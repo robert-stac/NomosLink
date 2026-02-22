@@ -25,8 +25,8 @@ export default function NotificationBell({ currentUser, notifications, markAsRea
     const newStatus = !n.read;
 
     // Update Local UI
-    setNotifications(prev => 
-      prev.map(notif => notif.id === n.id ? { ...notif, read: newStatus } : notif)
+    setNotifications(
+      notifications.map((notif: AppNotification) => notif.id === n.id ? { ...notif, read: newStatus } : notif)
     );
 
     // Update Database
@@ -39,7 +39,7 @@ export default function NotificationBell({ currentUser, notifications, markAsRea
   const handleNotificationClick = async (n: AppNotification) => {
     // Mark as read first
     if (!n.read) {
-      setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, read: true } : notif));
+      setNotifications(notifications.map((notif: AppNotification) => notif.id === n.id ? { ...notif, read: true } : notif));
       if (navigator.onLine) {
         await supabase.from('notifications').update({ read: true }).eq('id', n.id);
       }

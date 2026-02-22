@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Bar, Doughnut } from "react-chartjs-2";
+import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
 import { useAppContext } from "../context/AppContext";
 
@@ -19,8 +19,8 @@ export default function AccountantDashboard() {
     
     // Calculate Revenue & Billing
     const revenue = allRevenueItems.reduce((acc, item) => {
-      const billed = Number(item.billed || item.billedAmount || 0);
-      const paid = Number(item.paid || item.paidAmount || 0);
+      const billed = Number(('billed' in item ? item.billed : 0) || ('billedAmount' in item ? item.billedAmount : 0) || 0);
+      const paid = Number(('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0);
       acc.totalBilled += billed;
       acc.totalPaid += paid;
       if (billed > paid) acc.outstanding += (billed - paid);
@@ -100,13 +100,13 @@ export default function AccountantDashboard() {
               </thead>
               <tbody>
                 {[...(transactions || []), ...(courtCases || [])]
-                  .filter(item => (item.billed || item.billedAmount) > (item.paid || item.paidAmount))
+                  .filter(item => (('billed' in item ? item.billed : 0) || ('billedAmount' in item ? item.billedAmount : 0) || 0) > (('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0))
                   .slice(0, 8)
                   .map((item, idx) => (
                     <tr key={idx}>
-                      <td style={styles.td}>{item.fileName || item.clientName}</td>
+                      <td style={styles.td}>{String(item.fileName || ('clientName' in item ? item.clientName : 'Unknown'))}</td>
                       <td style={{ ...styles.td, color: "#E74C3C", fontWeight: "bold" }}>
-                        {formatUGX((item.billed || item.billedAmount) - (item.paid || item.paidAmount))}
+                        {formatUGX((('billed' in item ? item.billed : 0) || ('billedAmount' in item ? item.billedAmount : 0) || 0) - (('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0))}
                       </td>
                       <td style={styles.td}>
                         <button style={styles.actionBtn}>Invoice</button>

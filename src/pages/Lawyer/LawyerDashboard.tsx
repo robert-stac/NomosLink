@@ -112,7 +112,7 @@ export default function LawyerDashboard() {
       .map(c => ({
         id: c.id,
         dateStr: c.nextCourtDate,
-        timestamp: new Date(c.nextCourtDate).getTime()
+        timestamp: new Date(c.nextCourtDate!).getTime()
       }))
       .filter(c => c.timestamp >= now.getTime())
       .sort((a, b) => a.timestamp - b.timestamp)[0];

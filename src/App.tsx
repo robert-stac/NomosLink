@@ -34,7 +34,7 @@ import LawyerLetterDetails from "./pages/Lawyer/LawyerLetterDetails";
 import ClerkDashboard from "./pages/Clerk/ClerkDashboard";
 
 // Performance
-import LawyerPerformanceDashboard from "./pages/Performance/LawyerPerformanceDashboard";
+import LawyerPerformanceDashboard from "./pages/performance/LawyerPerformanceDashboard";
 
 // Route Guard
 import ProtectedRoute from "./routes/ProtectedRoute";

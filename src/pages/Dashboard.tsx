@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Pie, Bar } from "react-chartjs-2";
 import { 
   Chart as ChartJS, 
@@ -120,7 +120,7 @@ const NotificationBell = ({ currentUser, notifications, markAsRead }: any) => {
 };
 
 export default function Dashboard() {
-  const { transactions, courtCases, letters, tasks, users, currentUser, expenses } = useAppContext();
+  const { transactions, courtCases, letters, tasks, currentUser, expenses } = useAppContext();
   const navigate = useNavigate();
 
   const [selectedTask, setSelectedTask] = useState<any>(null);
@@ -164,16 +164,16 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     const allItems = [
       ...(transactions || []).map(t => ({ 
-        billed: Number(t.billedAmount || t.billed || 0), 
-        paid: Number(t.paidAmount || t.paid || 0) 
+        billed: Number(t.billedAmount || 0), 
+        paid: Number(t.paidAmount || 0) 
       })),
       ...(courtCases || []).map(c => ({ 
-        billed: Number(c.billed || c.billedAmount || 0), 
-        paid: Number(c.paid || c.paidAmount || 0) 
+        billed: Number(c.billed || 0), 
+        paid: Number(c.paid || 0) 
       })),
       ...(letters || []).map(l => ({ 
-        billed: Number(l.billed || l.billedAmount || 0), 
-        paid: Number(l.paid || l.paidAmount || 0) 
+        billed: Number(l.billed || 0), 
+        paid: Number(l.paid || 0) 
       }))
     ];
 
@@ -215,7 +215,7 @@ export default function Dashboard() {
         const nextDate = new Date(c.nextCourtDate);
         return nextDate >= today && nextDate <= twoWeeksFromNow;
       })
-      .sort((a, b) => new Date(a.nextCourtDate).getTime() - new Date(b.nextCourtDate).getTime());
+      .sort((a, b) => new Date(a.nextCourtDate || 0).getTime() - new Date(b.nextCourtDate || 0).getTime());
   }, [courtCases]);
 
   // --- CHARTS DATA ---

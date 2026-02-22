@@ -86,6 +86,7 @@ export interface CourtCase {
 }
 
 export interface Letter {
+  recipient: string;
   id: string;
   subject: string;
   type: "Incoming" | "Outgoing";
@@ -141,7 +142,7 @@ interface AppContextType {
   deleteUser: (id: string) => void;
   login: (email: string, password: string) => boolean;
   logout: () => void;
-  setUser: (users: User[]) => void;
+  setUsers: (users: User[]) => void;
 
   transactions: Transaction[];
   addTransaction: (tx: Transaction) => void;
@@ -190,6 +191,7 @@ interface AppContextType {
   notifications: AppNotification[];
   sendNotification: (recipientId: string, message: string, type: 'alert' | 'task' | 'file', relatedId?: string, relatedType?: 'case' | 'transaction' | 'letter' | 'task') => void;
   markNotificationsAsRead: (userId: string) => void;
+  setNotifications: (notifications: AppNotification[]) => void;
 
   expenses: any[];
   setExpenses: React.Dispatch<React.SetStateAction<any[]>>;
@@ -526,7 +528,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
-        currentUser, setCurrentUser, users, setUser: (newUsers) => setUsers(newUsers), lawyers, addUser, deleteUser,
+        currentUser, setCurrentUser, users, setUsers, lawyers, addUser, deleteUser,
         login, logout, 
         transactions, addTransaction, editTransaction, deleteTransaction,
         updateTransaction: editTransaction, 
