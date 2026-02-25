@@ -76,7 +76,7 @@ export default function Login() {
     <div style={styles.page}>
       <div style={styles.card}>
         <img
-          src="/BCA-Logo.png" 
+          src="/BCA small Logo.png" 
           alt={firmName}
           style={styles.logo}
         />
