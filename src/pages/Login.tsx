@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import bcrypt from "bcryptjs";
 import { supabase } from "../lib/supabaseClient";
 import { useAppContext } from "../context/AppContext";
-import type { User } from "../context/AppContext";
 
 export default function Login() {
-  const { users, setCurrentUser, firmName } = useAppContext();
+  const { setCurrentUser, firmName } = useAppContext();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -17,25 +17,37 @@ export default function Login() {
     document.title = `${firmName} - Login`;
   }, [firmName]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const user: User | undefined = users.find(
-      (u) => u.email === email.trim() && u.password === password.trim()
-    );
+    try {
+      // 1. Query the users table to find user by email
+      const { data: users, error: queryError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email.trim());
 
-    setTimeout(() => {
-      setLoading(false);
+      if (queryError) throw queryError;
 
-      if (!user) {
-        setError("Invalid email or password");
-        return;
+      if (!users || users.length === 0) {
+        throw new Error("Invalid email or password.");
       }
 
-      setCurrentUser(user);
+      const user = users[0];
 
+      // 2. Validate password using bcrypt
+      const passwordMatch = await bcrypt.compare(password.trim(), user.password || "");
+      if (!passwordMatch) {
+        throw new Error("Invalid email or password.");
+      }
+
+      // 3. Set global state
+      setCurrentUser(user);
+      localStorage.setItem("currentUser", JSON.stringify(user));
+
+      // 4. Role-Based Redirection
       switch (user.role) {
         case "admin":
         case "accountant":
@@ -49,12 +61,15 @@ export default function Login() {
           navigate("/clerk-dashboard");
           break;
         default:
-          setError("Role not recognized");
+          setError("Role not recognized. Contact System Admin.");
       }
-    }, 500);
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // --- NEW: Reset Password Logic ---
   const handleRequestReset = async () => {
     const emailToReset = prompt("Enter your registered email address:");
     if (!emailToReset) return;
@@ -102,7 +117,6 @@ export default function Login() {
           <div style={styles.field}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label style={styles.label}>Password</label>
-              {/* Reset Link Trigger */}
               <span 
                 onClick={handleRequestReset} 
                 style={styles.forgotLink}
@@ -134,9 +148,8 @@ export default function Login() {
 }
 
 /* =======================
-    STYLES
+    STYLES (Unchanged)
 ======================= */
-
 const styles: { [key: string]: React.CSSProperties } = {
   page: {
     minHeight: "100vh",
@@ -150,7 +163,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     width: 380,
     backgroundColor: "#ffffff",
     padding: "40px 35px",
-    borderRadius: 16, // Smoother rounded corners
+    borderRadius: 16,
     boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
     textAlign: "center",
   },

@@ -1,4 +1,6 @@
 import { useState, useRef } from "react";
+import bcrypt from "bcryptjs";
+import { supabase } from "../lib/supabaseClient";
 import { useAppContext } from "../context/AppContext";
 
 export default function AddUser() {
@@ -10,6 +12,8 @@ export default function AddUser() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"lawyer" | "clerk" | "accountant" | "manager">("lawyer");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   // --- BACKUP LOGIC ---
   const downloadBackup = () => {
@@ -54,16 +58,50 @@ export default function AddUser() {
     e.target.value = "";
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) return alert("Fill all fields");
     
-    addUser({
-      id: crypto.randomUUID(),
-      name, email, password, role,
-    });
+    setLoading(true);
+    setMessage("");
 
-    setName(""); setEmail(""); setPassword("");
+    try {
+      // 1. Hash the password with bcrypt
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // 2. Create new user object
+      const newUser = {
+        id: crypto.randomUUID(),
+        name,
+        email,
+        password: hashedPassword,
+        role,
+      };
+
+      // 3. Save to Supabase
+      const { data, error } = await supabase
+        .from("users")
+        .insert([newUser])
+        .select();
+
+      if (error) throw error;
+
+      // 4. Add to local state using context
+      addUser(newUser);
+
+      // 5. Clear form and show success
+      setName("");
+      setEmail("");
+      setPassword("");
+      setRole("lawyer");
+      setMessage(`✓ ${name} added successfully!`);
+      setTimeout(() => setMessage(""), 3000);
+    } catch (err: any) {
+      setMessage(`✗ Error: ${err.message}`);
+      console.error("Add user error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -104,6 +142,13 @@ export default function AddUser() {
         </div>
       </div>
 
+      {/* MESSAGE DISPLAY */}
+      {message && (
+        <div className={`p-3 rounded-lg mb-4 text-sm font-semibold ${message.startsWith('✓') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {message}
+        </div>
+      )}
+
       {/* FORM SECTION */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 gap-4">
@@ -143,9 +188,10 @@ export default function AddUser() {
 
         <button
           type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-[0.2em] py-5 rounded-2xl w-full transition-all shadow-xl shadow-blue-200 mt-2"
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-black text-xs uppercase tracking-[0.2em] py-5 rounded-2xl w-full transition-all shadow-xl shadow-blue-200 mt-2"
         >
-          Add Staff Member
+          {loading ? "Adding..." : "Add Staff Member"}
         </button>
       </form>
 
