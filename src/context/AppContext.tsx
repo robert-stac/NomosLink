@@ -234,6 +234,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
+        const { data: txData } = await supabase.from('transactions').select('*');
+      if (txData) setTransactions(txData);
+
         const { data: clientData } = await supabase.from('clients').select('*').order('dateAdded', { ascending: false });
         if (clientData) setClients(clientData);
 
@@ -300,26 +303,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /* --- 2. SUPABASE SYNC LOGIC --- */
-  const syncToCloud = async () => {
-    // Safety check: Don't sync if we aren't online or if we're still initializing
-    if (!navigator.onLine || !currentUser) return; 
+const syncToCloud = async () => {
+  // 1. Safety check: Don't sync if offline or no user
+  if (!navigator.onLine || !currentUser) return; 
 
-    try {
-      await Promise.all([
-        supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
-        supabase.from('clients').upsert(clients, { onConflict: 'id' }),
-        supabase.from('letters').upsert(letters, { onConflict: 'id' }),
-        supabase.from('invoices').upsert(invoices, { onConflict: 'id' }),
-        supabase.from('transactions').upsert(transactions, { onConflict: 'id' }),
-        supabase.from('court_cases').upsert(courtCases, { onConflict: 'id' }),
-        supabase.from('users').upsert(users, { onConflict: 'id' }),
-        supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
-        supabase.from('notifications').upsert(notifications, { onConflict: 'id' })
-      ]);
-    } catch (e) {
-      console.warn("Cloud sync paused or table missing:", e);
-    }
-  };
+  // 2. EXTRA SAFETY: Don't sync if our main arrays are empty. 
+  // This prevents a new computer from wiping the DB before it has fetched the data.
+  if (transactions.length === 0 && courtCases.length === 0 && clients.length === 0) {
+    console.warn("Sync skipped: Local state is empty. Fetching from cloud first...");
+    return;
+  }
+
+  try {
+    await Promise.all([
+      supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
+      supabase.from('clients').upsert(clients, { onConflict: 'id' }),
+      supabase.from('letters').upsert(letters, { onConflict: 'id' }),
+      supabase.from('invoices').upsert(invoices, { onConflict: 'id' }),
+      supabase.from('transactions').upsert(transactions, { onConflict: 'id' }),
+      supabase.from('court_cases').upsert(courtCases, { onConflict: 'id' }),
+      supabase.from('users').upsert(users, { onConflict: 'id' }),
+      supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
+      supabase.from('notifications').upsert(notifications, { onConflict: 'id' })
+    ]);
+    console.log("Cloud sync successful.");
+  } catch (e) {
+    console.error("Cloud sync failed:", e);
+  }
+};
 
   /* --- AUTH --- */
   const login = async (email: string, password: string) => {
