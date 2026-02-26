@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { useAppContext } from "../context/AppContext";
-import { getAutoLabels } from "../utils/autoLabel"; // Logic we discussed earlier
+import { getAutoLabels } from "../utils/autoLabel";
 import AutoLabelBadge from "../components/AutoLabelBadge";
 
-type SortField = "date" | "billed" | null;
+// Added 'refNumber' and 'fileName' to sort options
+type SortField = "date" | "billed" | "fileName" | "refNumber" | null;
 type SortOrder = "asc" | "desc";
 
 export default function Letters() {
@@ -14,6 +15,11 @@ export default function Letters() {
   const [type, setType] = useState("Incoming");
   const [lawyerId, setLawyerId] = useState("");
   const [subject, setSubject] = useState("");
+  
+  // --- NEW FIELDS ---
+  const [fileName, setFileName] = useState(""); 
+  const [refNumber, setRefNumber] = useState(""); 
+
   const [date, setDate] = useState("");
   const [status, setStatus] = useState("Pending");
   const [billed, setBilled] = useState("");
@@ -28,13 +34,14 @@ export default function Letters() {
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
-  // --- NEW FEATURE: TOGGLE FORM VISIBILITY ---
   const [showForm, setShowForm] = useState(false);
 
   const resetForm = () => {
     setType("Incoming");
     setLawyerId("");
     setSubject("");
+    setFileName(""); 
+    setRefNumber(""); // Reset Ref
     setDate("");
     setStatus("Pending");
     setBilled("");
@@ -55,6 +62,8 @@ export default function Letters() {
       type,
       lawyer: lawyerObj,
       subject,
+      fileName, 
+      refNumber, // Save Ref
       date,
       status,
       billed: billedNum,
@@ -74,6 +83,8 @@ export default function Letters() {
     setType(l.type);
     setLawyerId(l.lawyer?.id || "");
     setSubject(l.subject);
+    setFileName(l.fileName || ""); 
+    setRefNumber(l.refNumber || ""); // Load Ref
     setDate(l.date);
     setStatus(l.status);
     setBilled(l.billed.toString());
@@ -81,7 +92,6 @@ export default function Letters() {
     setShowForm(true);
   };
 
-  // --- NEW FEATURE: QUICK STATUS TOGGLE ---
   const handleQuickComplete = (l: any) => {
     editLetter(l.id, { ...l, status: l.status === "Completed" ? "Pending" : "Completed" });
   };
@@ -94,7 +104,7 @@ export default function Letters() {
   const outgoingLetters = letters.filter((l) => l.type === "Outgoing").length;
   const totalBilled = useMemo(() => letters.reduce((sum, l) => sum + l.billed, 0), [letters]);
 
-  // PRESERVED FILTERING LOGIC
+  // UPDATED FILTERING LOGIC
   const filteredLetters = letters.filter((l) => {
     const matchesFilter =
       (filterType === "All" || l.type === filterType) &&
@@ -103,17 +113,27 @@ export default function Letters() {
     const matchesSearch =
       searchQuery === "" ||
       l.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (l.fileName && l.fileName.toLowerCase().includes(searchQuery.toLowerCase())) || 
+      (l.refNumber && l.refNumber.toLowerCase().includes(searchQuery.toLowerCase())) || // Search Ref
       (l.lawyer?.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesFilter && matchesSearch;
   });
 
-  // PRESERVED SORTING LOGIC
+  // UPDATED SORTING LOGIC
   const sortedLetters = useMemo(() => {
     if (!sortField) return filteredLetters;
     return [...filteredLetters].sort((a, b) => {
       let aVal: any = a[sortField];
       let bVal: any = b[sortField];
+      
+      // String sorting for fileName and refNumber
+      if (sortField === "fileName" || sortField === "refNumber") {
+         aVal = aVal || "";
+         bVal = bVal || "";
+         return sortOrder === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+
       if (sortField === "date") {
         aVal = aVal ? new Date(aVal).getTime() : 0;
         bVal = bVal ? new Date(bVal).getTime() : 0;
@@ -161,7 +181,7 @@ export default function Letters() {
         ))}
       </div>
 
-      {/* ADD / UPDATE FORM (Now Collapsible) */}
+      {/* ADD / UPDATE FORM */}
       {showForm && (
         <div className="bg-white shadow-xl rounded-[32px] mb-8 overflow-hidden border border-slate-200 animate-in slide-in-from-top-4 duration-300">
           <div className="bg-[#0B1F3A] text-white px-8 py-5 flex justify-between items-center">
@@ -169,6 +189,30 @@ export default function Letters() {
             <span className="text-[10px] font-bold opacity-50 uppercase">Step 1 of 1</span>
           </div>
           <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            
+            {/* FILE NAME & REF NUMBER (Grouped for Layout) */}
+            <div>
+              <label className="block text-xs font-black uppercase text-slate-400 mb-2">File Name</label>
+              <input 
+                type="text" 
+                placeholder="e.g. Enter File Name..." 
+                value={fileName} 
+                onChange={(e) => setFileName(e.target.value)} 
+                className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500" 
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-black uppercase text-slate-400 mb-2">Ref Number</label>
+              <input 
+                type="text" 
+                placeholder="e.g. BCA/___/0000/202___" 
+                value={refNumber} 
+                onChange={(e) => setRefNumber(e.target.value)} 
+                className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500" 
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-black uppercase text-slate-400 mb-2">Direction</label>
               <select value={type} onChange={(e) => setType(e.target.value)} className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500">
@@ -227,7 +271,7 @@ export default function Letters() {
       <div className="bg-white p-4 rounded-[28px] shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 mb-6">
         <div className="relative flex-1">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-            <input type="text" placeholder="Search subject or lawyer..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-slate-50 border-0 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500" />
+            <input type="text" placeholder="Search Ref, File Name, or Subject..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-slate-50 border-0 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500" />
         </div>
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-50 border-0 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600">
           <option value="All">All Types</option>
@@ -247,7 +291,15 @@ export default function Letters() {
           <thead>
             <tr className="bg-slate-900 text-white">
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest">Type</th>
-              <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest">Lawyer</th>
+              
+              {/* FILE & REF COLUMNS */}
+              <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("fileName")}>
+                 File Name {sortField === "fileName" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+              </th>
+               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("refNumber")}>
+                 Ref No. {sortField === "refNumber" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+              </th>
+
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest">Subject</th>
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("date")}>
                 Date {sortField === "date" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
@@ -267,12 +319,14 @@ export default function Letters() {
                         {l.type}
                     </span>
                 </td>
-                <td className="p-5 font-bold text-slate-700">{l.lawyer?.name || "-"}</td>
+
+                {/* NEW COLUMNS */}
+                <td className="p-5 font-bold text-slate-800">{l.fileName || "-"}</td>
+                <td className="p-5 font-bold text-slate-500 text-xs">{l.refNumber || "-"}</td>
+
                 <td className="p-5">
                     <p className="font-bold text-slate-800 line-clamp-1">{l.subject}</p>
-                    <div className="flex gap-1 mt-1">
-                        {getAutoLabels(l).map(tag => <AutoLabelBadge key={tag} label={tag} />)}
-                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase">{l.lawyer?.name || "Unassigned"}</p>
                 </td>
                 <td className="p-5 text-slate-500 font-medium">{l.date || "-"}</td>
                 <td className="p-5">
