@@ -205,14 +205,10 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
     PROVIDER
 ======================= */
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // BYPASS LOGIN: Hardcoded user to stop the 500/Token errors
-  const [currentUser, setCurrentUser] = useState<User | null>({
-    id: "d70d4e47-1422-4501-961a-c1e69a1c15d7",
-    name: "System Admin",
-    email: "admin@nomoslink.com",
-    role: "admin",
-    password: "password123"
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+  const savedUser = localStorage.getItem("currentUser");
+  return savedUser ? JSON.parse(savedUser) : null;
+});
 
   const [users, setUsers] = useState<User[]>(() => {
     const stored = localStorage.getItem("users");
@@ -234,8 +230,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
+
+        const { data: courtData } = await supabase.from('court_cases').select('*');
+        if (courtData) setCourtCases(courtData);
+
         const { data: txData } = await supabase.from('transactions').select('*');
-      if (txData) setTransactions(txData);
+        if (txData) setTransactions(txData);
 
         const { data: clientData } = await supabase.from('clients').select('*').order('dateAdded', { ascending: false });
         if (clientData) setClients(clientData);

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useAppContext } from "../context/AppContext";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Expenses() {
   const { expenses, setExpenses } = useAppContext();
@@ -91,11 +92,18 @@ export default function Expenses() {
     setShowModal(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure?")) {
-      setExpenses(expenses.filter((exp: any) => exp.id !== id));
+   const handleDelete = async (id: string) => {
+  if (window.confirm("Are you sure? This will delete the expense permanently.")) {
+    // Update local UI immediately
+    setExpenses(expenses.filter((exp: any) => exp.id !== id));
+
+    // Update Database immediately so syncToCloud doesn't re-upload it
+    if (navigator.onLine) {
+      const { error } = await supabase.from('expenses').delete().eq('id', id);
+      if (error) console.error("Cloud delete failed:", error.message);
     }
-  };
+  }
+};
 
   return (
     <div style={styles.container}>
