@@ -83,16 +83,25 @@ export default function App() {
   const { currentUser } = useAppContext();
   const isOnline = useOnlineStatus();
 
-  // Helper to determine the main landing page
+  // Helper to determine the main landing page for Management roles
   const getDashboardComponent = () => {
     if (currentUser?.role === "accountant") return <AccountantDashboard />;
     if (currentUser?.role === "manager") return <ManagerDashboard />;
     return <Dashboard />;
   };
 
+  // Helper to get the correct redirect path based on user role
+  const getRedirectPath = () => {
+    if (!currentUser) return "/login";
+    if (["admin", "accountant", "manager"].includes(currentUser.role)) return "/";
+    if (currentUser.role === "lawyer") return "/lawyer-dashboard";
+    if (currentUser.role === "clerk") return "/clerk-dashboard";
+    return "/login";
+  };
+
   return (
     <BrowserRouter>
-      {/* OFFLINE BANNER - Fixed at the top */}
+      {/* OFFLINE BANNER */}
       {!isOnline && (
         <div style={bannerStyles}>
           <span style={{ marginRight: 8 }}>📡</span>
@@ -102,7 +111,11 @@ export default function App() {
 
       <Routes>
         {/* ================= LOGIN ================= */}
-        <Route path="/login" element={<Login />} />
+        {/* If logged in, don't show login page; redirect to dashboard instead */}
+        <Route 
+          path="/login" 
+          element={currentUser ? <Navigate to={getRedirectPath()} /> : <Login />} 
+        />
 
         {/* ================= SHARED ADMIN/ACCOUNTANT/MANAGER ROUTES ================= */}
         <Route
@@ -149,7 +162,6 @@ export default function App() {
           }
         />
 
-        {/* 🔒 UPDATED: Manager removed from Expenses for financial privacy */}
         <Route
           path="/expenses"
           element={
@@ -161,7 +173,7 @@ export default function App() {
           }
         />
 
-        {/* ================= ADMIN & MANAGER SHARED ACCESS (OVERSIGHT) ================= */}
+        {/* ================= ADMIN & MANAGER SHARED ACCESS ================= */}
         <Route
           path="/transactions"
           element={
@@ -229,7 +241,7 @@ export default function App() {
           }
         />
 
-        {/* ================= LAWYER ROUTES (MANAGER ACCESSIBLE FOR HIS OWN FILES) ================= */}
+        {/* ================= LAWYER ROUTES ================= */}
         <Route
           path="/lawyer-dashboard"
           element={
@@ -286,7 +298,7 @@ export default function App() {
           }
         />
         
-        {/* ================= PERFORMANCE (🔒 UPDATED: Manager removed) ================= */}
+        {/* ================= PERFORMANCE ================= */}
         <Route
           path="/performance"
           element={
@@ -298,22 +310,14 @@ export default function App() {
           }
         />
 
+        <Route path="/reset-password" element={<ResetPassword />} />
+
         {/* ================= FALLBACK ================= */}
+        {/* This ensures any random URL takes the user to their specific starting page or Login */}
         <Route
           path="*"
-          element={
-            <Navigate
-              to={
-                currentUser
-                  ? (currentUser.role === "admin" || currentUser.role === "accountant" || currentUser.role === "manager")
-                    ? "/"
-                    : "/lawyer-dashboard"
-                  : "/login"
-              }
-            />
-          }
+          element={<Navigate to={getRedirectPath()} replace />}
         />
-        <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
     </BrowserRouter>
   );
@@ -327,11 +331,11 @@ const bannerStyles: React.CSSProperties = {
   top: 0,
   left: 0,
   right: 0,
-  backgroundColor: "#b91c1c", // Professional Red
+  backgroundColor: "#b91c1c",
   color: "white",
   textAlign: "center",
   padding: "10px",
   fontSize: "14px",
-  zIndex: 3000, // Above everything
+  zIndex: 3000,
   boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
 };

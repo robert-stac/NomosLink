@@ -12,6 +12,9 @@ export default function Transactions() {
     currentUser 
   } = useAppContext();
 
+  // --- SEARCH STATE ---
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteViewId, setNoteViewId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
@@ -27,23 +30,47 @@ export default function Transactions() {
 
   const activeTransaction = transactions.find(t => t.id === noteViewId);
 
+  // --- FILTERING LOGIC ---
   const visibleTransactions = useMemo(() => {
     let data = transactions.filter((t) => t.type !== "Court Case");
+    
+    // Role Filter
     if (currentUser?.role === "lawyer") {
       data = data.filter((t) => t.lawyerId === currentUser.id);
     }
-    return [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, currentUser]);
 
-  const totals = useMemo(() => {
+    // Search Filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      data = data.filter((t) => {
+        const lawyerName = lawyers.find(l => l.id === t.lawyerId)?.name.toLowerCase() || "";
+        return (
+          t.fileName.toLowerCase().includes(query) ||
+          t.type.toLowerCase().includes(query) ||
+          lawyerName.includes(query)
+        );
+      });
+    }
+
+    return [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, currentUser, searchQuery, lawyers]);
+
+  // --- STATS LOGIC ---
+  const stats = useMemo(() => {
     return visibleTransactions.reduce(
       (acc, t) => {
-        acc.billed += Number(t.billedAmount) || 0;
-        acc.paid += Number(t.paidAmount) || 0;
-        acc.balance += (Number(t.billedAmount) || 0) - (Number(t.paidAmount) || 0);
+        const billed = Number(t.billedAmount) || 0;
+        const paid = Number(t.paidAmount) || 0;
+        const balance = billed - paid;
+
+        acc.billed += billed;
+        acc.paid += paid;
+        acc.balance += balance;
+        acc.totalFiles += 1;
+
         return acc;
       },
-      { billed: 0, paid: 0, balance: 0 }
+      { billed: 0, paid: 0, balance: 0, totalFiles: 0 }
     );
   }, [visibleTransactions]);
 
@@ -95,19 +122,46 @@ export default function Transactions() {
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
-      {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      
+      {/* HEADER & SEARCH BAR */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Transactions</h1>
+          <p className="text-slate-500 font-medium">Manage client billing and files</p>
+        </div>
+        <div className="relative w-full md:w-96">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+          <input 
+            type="text" 
+            placeholder="Search client, type, or lawyer..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 shadow-sm"
+          />
+        </div>
+      </div>
+
+      {/* SUMMARY CARDS (4 COLUMNS) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        
+        {/* Total Files Card */}
+        <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Files</p>
+          <p className="text-slate-900 text-2xl font-black">{stats.totalFiles}</p>
+        </div>
+
+        {/* Financial Cards */}
         <div className="bg-slate-900 p-6 rounded-3xl shadow-lg">
           <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Total Billed</p>
-          <p className="text-white text-2xl font-black">UGX {totals.billed.toLocaleString()}</p>
+          <p className="text-white text-2xl font-black">UGX {stats.billed.toLocaleString()}</p>
         </div>
         <div className="bg-emerald-600 p-6 rounded-3xl shadow-lg">
           <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Total Paid</p>
-          <p className="text-white text-2xl font-black">UGX {totals.paid.toLocaleString()}</p>
+          <p className="text-white text-2xl font-black">UGX {stats.paid.toLocaleString()}</p>
         </div>
         <div className="bg-orange-600 p-6 rounded-3xl shadow-lg">
           <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Outstanding</p>
-          <p className="text-white text-2xl font-black">UGX {totals.balance.toLocaleString()}</p>
+          <p className="text-white text-2xl font-black">UGX {stats.balance.toLocaleString()}</p>
         </div>
       </div>
 
@@ -157,7 +211,7 @@ export default function Transactions() {
         </div>
       </form>
 
-      {/* TABLE WITH LAWYER COLUMN */}
+      {/* TABLE */}
       <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -211,6 +265,13 @@ export default function Transactions() {
                   </td>
                 </tr>
               ))}
+              {visibleTransactions.length === 0 && (
+                 <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">
+                        No transactions found matching your search.
+                    </td>
+                 </tr>
+              )}
             </tbody>
           </table>
         </div>
