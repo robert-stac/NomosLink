@@ -1,76 +1,106 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
 export default function Sidebar() {
   const { currentUser, logout, firmName } = useAppContext();
   const location = useLocation();
+  const [isOpen, setIsOpen] = useState(false); // Mobile toggle state
 
   if (!currentUser) return null;
 
   const role = currentUser.role;
 
-  // Define who sees what
   const isAdmin = role === "admin";
   const isAccountant = role === "accountant";
   const isManager = role === "manager";
   const isStaff = isAdmin || isAccountant || isManager;
 
   const menuItems = [
-    // Dashboard is common for Admin, Accountant, and Manager
     { label: "Dashboard", path: "/", icon: "📊", show: isStaff },
-    
-    // Oversight & Management
     { label: "Clients", path: "/clients", icon: "👥", show: isStaff },
     { label: "Transactions", path: "/transactions", icon: "💸", show: isAdmin || isManager },
     { label: "Court Cases", path: "/court-cases", icon: "⚖️", show: isAdmin || isManager },
     { label: "Letters", path: "/letters", icon: "✉️", show: isAdmin || isManager },
-    
-    // Financials
     { label: "Invoices", path: "/invoices", icon: "🧾", show: isStaff },
     { label: "Expenses", path: "/expenses", icon: "📉", show: isAccountant },
-    
-    // Reporting & Performance
     { label: "Reports", path: "/reports", icon: "📈", show: isStaff },
     { label: "Performance", path: "/performance", icon: "🏆", show: isAdmin },
-    
-    // Admin Only - System Settings
     { label: "Lawyers List", path: "/lawyers", icon: "👨‍⚖️", show: isAdmin },
     { label: "Archive", path: "/archive", icon: "📦", show: isAdmin || isManager },
     { label: "Add User/Staff", path: "/AddUser", icon: "➕", show: isAdmin },
   ];
 
+  const toggleSidebar = () => setIsOpen(!isOpen);
+
   return (
-    <div style={sidebarStyles.container}>
-      <div style={sidebarStyles.header}>
-        <h2 style={sidebarStyles.logo}>{firmName}</h2>
-        <div style={sidebarStyles.userBadge}>
-          <span style={sidebarStyles.roleTag}>{role.toUpperCase()}</span>
-          <p style={sidebarStyles.userName}>{currentUser.name}</p>
-        </div>
-      </div>
-
-      <nav style={sidebarStyles.nav}>
-        {menuItems.map((item) => item.show && (
-          <Link
-            key={item.path}
-            to={item.path}
-            style={{
-              ...sidebarStyles.link,
-              backgroundColor: location.pathname === item.path ? "#1e293b" : "transparent",
-              color: location.pathname === item.path ? "#38bdf8" : "#cbd5e1",
-            }}
-          >
-            <span style={{ marginRight: 12 }}>{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-
-      <button onClick={logout} style={sidebarStyles.logoutBtn}>
-        <span style={{ marginRight: 12 }}>🚪</span> Logout
+    <>
+      {/* 1. MOBILE HAMBURGER BUTTON */}
+      <button 
+        onClick={toggleSidebar}
+        className="md:hidden fixed top-4 left-4 z-[60] bg-[#0B1F3A] text-white p-3 rounded-xl shadow-lg"
+      >
+        {isOpen ? "✕" : "☰"}
       </button>
-    </div>
+
+      {/* 2. MOBILE OVERLAY (Backdrop) */}
+      {isOpen && (
+        <div 
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[40] md:hidden"
+        />
+      )}
+
+      {/* 3. SIDEBAR CONTAINER */}
+      <div style={{
+        ...sidebarStyles.container,
+        left: isOpen ? "0" : "-260px", // Slide logic
+      }} className="mobile-sidebar">
+        
+        <style>{`
+          nav::-webkit-scrollbar {
+            display: none;
+          }
+          /* Desktop override */
+          @media (min-width: 768px) {
+            .mobile-sidebar {
+              left: 0 !important;
+              position: sticky !important;
+            }
+          }
+        `}</style>
+
+        <div style={sidebarStyles.header}>
+          <h2 style={sidebarStyles.logo}>{firmName}</h2>
+          <div style={sidebarStyles.userBadge}>
+            <span style={sidebarStyles.roleTag}>{role.toUpperCase()}</span>
+            <p style={sidebarStyles.userName}>{currentUser.name}</p>
+          </div>
+        </div>
+
+        <nav style={sidebarStyles.nav}>
+          {menuItems.map((item) => item.show && (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={() => setIsOpen(false)} // Close menu on link click
+              style={{
+                ...sidebarStyles.link,
+                backgroundColor: location.pathname === item.path ? "#1e293b" : "transparent",
+                color: location.pathname === item.path ? "#38bdf8" : "#cbd5e1",
+              }}
+            >
+              <span style={{ marginRight: 12 }}>{item.icon}</span>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <button onClick={logout} style={sidebarStyles.logoutBtn}>
+          <span style={{ marginRight: 12 }}>🚪</span> Logout
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -82,8 +112,10 @@ const sidebarStyles = {
     height: "100vh",
     display: "flex",
     flexDirection: "column" as const,
-    position: "sticky" as const,
+    position: "fixed" as const, // Changed to fixed for mobile slide-in
     top: 0,
+    zIndex: 50,
+    transition: "left 0.3s ease-in-out", // Smooth slide transition
     boxShadow: "4px 0 10px rgba(0,0,0,0.1)",
   },
   header: {
@@ -117,6 +149,8 @@ const sidebarStyles = {
     flex: 1,
     padding: "20px 10px",
     overflowY: "auto" as const,
+    msOverflowStyle: "none" as const,
+    scrollbarWidth: "none" as const,
   },
   link: {
     display: "flex",
