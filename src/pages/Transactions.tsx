@@ -32,7 +32,8 @@ export default function Transactions() {
 
   // --- FILTERING LOGIC ---
   const visibleTransactions = useMemo(() => {
-    let data = transactions.filter((t) => t.type !== "Court Case");
+    // UPDATED: Now also filters out archived transactions
+    let data = transactions.filter((t) => t.type !== "Court Case" && !t.archived);
     
     // Role Filter
     if (currentUser?.role === "lawyer") {
@@ -74,6 +75,13 @@ export default function Transactions() {
     );
   }, [visibleTransactions]);
 
+  // --- NEW: ARCHIVE HANDLER ---
+  const handleArchive = (id: string) => {
+    if (confirm("Are you sure you want to archive this record? It will be moved to the Firm Archives.")) {
+      editTransaction(id, { archived: true });
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -95,6 +103,7 @@ export default function Transactions() {
       billedAmount: billed,
       paidAmount: paid,
       balance: billed - paid,
+      archived: false, // Ensure new/edited records aren't archived by default
       progressNotes: editingId 
         ? (transactions.find(t => t.id === editingId)?.progressNotes || []) 
         : [],
@@ -141,16 +150,12 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* SUMMARY CARDS (4 COLUMNS) */}
+      {/* SUMMARY CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        
-        {/* Total Files Card */}
         <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Files</p>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Active Files</p>
           <p className="text-slate-900 text-2xl font-black">{stats.totalFiles}</p>
         </div>
-
-        {/* Financial Cards */}
         <div className="bg-slate-900 p-6 rounded-3xl shadow-lg">
           <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Total Billed</p>
           <p className="text-white text-2xl font-black">UGX {stats.billed.toLocaleString()}</p>
@@ -165,7 +170,7 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* FORM WITH LABELS */}
+      {/* FORM */}
       <form onSubmit={handleSubmit} className="bg-white border rounded-2xl p-6 mb-8 shadow-sm">
         <h3 className="font-bold mb-6 text-slate-800">{editingId ? "Update Transaction" : "New Transaction"}</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -249,7 +254,7 @@ export default function Transactions() {
                       NOTES ({t.progressNotes?.length || 0})
                     </button>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-6 py-4 text-center space-x-3">
                     <button onClick={() => {
                       setEditingId(t.id);
                       setForm({
@@ -260,15 +265,19 @@ export default function Transactions() {
                         paidAmount: String(t.paidAmount || ""),
                         date: t.date ? t.date.split('T')[0] : ""
                       });
-                    }} className="text-blue-600 hover:text-blue-800 mr-4 text-xs font-black uppercase">Edit</button>
-                    <button onClick={() => deleteTransaction(t.id)} className="text-red-400 hover:text-red-600 text-xs font-bold uppercase">Delete</button>
+                    }} className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase">Edit</button>
+                    
+                    {/* NEW: ARCHIVE BUTTON */}
+                    <button onClick={() => handleArchive(t.id)} className="text-gray-400 hover:text-gray-600 text-xs font-bold uppercase">Archive</button>
+                    
+                    <button onClick={() => { if(confirm("Permanently delete this record?")) deleteTransaction(t.id); }} className="text-red-400 hover:text-red-600 text-xs font-bold uppercase">Delete</button>
                   </td>
                 </tr>
               ))}
               {visibleTransactions.length === 0 && (
                  <tr>
                     <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">
-                        No transactions found matching your search.
+                        No active transactions found.
                     </td>
                  </tr>
               )}
@@ -277,7 +286,7 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL (Activity Log) */}
       {noteViewId && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]">

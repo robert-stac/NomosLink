@@ -4,7 +4,7 @@ import { useAppContext } from "../context/AppContext";
 
 export default function CourtCases() {
   const { courtCases, addCourtCase, editCourtCase, deleteCourtCase, lawyers } = useAppContext();
-  const location = useLocation(); // Hook to listen to URL params
+  const location = useLocation(); 
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
@@ -13,7 +13,6 @@ export default function CourtCases() {
   const [paid, setPaid] = useState("");
   const [nextDate, setNextDate] = useState("");
   
-
   // --- SEARCH & HIGHLIGHT LOGIC ---
   const [searchTerm, setSearchTerm] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -23,23 +22,24 @@ export default function CourtCases() {
     const search = params.get("search");
     if (search) {
       setSearchTerm(search);
-      // Auto-identify the case to highlight it
       const targetCase = courtCases.find(c => c.fileName.toLowerCase().includes(search.toLowerCase()));
       if (targetCase) {
         setHighlightId(targetCase.id);
-        // Remove highlight after 3 seconds
         setTimeout(() => setHighlightId(null), 3000);
       }
     }
   }, [location, courtCases]);
 
+  // --- FILTERING LOGIC (Hides Archived) ---
   const filteredCases = useMemo(() => {
-    return courtCases.filter(c => 
-      c.fileName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return courtCases
+      .filter(c => !c.archived) 
+      .filter(c => 
+        c.fileName.toLowerCase().includes(searchTerm.toLowerCase())
+      );
   }, [courtCases, searchTerm]);
 
-  // --- EXISTING FUNCTIONS ---
+  // --- FORM FUNCTIONS ---
   const resetForm = () => {
     setFileName("");
     setLawyerId("");
@@ -97,8 +97,9 @@ export default function CourtCases() {
     setNextDate(c.nextCourtDate || "");
   };
 
+  // --- ARCHIVE LOGIC (Soft Delete) ---
   const handleArchive = (id: string) => {
-    if (confirm("Are you sure you want to archive this court case?")) {
+    if (confirm("Move this case to the Firm Archives?")) {
       const now = new Date().toLocaleDateString();
       editCourtCase(id, {
         archived: true,
@@ -108,18 +109,25 @@ export default function CourtCases() {
     }
   };
 
+  // --- DELETE LOGIC (Permanent Delete) ---
+  const handleDelete = (id: string) => {
+    if (confirm("Are you sure you want to PERMANENTLY delete this case? This cannot be undone.")) {
+      deleteCourtCase(id);
+    }
+  };
+
   const formatCurrency = (n: number) => "UGX " + n.toLocaleString();
 
-  const totalCases = courtCases.length;
-  const ongoingCases = courtCases.filter((c) => c.status === "Ongoing").length;
-  const completedCases = courtCases.filter((c) => c.status === "Completed").length;
-  const totalBilled = useMemo(() => courtCases.reduce((sum, c) => sum + c.billed, 0), [courtCases]);
+  const activeCases = courtCases.filter(c => !c.archived);
+  const totalCases = activeCases.length;
+  const ongoingCases = activeCases.filter((c) => c.status === "Ongoing").length;
+  const completedCases = activeCases.filter((c) => c.status === "Completed").length;
+  const totalBilled = useMemo(() => activeCases.reduce((sum, c) => sum + c.billed, 0), [activeCases]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Court Cases</h1>
-        {/* SEARCH BOX TO CLEAR FILTERS */}
         <input 
             type="text" 
             placeholder="Filter files..." 
@@ -222,14 +230,14 @@ export default function CourtCases() {
                 <td className="p-4 text-center space-x-2">
                   <button onClick={() => handleEdit(c)} className="bg-yellow-400 text-white px-3 py-1 rounded text-xs font-bold shadow-sm">Edit</button>
                   <button onClick={() => handleArchive(c.id)} className="bg-gray-400 text-white px-3 py-1 rounded text-xs font-bold shadow-sm">Archive</button>
-                  <button onClick={() => deleteCourtCase(c.id)} className="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold shadow-sm">Delete</button>
+                  <button onClick={() => handleDelete(c.id)} className="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold shadow-sm">Delete</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         {filteredCases.length === 0 && (
-          <div className="p-10 text-center text-gray-400 italic">No cases match your search criteria.</div>
+          <div className="p-10 text-center text-gray-400 italic">No active cases match your search criteria.</div>
         )}
       </div>
     </div>
