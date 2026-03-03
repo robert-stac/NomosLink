@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-// 1. Import the supabase client
 import { supabase } from "../lib/supabaseClient";
 
 /* =======================
@@ -66,6 +65,7 @@ export interface Transaction {
   paidAmount?: number;
   balance?: number;
   date?: string;
+  archived?: boolean;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
 }
@@ -80,6 +80,7 @@ export interface CourtCase {
   status: "Ongoing" | "Completed";
   nextCourtDate?: string;
   lawyerId?: string;
+  archived?: boolean;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
 }
@@ -139,7 +140,7 @@ interface AppContextType {
   lawyers: User[];
   addUser: (user: User) => void;
   deleteUser: (id: string) => void;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   setUsers: (users: User[]) => void;
 
@@ -206,9 +207,9 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 ======================= */
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-  const savedUser = localStorage.getItem("currentUser");
-  return savedUser ? JSON.parse(savedUser) : null;
-});
+    const savedUser = localStorage.getItem("currentUser");
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
   const [users, setUsers] = useState<User[]>(() => {
     const stored = localStorage.getItem("users");
@@ -219,44 +220,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [courtCases, setCourtCases] = useState<CourtCase[]>(() => JSON.parse(localStorage.getItem("courtCases") || "[]"));
   const [letters, setLetters] = useState<Letter[]>(() => JSON.parse(localStorage.getItem("letters") || "[]"));
   const [invoices, setInvoices] = useState<Invoice[]>(() => JSON.parse(localStorage.getItem("invoices") || "[]"));
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
   const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem("tasks") || "[]"));
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
-  const [expenses, setExpenses] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
 
-  /* --- 1. INITIAL DATA LOAD --- */
+  /* --- 1. INITIAL DATA LOAD (WITH SMART MERGE) --- */
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
+        const [
+          { data: courtData },
+          { data: txData },
+          { data: clientData },
+          { data: letterData },
+          { data: userData },
+          { data: taskData },
+          { data: invoiceData },
+          { data: notifData },
+          { data: expenseData }
+        ] = await Promise.all([
+          supabase.from('court_cases').select('*'),
+          supabase.from('transactions').select('*'),
+          supabase.from('clients').select('*').order('dateAdded', { ascending: false }),
+          supabase.from('letters').select('*'),
+          supabase.from('users').select('*'),
+          supabase.from('tasks').select('*'),
+          supabase.from('invoices').select('*'),
+          supabase.from('notifications').select('*'),
+          supabase.from('expenses').select('*').order('date', { ascending: false })
+        ]);
 
-        const { data: courtData } = await supabase.from('court_cases').select('*');
-        if (courtData) setCourtCases(courtData);
+        const merge = (local: any[], cloud: any[] | null) => {
+          if (!cloud) return local;
+          const cloudIds = new Set(cloud.map(i => i.id));
+          const localOnly = local.filter(i => !cloudIds.has(i.id));
+          return [...cloud, ...localOnly];
+        };
 
-        const { data: txData } = await supabase.from('transactions').select('*');
-        if (txData) setTransactions(txData);
+        if (courtData) setCourtCases(prev => merge(prev, courtData));
+        if (txData) setTransactions(prev => merge(prev, txData));
+        if (clientData) setClients(prev => merge(prev, clientData));
+        if (letterData) setLetters(prev => merge(prev, letterData));
+        if (userData) setUsers(prev => merge(prev, userData));
+        if (taskData) setTasks(prev => merge(prev, taskData));
+        if (invoiceData) setInvoices(prev => merge(prev, invoiceData));
+        if (notifData) setNotifications(prev => merge(prev, notifData));
+        if (expenseData) setExpenses(prev => merge(prev, expenseData));
 
-        const { data: clientData } = await supabase.from('clients').select('*').order('dateAdded', { ascending: false });
-        if (clientData) setClients(clientData);
-
-        const { data: letterData } = await supabase.from('letters').select('*');
-        if (letterData) setLetters(letterData);
-
-        const { data: userData } = await supabase.from('users').select('*');
-        if (userData) setUsers(userData);
-
-        const { data: taskData } = await supabase.from('tasks').select('*');
-        if (taskData) setTasks(taskData);
-
-        const { data: invoiceData } = await supabase.from('invoices').select('*');
-        if (invoiceData) setInvoices(invoiceData);
-
-        const { data: notifData } = await supabase.from('notifications').select('*');
-        if (notifData) setNotifications(notifData);
-
-        const { data: expenseData } = await supabase.from('expenses').select('*').order('date', { ascending: false });
-        if (expenseData) setExpenses(expenseData);
       } catch (err) {
         console.error("Initial load failed, showing local data instead.", err);
       }
@@ -303,59 +316,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /* --- 2. SUPABASE SYNC LOGIC --- */
-const syncToCloud = async () => {
-  // 1. Safety check: Don't sync if offline or no user
-  if (!navigator.onLine || !currentUser) return; 
+  const syncToCloud = async () => {
+    if (!navigator.onLine || !currentUser) return; 
 
-  // 2. EXTRA SAFETY: Don't sync if our main arrays are empty. 
-  // This prevents a new computer from wiping the DB before it has fetched the data.
-  if (transactions.length === 0 && courtCases.length === 0 && clients.length === 0) {
-    console.warn("Sync skipped: Local state is empty. Fetching from cloud first...");
-    return;
-  }
+    if (transactions.length === 0 && courtCases.length === 0 && clients.length === 0) {
+      console.warn("Sync skipped: Local state is empty.");
+      return;
+    }
 
-  try {
-    await Promise.all([
-      supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
-      supabase.from('clients').upsert(clients, { onConflict: 'id' }),
-      supabase.from('letters').upsert(letters, { onConflict: 'id' }),
-      supabase.from('invoices').upsert(invoices, { onConflict: 'id' }),
-      supabase.from('transactions').upsert(transactions, { onConflict: 'id' }),
-      supabase.from('court_cases').upsert(courtCases, { onConflict: 'id' }),
-      supabase.from('users').upsert(users, { onConflict: 'id' }),
-      supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
-      supabase.from('notifications').upsert(notifications, { onConflict: 'id' })
-    ]);
-    console.log("Cloud sync successful.");
-  } catch (e) {
-    console.error("Cloud sync failed:", e);
-  }
-};
+    try {
+      await Promise.all([
+        supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
+        supabase.from('clients').upsert(clients, { onConflict: 'id' }),
+        supabase.from('letters').upsert(letters, { onConflict: 'id' }),
+        supabase.from('invoices').upsert(invoices, { onConflict: 'id' }),
+        supabase.from('transactions').upsert(transactions, { onConflict: 'id' }),
+        supabase.from('court_cases').upsert(courtCases, { onConflict: 'id' }),
+        supabase.from('users').upsert(users, { onConflict: 'id' }),
+        supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
+        supabase.from('notifications').upsert(notifications, { onConflict: 'id' })
+      ]);
+      console.log("Cloud sync successful.");
+    } catch (e) {
+      console.error("Cloud sync failed:", e);
+    }
+  };
 
   /* --- AUTH --- */
   const login = async (email: string, password: string) => {
-  // 1. Check local state first (fast)
-  let user = users.find(u => u.email === email && u.password === password);
-  
-  // 2. If not found locally, check Supabase directly (important for new computers)
-  if (!user) {
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single();
+    let user = users.find(u => u.email === email && u.password === password);
     
-    if (data) user = data;
-  }
+    if (!user) {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single();
+      
+      if (data) user = data;
+    }
 
-  if (!user) return false;
+    if (!user) return false;
 
-  setCurrentUser(user);
-  // Persist immediately so a refresh doesn't log them out
-  localStorage.setItem("currentUser", JSON.stringify(user));
-  return true;
-};
+    setCurrentUser(user);
+    localStorage.setItem("currentUser", JSON.stringify(user));
+    return true;
+  };
+
   const logout = () => {
     localStorage.removeItem("currentUser");
     setCurrentUser(null);
@@ -550,12 +558,9 @@ const syncToCloud = async () => {
     
     if (currentUser) {
       localStorage.setItem("currentUser", JSON.stringify(currentUser));
-      
-      // DEBOUNCE: Only sync to cloud after 2 seconds of inactivity
       const timeoutId = setTimeout(() => {
         syncToCloud();
       }, 2000);
-      
       return () => clearTimeout(timeoutId);
     } else {
       localStorage.removeItem("currentUser");

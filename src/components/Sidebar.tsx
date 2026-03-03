@@ -3,9 +3,10 @@ import { Link, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
 export default function Sidebar() {
-  const { currentUser, logout, firmName } = useAppContext();
+  const { currentUser, logout, firmName, syncToCloud } = useAppContext();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false); // Mobile toggle state
+  const [isSyncing, setIsSyncing] = useState(false); // Sync animation state
 
   if (!currentUser) return null;
 
@@ -32,6 +33,13 @@ export default function Sidebar() {
   ];
 
   const toggleSidebar = () => setIsOpen(!isOpen);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    await syncToCloud();
+    // Keep the "Syncing..." state visible for a moment so the user knows it worked
+    setTimeout(() => setIsSyncing(false), 500);
+  };
 
   return (
     <>
@@ -95,6 +103,20 @@ export default function Sidebar() {
             </Link>
           ))}
         </nav>
+
+        {/* 4. SYNC TO CLOUD BUTTON */}
+        <button 
+          onClick={handleManualSync} 
+          disabled={isSyncing}
+          style={{
+            ...sidebarStyles.syncBtn,
+            opacity: isSyncing ? 0.7 : 1,
+            cursor: isSyncing ? "not-allowed" : "pointer"
+          }}
+        >
+          <span style={{ marginRight: 12 }}>{isSyncing ? "⏳" : "☁️"}</span> 
+          {isSyncing ? "Syncing..." : "Sync to Cloud"}
+        </button>
 
         <button onClick={logout} style={sidebarStyles.logoutBtn}>
           <span style={{ marginRight: 12 }}>🚪</span> Logout
@@ -162,8 +184,22 @@ const sidebarStyles = {
     fontSize: "14px",
     transition: "all 0.2s",
   },
+  syncBtn: {
+    margin: "10px 10px 0 10px",
+    padding: "12px 15px",
+    backgroundColor: "#1e293b",
+    border: "1px solid #334155",
+    color: "#38bdf8",
+    borderRadius: "8px",
+    textAlign: "left" as const,
+    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
+    fontWeight: "bold",
+    transition: "all 0.2s",
+  },
   logoutBtn: {
-    margin: "20px 10px",
+    margin: "10px 10px 20px 10px", // Adjusted margin to accommodate the sync button
     padding: "12px 15px",
     backgroundColor: "transparent",
     border: "1px solid #334155",
