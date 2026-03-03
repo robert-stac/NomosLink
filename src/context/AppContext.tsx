@@ -59,8 +59,6 @@ export interface Transaction {
   fileName: string;
   lawyerId: string;
   type: string;
-  status: "Pending" | "Completed";
-  amount?: number;
   billedAmount?: number;
   paidAmount?: number;
   balance?: number;
@@ -145,7 +143,7 @@ interface AppContextType {
   setUsers: (users: User[]) => void;
 
   transactions: Transaction[];
-  addTransaction: (tx: Transaction) => void;
+  addTransaction: (tx: Transaction) => Promise<void>;
   editTransaction: (id: string, data: Partial<Transaction>) => void;
   updateTransaction: (id: string, data: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
@@ -206,9 +204,22 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
     PROVIDER
 ======================= */
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // IMPROVED: Initialize with validation to prevent "Access Denied" errors
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const savedUser = localStorage.getItem("currentUser");
-    return savedUser ? JSON.parse(savedUser) : null;
+    if (!savedUser) return null;
+    try {
+      const parsed = JSON.parse(savedUser);
+      // Ensure the object actually has the required fields
+      if (parsed && parsed.id && parsed.role) {
+        return parsed;
+      }
+      localStorage.removeItem("currentUser");
+      return null;
+    } catch (e) {
+      localStorage.removeItem("currentUser");
+      return null;
+    }
   });
 
   const [users, setUsers] = useState<User[]>(() => {
@@ -233,13 +244,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
       if (error) throw error;
-      console.log(`Instant save to ${table} successful.`);
     } catch (e) {
       console.error(`Instant save to ${table} failed:`, e);
     }
   };
 
-  /* --- 1. INITIAL DATA LOAD --- */
+  /* --- INITIAL DATA LOAD --- */
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -322,7 +332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  /* --- 2. SUPABASE SYNC LOGIC (MANUAL FALLBACK) --- */
+  /* --- SYNC LOGIC --- */
   const syncToCloud = async () => {
     if (!navigator.onLine || !currentUser) return; 
     try {
@@ -356,12 +366,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
+  // IMPROVED: Robust logout to reset app state completely
   const logout = () => {
     localStorage.removeItem("currentUser");
     setCurrentUser(null);
+    // Force a reload to the root to ensure clean state
+    window.location.href = "/";
   };
 
-  /* --- USERS --- */
+  /* --- CRUD OPERATIONS --- */
   const addUser = (user: User) => {
     setUsers(prev => [...prev, user]);
     instantSave('users', user);
@@ -372,20 +385,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const lawyers = users.filter(u => u.role !== "admin");
 
-  /* --- TRANSACTIONS --- */
-  const addTransaction = (tx: Transaction) => {
-    setTransactions(prev => [...prev, tx]);
-    instantSave('transactions', tx); // Instant save single row
+  const addTransaction = async (tx: Transaction) => {
+    const { id, archived, ...cleanData } = tx as any;
+    const { data, error } = await supabase.from('transactions').insert([cleanData]).select().single();
+    if (error) {
+      console.error("Supabase Error:", error.message);
+      return;
+    }
+    if (data) setTransactions(prev => [...prev, data]);
   };
   
   const editTransaction = (id: string, data: Partial<Transaction>) => {
     setTransactions(prev => prev.map(t => {
       if (t.id === id) {
         const updated = { ...t, ...data };
-        const billed = Number(updated.billedAmount) || Number((updated as any).billed) || Number(updated.amount) || 0;
-        const paid = Number(updated.paidAmount) || Number((updated as any).paid) || 0;
-        const finalObj = { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid, amount: billed };
-        instantSave('transactions', finalObj); // Instant save update
+        const billed = Number(updated.billedAmount) || 0;
+        const paid = Number(updated.paidAmount) || 0;
+        const finalObj = { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid };
+        const { progressNotes, documents, ...dbSafe } = finalObj as any;
+        instantSave('transactions', dbSafe); 
         return finalObj;
       }
       return t;
@@ -409,9 +427,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             date: new Date().toLocaleString()
           }]
         };
-        instantSave('transactions', updated);
+        supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
         if (t.lawyerId && t.lawyerId !== currentUser.id) {
-           sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
+            sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
         }
         return updated;
       }
@@ -419,52 +437,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  /* --- COURT CASES --- */
   const addCourtCase = (c: CourtCase) => {
     setCourtCases(prev => [...prev, c]);
-    instantSave('court_cases', c); // Fix: Send instantly to database
+    instantSave('court_cases', c);
   };
-
   const editCourtCase = (id: string, data: Partial<CourtCase>) =>
     setCourtCases(prev => prev.map(c => {
       if (c.id === id) {
         const updated = { ...c, ...data };
-        const b = Number(updated.billed) || Number((updated as any).billedAmount) || 0;
-        const p = Number(updated.paid) || Number((updated as any).paidAmount) || 0;
-        const finalObj = { ...updated, billed: b, paid: p, balance: b - p };
-        instantSave('court_cases', finalObj); // Fix: Send update instantly
-        return finalObj;
+        instantSave('court_cases', updated);
+        return updated;
       }
       return c;
     }));
-
   const deleteCourtCase = (id: string) => {
     setCourtCases(prev => prev.filter(c => c.id !== id));
     if (navigator.onLine) supabase.from('court_cases').delete().eq('id', id).then();
   };
 
-  /* --- LETTERS --- */
   const addLetter = (l: Letter) => {
     setLetters(prev => [...prev, l]);
-    instantSave('letters', l); // Fix: Send instantly
+    instantSave('letters', l);
   };
-
   const editLetter = (id: string, data: Partial<Letter>) =>
     setLetters(prev => prev.map(l => {
       if (l.id === id) {
         const updated = { ...l, ...data };
-        instantSave('letters', updated); // Fix: Send update instantly
+        instantSave('letters', updated);
         return updated;
       }
       return l;
     }));
-
   const deleteLetter = (id: string) => {
     setLetters(prev => prev.filter(l => l.id !== id));
     if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
   };
 
-  /* --- INVOICES --- */
   const addInvoice = (inv: Invoice) => {
     setInvoices(prev => [...prev, inv]);
     instantSave('invoices', inv);
@@ -478,7 +486,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('invoices').delete().eq('id', id).then();
   };
 
-  /* --- CLIENTS --- */
   const addClient = (client: Client) => {
     setClients(prev => [...prev, client]);
     instantSave('clients', client);
@@ -492,7 +499,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('clients').delete().eq('id', id).then();
   };
 
-  /* --- TASKS --- */
   const addTask = (taskData: Omit<Task, "id" | "status" | "dateCreated">) => {
     const newTask: Task = { ...taskData, id: `TASK-${Date.now()}`, status: "Pending", dateCreated: new Date().toLocaleString() };
     setTasks(prev => [...prev, newTask]);

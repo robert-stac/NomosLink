@@ -82,6 +82,14 @@ function AdminLayout({ children, isOnline }: { children: React.ReactNode; isOnli
 export default function App() {
   const { currentUser } = useAppContext();
   const isOnline = useOnlineStatus();
+  const [isInitialising, setIsInitialising] = useState(true);
+
+  // Safety: Allow the AppContext 100ms to validate the localStorage role 
+  // before the router decides to redirect to login.
+  useEffect(() => {
+    const timer = setTimeout(() => setIsInitialising(false), 150);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Helper to determine the main landing page for Management roles
   const getDashboardComponent = () => {
@@ -98,6 +106,10 @@ export default function App() {
     if (currentUser.role === "clerk") return "/clerk-dashboard";
     return "/login";
   };
+
+  if (isInitialising) {
+    return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center' }}>Loading NomosLink...</div>;
+  }
 
   return (
     <BrowserRouter>
