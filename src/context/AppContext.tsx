@@ -204,16 +204,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
     PROVIDER
 ======================= */
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // IMPROVED: Initialize with validation to prevent "Access Denied" errors
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const savedUser = localStorage.getItem("currentUser");
     if (!savedUser) return null;
     try {
       const parsed = JSON.parse(savedUser);
-      // Ensure the object actually has the required fields
-      if (parsed && parsed.id && parsed.role) {
-        return parsed;
-      }
+      if (parsed && parsed.id && parsed.role) return parsed;
       localStorage.removeItem("currentUser");
       return null;
     } catch (e) {
@@ -238,7 +234,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
 
-  /* --- INSTANT SAVE HELPER --- */
   const instantSave = async (table: string, payload: any) => {
     if (!navigator.onLine) return;
     try {
@@ -249,7 +244,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  /* --- INITIAL DATA LOAD --- */
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -299,7 +293,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchInitialData();
   }, []);
 
-  /* --- NOTIFICATION HELPERS --- */
   const sendNotification = (
     recipientId: string, 
     message: string, 
@@ -332,7 +325,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  /* --- SYNC LOGIC --- */
   const syncToCloud = async () => {
     if (!navigator.onLine || !currentUser) return; 
     try {
@@ -353,7 +345,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  /* --- AUTH --- */
   const login = async (email: string, password: string) => {
     let user = users.find(u => u.email === email && u.password === password);
     if (!user) {
@@ -366,15 +357,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // IMPROVED: Robust logout to reset app state completely
   const logout = () => {
     localStorage.removeItem("currentUser");
     setCurrentUser(null);
-    // Force a reload to the root to ensure clean state
     window.location.href = "/";
   };
 
-  /* --- CRUD OPERATIONS --- */
   const addUser = (user: User) => {
     setUsers(prev => [...prev, user]);
     instantSave('users', user);
@@ -463,7 +451,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLetters(prev => prev.map(l => {
       if (l.id === id) {
         const updated = { ...l, ...data };
-        instantSave('letters', updated);
+        const { progressNotes, documents, ...dbSafe } = updated as any;
+        instantSave('letters', dbSafe);
         return updated;
       }
       return l;
@@ -471,6 +460,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteLetter = (id: string) => {
     setLetters(prev => prev.filter(l => l.id !== id));
     if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
+  };
+
+  /* --- ADDED: LETTER PROGRESS LOGIC --- */
+  const addLetterProgress = (id: string, message: string) => {
+    if (!currentUser) return;
+    setLetters(prev => prev.map(l => {
+      if (l.id === id) {
+        const newNote: ProgressNote = {
+          id: crypto.randomUUID(),
+          message,
+          authorId: currentUser.id,
+          authorName: currentUser.name,
+          authorRole: currentUser.role,
+          date: new Date().toLocaleString()
+        };
+        const updated = {
+          ...l,
+          progressNotes: [...(l.progressNotes || []), newNote]
+        };
+        
+        // Sync specifically the progressNotes column to Supabase
+        supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+        
+        // Notify the assigned lawyer if someone else updated it
+        if (l.lawyerId && l.lawyerId !== currentUser.id) {
+          sendNotification(l.lawyerId, `Letter Update: ${l.subject}`, 'file', l.id, 'letter');
+        }
+        return updated;
+      }
+      return l;
+    }));
   };
 
   const addInvoice = (inv: Invoice) => {
@@ -516,7 +536,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  /* --- PERSISTENCE --- */
   useEffect(() => {
     localStorage.setItem("users", JSON.stringify(users));
     localStorage.setItem("transactions", JSON.stringify(transactions));
@@ -541,7 +560,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTransactionProgress, editTransactionProgress: () => {}, deleteTransactionProgress: () => {}, uploadTransactionDocument: () => {},
         courtCases, addCourtCase, editCourtCase, deleteCourtCase, addCourtCaseProgress: () => {},
         updateCourtCase: editCourtCase, 
-        letters, addLetter, editLetter, deleteLetter, addLetterProgress: () => {},
+        letters, addLetter, editLetter, deleteLetter, addLetterProgress,
         updateLetter: editLetter, 
         invoices, addInvoice, updateInvoice, deleteInvoice,
         clients, addClient, updateClient, deleteClient,
