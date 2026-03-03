@@ -13,7 +13,7 @@ export default function Letters() {
   // --- PRESERVED STATE ---
   const [editingId, setEditingId] = useState<string | null>(null);
   const [type, setType] = useState("Incoming");
-  const [lawyerId, setLawyerId] = useState("");
+  const [lawyerId, setLawyerId] = useState(""); // This stores the ID string
   const [subject, setSubject] = useState("");
   
   // --- NEW FIELDS ---
@@ -41,7 +41,7 @@ export default function Letters() {
     setLawyerId("");
     setSubject("");
     setFileName(""); 
-    setRefNumber(""); // Reset Ref
+    setRefNumber(""); 
     setDate("");
     setStatus("Pending");
     setBilled("");
@@ -51,19 +51,22 @@ export default function Letters() {
   };
 
   const handleSave = () => {
-    if (!lawyerId || !subject || !billed) return;
+    if (!lawyerId || !subject || !billed) {
+        alert("Please fill in the Assigned Counsel, Subject, and Fees.");
+        return;
+    }
 
     const billedNum = parseFloat(billed);
     const paidNum = parseFloat(paid) || 0;
-    const lawyerObj = lawyers.find((l) => l.id === lawyerId) || null;
 
+    // We send lawyerId as a string to match the DB column
     const newLetter = {
       id: editingId || Date.now().toString(),
       type,
-      lawyer: lawyerObj,
+      lawyerId, // Fixed: Sending ID string, not the full object
       subject,
       fileName, 
-      refNumber, // Save Ref
+      refNumber, 
       date,
       status,
       billed: billedNum,
@@ -81,14 +84,14 @@ export default function Letters() {
   const handleEdit = (l: any) => {
     setEditingId(l.id);
     setType(l.type);
-    setLawyerId(l.lawyer?.id || "");
+    setLawyerId(l.lawyerId || ""); // Fixed: loading ID string
     setSubject(l.subject);
     setFileName(l.fileName || ""); 
-    setRefNumber(l.refNumber || ""); // Load Ref
-    setDate(l.date);
+    setRefNumber(l.refNumber || ""); 
+    setDate(l.date || "");
     setStatus(l.status);
-    setBilled(l.billed.toString());
-    setPaid(l.paid.toString());
+    setBilled(l.billed?.toString() || "");
+    setPaid(l.paid?.toString() || "");
     setShowForm(true);
   };
 
@@ -96,26 +99,30 @@ export default function Letters() {
     editLetter(l.id, { ...l, status: l.status === "Completed" ? "Pending" : "Completed" });
   };
 
-  const formatCurrency = (num: number) => "UGX " + num.toLocaleString();
+  const formatCurrency = (num: number) => "UGX " + (num || 0).toLocaleString();
 
   // PRESERVED SUMMARY LOGIC
   const totalLetters = letters.length;
-  const incomingLetters = letters.filter((l) => l.type === "Incoming").length;
-  const outgoingLetters = letters.filter((l) => l.type === "Outgoing").length;
-  const totalBilled = useMemo(() => letters.reduce((sum, l) => sum + l.billed, 0), [letters]);
+  const incomingLetters = letters.filter((l: any) => l.type === "Incoming").length;
+  const outgoingLetters = letters.filter((l: any) => l.type === "Outgoing").length;
+  const totalBilled = useMemo(() => letters.reduce((sum: number, l: any) => sum + (l.billed || 0), 0), [letters]);
 
   // UPDATED FILTERING LOGIC
-  const filteredLetters = letters.filter((l) => {
+  const filteredLetters = letters.filter((l: any) => {
     const matchesFilter =
       (filterType === "All" || l.type === filterType) &&
       (filterStatus === "All" || l.status === filterStatus);
+
+    // We look up the lawyer name locally to allow searching by name
+    const assignedLawyer = lawyers.find((lawyer: any) => lawyer.id === l.lawyerId);
+    const lawyerName = assignedLawyer?.name.toLowerCase() || "";
 
     const matchesSearch =
       searchQuery === "" ||
       l.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (l.fileName && l.fileName.toLowerCase().includes(searchQuery.toLowerCase())) || 
-      (l.refNumber && l.refNumber.toLowerCase().includes(searchQuery.toLowerCase())) || // Search Ref
-      (l.lawyer?.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      (l.refNumber && l.refNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      lawyerName.includes(searchQuery.toLowerCase());
 
     return matchesFilter && matchesSearch;
   });
@@ -123,15 +130,14 @@ export default function Letters() {
   // UPDATED SORTING LOGIC
   const sortedLetters = useMemo(() => {
     if (!sortField) return filteredLetters;
-    return [...filteredLetters].sort((a, b) => {
+    return [...filteredLetters].sort((a: any, b: any) => {
       let aVal: any = a[sortField];
       let bVal: any = b[sortField];
       
-      // String sorting for fileName and refNumber
       if (sortField === "fileName" || sortField === "refNumber") {
-         aVal = aVal || "";
-         bVal = bVal || "";
-         return sortOrder === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+          aVal = aVal || "";
+          bVal = bVal || "";
+          return sortOrder === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       }
 
       if (sortField === "date") {
@@ -161,7 +167,7 @@ export default function Letters() {
         </div>
         <button 
             onClick={() => setShowForm(!showForm)} 
-            className="bg-[#0B1F3A] text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-blue-900/20 transition-all hover:scale-105 active:scale-95 bg-gradient-to-r from-blue-700 to-black"        >
+            className="bg-[#0B1F3A] text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-blue-900/20 transition-all hover:scale-105 active:scale-95 bg-gradient-to-r from-blue-700 to-black">
             {showForm ? "Cancel Entry" : "+ Create New Letter"}
         </button>
       </div>
@@ -190,7 +196,6 @@ export default function Letters() {
           </div>
           <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             
-            {/* FILE NAME & REF NUMBER (Grouped for Layout) */}
             <div>
               <label className="block text-xs font-black uppercase text-slate-400 mb-2">File Name</label>
               <input 
@@ -225,7 +230,7 @@ export default function Letters() {
               <label className="block text-xs font-black uppercase text-slate-400 mb-2">Assigned Counsel *</label>
               <select value={lawyerId} onChange={(e) => setLawyerId(e.target.value)} className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500">
                 <option value="">Select Counsel</option>
-                {lawyers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                {lawyers.map((l: any) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
 
@@ -291,15 +296,12 @@ export default function Letters() {
           <thead>
             <tr className="bg-slate-900 text-white">
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest">Type</th>
-              
-              {/* FILE & REF COLUMNS */}
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("fileName")}>
                  File Name {sortField === "fileName" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
               </th>
                <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("refNumber")}>
                  Ref No. {sortField === "refNumber" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
               </th>
-
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest">Subject</th>
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("date")}>
                 Date {sortField === "date" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
@@ -312,48 +314,51 @@ export default function Letters() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {sortedLetters.map((l) => (
-              <tr key={l.id} className="hover:bg-slate-50/80 transition-colors group">
-                <td className="p-5">
-                    <span className={`text-[10px] font-black px-3 py-1 rounded-full ${l.type === 'Incoming' ? 'bg-blue-50 text-blue-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                        {l.type}
-                    </span>
-                </td>
+            {sortedLetters.map((l: any) => {
+              // Lookup lawyer name for display
+              const assignedLawyer = lawyers.find((lawyer: any) => lawyer.id === l.lawyerId);
+              
+              return (
+                <tr key={l.id} className="hover:bg-slate-50/80 transition-colors group">
+                  <td className="p-5">
+                      <span className={`text-[10px] font-black px-3 py-1 rounded-full ${l.type === 'Incoming' ? 'bg-blue-50 text-blue-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                          {l.type}
+                      </span>
+                  </td>
+                  <td className="p-5 font-bold text-slate-800">{l.fileName || "-"}</td>
+                  <td className="p-5 font-bold text-slate-500 text-xs">{l.refNumber || "-"}</td>
 
-                {/* NEW COLUMNS */}
-                <td className="p-5 font-bold text-slate-800">{l.fileName || "-"}</td>
-                <td className="p-5 font-bold text-slate-500 text-xs">{l.refNumber || "-"}</td>
-
-                <td className="p-5">
-                    <p className="font-bold text-slate-800 line-clamp-1">{l.subject}</p>
-                    <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase">{l.lawyer?.name || "Unassigned"}</p>
-                </td>
-                <td className="p-5 text-slate-500 font-medium">{l.date || "-"}</td>
-                <td className="p-5">
-                    <button onClick={() => handleQuickComplete(l)} className={`text-[10px] font-black px-3 py-1 rounded-lg transition ${l.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {l.status}
-                    </button>
-                </td>
-                <td className="p-5">
-                    <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold">
-                            <span className="text-slate-400">Paid:</span>
-                            <span className="text-slate-900">{formatCurrency(l.paid)}</span>
-                        </div>
-                        <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(l.paid / l.billed) * 100}%` }}></div>
-                        </div>
-                        <p className="text-[10px] font-black text-slate-400">Bal: {formatCurrency(l.billed - l.paid)}</p>
-                    </div>
-                </td>
-                <td className="p-5 text-center">
-                    <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(l)} className="p-2 bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition">✏️</button>
-                        <button onClick={() => deleteLetter(l.id)} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition">🗑️</button>
-                    </div>
-                </td>
-              </tr>
-            ))}
+                  <td className="p-5">
+                      <p className="font-bold text-slate-800 line-clamp-1">{l.subject}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase">{assignedLawyer?.name || "Unassigned"}</p>
+                  </td>
+                  <td className="p-5 text-slate-500 font-medium">{l.date || "-"}</td>
+                  <td className="p-5">
+                      <button onClick={() => handleQuickComplete(l)} className={`text-[10px] font-black px-3 py-1 rounded-lg transition ${l.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {l.status}
+                      </button>
+                  </td>
+                  <td className="p-5">
+                      <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-bold">
+                              <span className="text-slate-400">Paid:</span>
+                              <span className="text-slate-900">{formatCurrency(l.paid)}</span>
+                          </div>
+                          <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="bg-emerald-500 h-full transition-all" style={{ width: `${((l.paid || 0) / (l.billed || 1)) * 100}%` }}></div>
+                          </div>
+                          <p className="text-[10px] font-black text-slate-400">Bal: {formatCurrency((l.billed || 0) - (l.paid || 0))}</p>
+                      </div>
+                  </td>
+                  <td className="p-5 text-center">
+                      <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleEdit(l)} className="p-2 bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition">✏️</button>
+                          <button onClick={() => deleteLetter(l.id)} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition">🗑️</button>
+                      </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {sortedLetters.length === 0 && (
