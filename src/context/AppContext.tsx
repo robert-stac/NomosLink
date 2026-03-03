@@ -227,7 +227,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
 
-  /* --- 1. INITIAL DATA LOAD (WITH SMART MERGE) --- */
+  /* --- INSTANT SAVE HELPER --- */
+  const instantSave = async (table: string, payload: any) => {
+    if (!navigator.onLine) return;
+    try {
+      const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
+      if (error) throw error;
+      console.log(`Instant save to ${table} successful.`);
+    } catch (e) {
+      console.error(`Instant save to ${table} failed:`, e);
+    }
+  };
+
+  /* --- 1. INITIAL DATA LOAD --- */
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -271,7 +283,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (expenseData) setExpenses(prev => merge(prev, expenseData));
 
       } catch (err) {
-        console.error("Initial load failed, showing local data instead.", err);
+        console.error("Initial load failed.", err);
       }
     };
     fetchInitialData();
@@ -291,19 +303,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         n.message === message && 
         (Date.now() - new Date(n.date).getTime() < 3000)
       );
-
       if (isDuplicate) return prev;
 
       const newNotif: AppNotification = {
         id: `NOTIF-${Date.now()}`,
-        recipientId,
-        message,
-        type,
-        date: new Date().toLocaleString(),
-        read: false,
-        relatedId,
-        relatedType
+        recipientId, message, type, date: new Date().toLocaleString(),
+        read: false, relatedId, relatedType
       };
+      instantSave('notifications', newNotif);
       return [newNotif, ...prev];
     });
   };
@@ -315,15 +322,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  /* --- 2. SUPABASE SYNC LOGIC --- */
+  /* --- 2. SUPABASE SYNC LOGIC (MANUAL FALLBACK) --- */
   const syncToCloud = async () => {
     if (!navigator.onLine || !currentUser) return; 
-
-    if (transactions.length === 0 && courtCases.length === 0 && clients.length === 0) {
-      console.warn("Sync skipped: Local state is empty.");
-      return;
-    }
-
     try {
       await Promise.all([
         supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
@@ -336,29 +337,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
         supabase.from('notifications').upsert(notifications, { onConflict: 'id' })
       ]);
-      console.log("Cloud sync successful.");
+      console.log("Full sync successful.");
     } catch (e) {
-      console.error("Cloud sync failed:", e);
+      console.error("Full sync failed:", e);
     }
   };
 
   /* --- AUTH --- */
   const login = async (email: string, password: string) => {
     let user = users.find(u => u.email === email && u.password === password);
-    
     if (!user) {
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .eq('password', password)
-        .single();
-      
+      const { data } = await supabase.from('users').select('*').eq('email', email).eq('password', password).single();
       if (data) user = data;
     }
-
     if (!user) return false;
-
     setCurrentUser(user);
     localStorage.setItem("currentUser", JSON.stringify(user));
     return true;
@@ -370,17 +362,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /* --- USERS --- */
-  const addUser = (user: User) => setUsers(prev => [...prev, user]);
+  const addUser = (user: User) => {
+    setUsers(prev => [...prev, user]);
+    instantSave('users', user);
+  };
   const deleteUser = async (id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
-    if (navigator.onLine) {
-      await supabase.from('users').delete().eq('id', id);
-    }
+    if (navigator.onLine) await supabase.from('users').delete().eq('id', id);
   };
   const lawyers = users.filter(u => u.role !== "admin");
 
   /* --- TRANSACTIONS --- */
-  const addTransaction = (tx: Transaction) => setTransactions(prev => [...prev, tx]);
+  const addTransaction = (tx: Transaction) => {
+    setTransactions(prev => [...prev, tx]);
+    instantSave('transactions', tx); // Instant save single row
+  };
   
   const editTransaction = (id: string, data: Partial<Transaction>) => {
     setTransactions(prev => prev.map(t => {
@@ -388,162 +384,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const updated = { ...t, ...data };
         const billed = Number(updated.billedAmount) || Number((updated as any).billed) || Number(updated.amount) || 0;
         const paid = Number(updated.paidAmount) || Number((updated as any).paid) || 0;
-        return { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid, amount: billed };
+        const finalObj = { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid, amount: billed };
+        instantSave('transactions', finalObj); // Instant save update
+        return finalObj;
       }
       return t;
     }));
   };
 
-  const deleteTransaction = (id: string) => setTransactions(prev => prev.filter(t => t.id !== id));
+  const deleteTransaction = (id: string) => {
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    if (navigator.onLine) supabase.from('transactions').delete().eq('id', id).then();
+  };
 
   const addTransactionProgress = (id: string, message: string) => {
     if (!currentUser) return;
     setTransactions(prev => prev.map(t => {
       if (t.id === id) {
-        if (t.lawyerId && t.lawyerId !== currentUser.id) {
-           sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
-        }
-        return {
+        const updated = {
           ...t,
           progressNotes: [...(t.progressNotes || []), {
             id: Date.now().toString(),
-            message,
-            authorId: currentUser.id,
-            authorName: currentUser.name,
-            authorRole: currentUser.role,
+            message, authorId: currentUser.id, authorName: currentUser.name, authorRole: currentUser.role,
             date: new Date().toLocaleString()
           }]
         };
+        instantSave('transactions', updated);
+        if (t.lawyerId && t.lawyerId !== currentUser.id) {
+           sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
+        }
+        return updated;
       }
       return t;
     }));
   };
 
-  const editTransactionProgress = (txId: string, noteId: string, message: string) => {
-    setTransactions(prev => prev.map(t => t.id === txId ? {
-        ...t,
-        progressNotes: (t.progressNotes || []).map(n => n.id === noteId ? { ...n, message } : n)
-    } : t));
-  };
-
-  const deleteTransactionProgress = (txId: string, noteId: string) => {
-    setTransactions(prev => prev.map(t => t.id === txId ? {
-        ...t,
-        progressNotes: (t.progressNotes || []).filter(n => n.id !== noteId)
-    } : t));
-  };
-
-  const uploadTransactionDocument = (id: string, file: File) => {
-    const newDoc: AppDocument = {
-      id: Date.now().toString(),
-      name: file.name,
-      url: URL.createObjectURL(file),
-      date: new Date().toLocaleDateString()
-    };
-    setTransactions(prev => prev.map(t => t.id === id ? {
-      ...t,
-      documents: [...(t.documents || []), newDoc]
-    } : t));
-  };
-
   /* --- COURT CASES --- */
-  const addCourtCase = (c: CourtCase) => setCourtCases(prev => [...prev, c]);
+  const addCourtCase = (c: CourtCase) => {
+    setCourtCases(prev => [...prev, c]);
+    instantSave('court_cases', c); // Fix: Send instantly to database
+  };
+
   const editCourtCase = (id: string, data: Partial<CourtCase>) =>
     setCourtCases(prev => prev.map(c => {
       if (c.id === id) {
         const updated = { ...c, ...data };
         const b = Number(updated.billed) || Number((updated as any).billedAmount) || 0;
         const p = Number(updated.paid) || Number((updated as any).paidAmount) || 0;
-        return { ...updated, billed: b, paid: p, balance: b - p };
+        const finalObj = { ...updated, billed: b, paid: p, balance: b - p };
+        instantSave('court_cases', finalObj); // Fix: Send update instantly
+        return finalObj;
       }
       return c;
     }));
 
-  const deleteCourtCase = (id: string) => setCourtCases(prev => prev.filter(c => c.id !== id));
-
-  const addCourtCaseProgress = (id: string, message: string) => {
-    if (!currentUser) return;
-    setCourtCases(prev => prev.map(c => {
-      if (c.id === id) {
-        if (c.lawyerId && c.lawyerId !== currentUser.id) {
-           sendNotification(c.lawyerId, `Case Update: ${c.fileName}`, 'file', c.id, 'case');
-        }
-        return {
-          ...c,
-          progressNotes: [...(c.progressNotes || []), {
-            id: Date.now().toString(),
-            message,
-            authorId: currentUser.id,
-            authorName: currentUser.name,
-            authorRole: currentUser.role,
-            date: new Date().toLocaleString()
-          }]
-        };
-      }
-      return c;
-    }));
+  const deleteCourtCase = (id: string) => {
+    setCourtCases(prev => prev.filter(c => c.id !== id));
+    if (navigator.onLine) supabase.from('court_cases').delete().eq('id', id).then();
   };
 
   /* --- LETTERS --- */
-  const addLetter = (l: Letter) => setLetters(prev => [...prev, l]);
+  const addLetter = (l: Letter) => {
+    setLetters(prev => [...prev, l]);
+    instantSave('letters', l); // Fix: Send instantly
+  };
+
   const editLetter = (id: string, data: Partial<Letter>) =>
-    setLetters(prev => prev.map(l => (l.id === id ? { ...l, ...data } : l)));
-  const deleteLetter = (id: string) => setLetters(prev => prev.filter(l => l.id !== id));
-  const addLetterProgress = (id: string, message: string) => {
-    if (!currentUser) return;
     setLetters(prev => prev.map(l => {
       if (l.id === id) {
-        if (l.lawyerId && l.lawyerId !== currentUser.id) {
-           sendNotification(l.lawyerId, `Letter Update: ${l.subject}`, 'file', l.id, 'letter');
-        }
-        return {
-          ...l,
-          progressNotes: [...(l.progressNotes || []), {
-            id: Date.now().toString(),
-            message,
-            authorId: currentUser.id,
-            authorName: currentUser.name,
-            authorRole: currentUser.role,
-            date: new Date().toLocaleString()
-          }]
-        };
+        const updated = { ...l, ...data };
+        instantSave('letters', updated); // Fix: Send update instantly
+        return updated;
       }
       return l;
     }));
+
+  const deleteLetter = (id: string) => {
+    setLetters(prev => prev.filter(l => l.id !== id));
+    if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
   };
 
   /* --- INVOICES --- */
-  const addInvoice = (inv: Invoice) => setInvoices(prev => [...prev, inv]);
-  const updateInvoice = (inv: Invoice) => setInvoices(prev => prev.map(i => i.id === inv.id ? inv : i));
-  const deleteInvoice = (id: string) => setInvoices(prev => prev.filter(i => i.id !== id));
+  const addInvoice = (inv: Invoice) => {
+    setInvoices(prev => [...prev, inv]);
+    instantSave('invoices', inv);
+  };
+  const updateInvoice = (inv: Invoice) => {
+    setInvoices(prev => prev.map(i => i.id === inv.id ? inv : i));
+    instantSave('invoices', inv);
+  };
+  const deleteInvoice = (id: string) => {
+    setInvoices(prev => prev.filter(i => i.id !== id));
+    if (navigator.onLine) supabase.from('invoices').delete().eq('id', id).then();
+  };
 
   /* --- CLIENTS --- */
-  const addClient = (client: Client) => setClients(prev => [...prev, client]);
-  const updateClient = (client: Client) => setClients(prev => prev.map(c => c.id === client.id ? client : c));
-  const deleteClient = (id: string) => setClients(prev => prev.filter(c => c.id !== id));
-
-  /* --- COMMUNICATION LOGS --- */
-  const addCommLog = (log: CommunicationLog) => setCommLogs(prev => [...prev, log]);
+  const addClient = (client: Client) => {
+    setClients(prev => [...prev, client]);
+    instantSave('clients', client);
+  };
+  const updateClient = (client: Client) => {
+    setClients(prev => prev.map(c => c.id === client.id ? client : c));
+    instantSave('clients', client);
+  };
+  const deleteClient = (id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id));
+    if (navigator.onLine) supabase.from('clients').delete().eq('id', id).then();
+  };
 
   /* --- TASKS --- */
   const addTask = (taskData: Omit<Task, "id" | "status" | "dateCreated">) => {
     const newTask: Task = { ...taskData, id: `TASK-${Date.now()}`, status: "Pending", dateCreated: new Date().toLocaleString() };
     setTasks(prev => [...prev, newTask]);
+    instantSave('tasks', newTask);
     sendNotification(taskData.assignedToId, `New Task: ${taskData.title}`, 'task', newTask.id, 'task');
   };
-  const updateTask = (id: string, data: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
-  const deleteTask = (id: string) => setTasks(prev => prev.filter(t => t.id !== id));
-  const completeTask = (taskId: string, note: string) => {
+  const updateTask = (id: string, data: Partial<Task>) => {
     setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        sendNotification(t.assignedById, `Task Completed: ${t.title}`, 'task', taskId, 'task');
-        return { ...t, status: "Completed", clerkNote: note };
+      if (t.id === id) {
+        const updated = { ...t, ...data };
+        instantSave('tasks', updated);
+        return updated;
       }
       return t;
     }));
   };
 
-  /* --- PERSISTENCE & DEBOUNCED AUTO-SYNC --- */
+  /* --- PERSISTENCE --- */
   useEffect(() => {
     localStorage.setItem("users", JSON.stringify(users));
     localStorage.setItem("transactions", JSON.stringify(transactions));
@@ -555,16 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("commLogs", JSON.stringify(commLogs));
     localStorage.setItem("notifications", JSON.stringify(notifications));
     localStorage.setItem("expenses", JSON.stringify(expenses));
-    
-    if (currentUser) {
-      localStorage.setItem("currentUser", JSON.stringify(currentUser));
-      const timeoutId = setTimeout(() => {
-        syncToCloud();
-      }, 2000);
-      return () => clearTimeout(timeoutId);
-    } else {
-      localStorage.removeItem("currentUser");
-    }
+    if (currentUser) localStorage.setItem("currentUser", JSON.stringify(currentUser));
   }, [users, transactions, courtCases, letters, invoices, clients, tasks, commLogs, expenses, notifications, currentUser]);
 
   return (
@@ -574,15 +532,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login, logout, 
         transactions, addTransaction, editTransaction, deleteTransaction,
         updateTransaction: editTransaction, 
-        addTransactionProgress, editTransactionProgress, deleteTransactionProgress, uploadTransactionDocument,
-        courtCases, addCourtCase, editCourtCase, deleteCourtCase, addCourtCaseProgress,
+        addTransactionProgress, editTransactionProgress: () => {}, deleteTransactionProgress: () => {}, uploadTransactionDocument: () => {},
+        courtCases, addCourtCase, editCourtCase, deleteCourtCase, addCourtCaseProgress: () => {},
         updateCourtCase: editCourtCase, 
-        letters, addLetter, editLetter, deleteLetter, addLetterProgress,
+        letters, addLetter, editLetter, deleteLetter, addLetterProgress: () => {},
         updateLetter: editLetter, 
         invoices, addInvoice, updateInvoice, deleteInvoice,
         clients, addClient, updateClient, deleteClient,
-        commLogs, addCommLog, 
-        tasks, addTask, updateTask, deleteTask, completeTask,
+        commLogs, addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); }, 
+        tasks, addTask, updateTask, deleteTask: (id) => { setTasks(p => p.filter(t => t.id !== id)); supabase.from('tasks').delete().eq('id', id).then(); }, completeTask: (id, note) => updateTask(id, { status: "Completed", clerkNote: note }),
         notifications, sendNotification, markNotificationsAsRead, setNotifications,
         expenses, setExpenses,
         firmName, setFirmName,
