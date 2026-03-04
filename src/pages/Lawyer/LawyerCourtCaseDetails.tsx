@@ -1,31 +1,37 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 
 export default function LawyerCourtCaseDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null); 
+  
+  // State for loading feedback
+  const [isUploading, setIsUploading] = useState(false);
+  const [newNote, setNewNote] = useState("");
+
   const { 
     currentUser, 
     courtCases, 
     updateCourtCase, 
     addCourtCaseProgress,
-    users // Added to find the assigned lawyer's name
+    deleteCourtCaseProgress,
+    uploadCourtCaseDocument,
+    deleteCourtCaseDocument,
+    users 
   } = useAppContext();
   
-  const [newNote, setNewNote] = useState("");
-
   if (!currentUser) return <div className="p-10 text-center font-black text-slate-400">SESSION EXPIRED</div>;
 
-  // 1. Find the case by ID only first
+  // 1. Find the case
   const foundCase = courtCases.find((c) => String(c.id) === String(id));
 
-  // 2. Determine Permission
+  // 2. Permission Check
   const isOwner = foundCase && String(foundCase.lawyerId) === String(currentUser.id);
   const isManager = currentUser.role === "manager";
   const isAdmin = currentUser.role === "admin";
 
-  // If case doesn't exist OR user isn't allowed to see it, show error
   if (!foundCase || (!isOwner && !isManager && !isAdmin)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -40,13 +46,34 @@ export default function LawyerCourtCaseDetails() {
   }
 
   const courtCase = foundCase;
-  // Get assigned lawyer's name for the reference card
   const assignedLawyer = users.find(u => u.id === courtCase.lawyerId);
 
+  // LOGIC HANDLERS
   const handleAddNote = () => {
     if (!newNote.trim()) return;
     addCourtCaseProgress(courtCase.id, newNote.trim());
     setNewNote("");
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && uploadCourtCaseDocument) {
+      setIsUploading(true);
+      try {
+        await uploadCourtCaseDocument(courtCase.id, file);
+      } catch (error) {
+        console.error("Upload failed", error);
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = ""; 
+      }
+    }
+  };
+
+  const handleDeleteDoc = (docId: string) => {
+    if (window.confirm("Are you sure you want to remove this document?")) {
+      deleteCourtCaseDocument?.(courtCase.id, docId);
+    }
   };
 
   const toggleStatus = () => {
@@ -84,7 +111,6 @@ export default function LawyerCourtCaseDetails() {
           </button>
           
           <div className="flex gap-3">
-            {/* DOWNLOAD BUTTON: Only visible to Managers/Admins */}
             {(isManager || isAdmin) && (
               <button 
                 onClick={downloadProgressReport}
@@ -125,9 +151,23 @@ export default function LawyerCourtCaseDetails() {
               <div className="space-y-8 relative before:absolute before:inset-y-0 before:left-3 before:w-0.5 before:bg-slate-100">
                 {courtCase.progressNotes?.length ? (
                   [...courtCase.progressNotes].reverse().map((note) => (
-                    <div key={note.id} className="relative pl-10">
+                    <div key={note.id} className="relative pl-10 group">
                       <div className="absolute left-1.5 top-2 w-3 h-3 rounded-full bg-blue-600 border-2 border-white shadow-sm"></div>
-                      <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                      <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 relative">
+                        
+                        {(note.authorId === currentUser.id || isAdmin) && (
+                          <button 
+                            onClick={() => {
+                              if(window.confirm("Delete this progress note?")) {
+                                deleteCourtCaseProgress?.(courtCase.id, note.id);
+                              }
+                            }}
+                            className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <span className="text-[10px]">🗑️</span>
+                          </button>
+                        )}
+
                         <p className="text-sm font-bold text-slate-700 mb-2">{note.message}</p>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
                           Logged on {note.date} by {note.authorName}
@@ -150,18 +190,62 @@ export default function LawyerCourtCaseDetails() {
                   className="w-full bg-slate-50 border-0 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 mb-4"
                   rows={3}
                 />
-                <button 
-                  onClick={handleAddNote}
-                  className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-800 transition shadow-lg"
-                >
-                  Save Progression
-                </button>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={handleAddNote}
+                    className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-800 transition shadow-lg"
+                  >
+                    Save Progression
+                  </button>
+
+                  <button 
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition shadow-sm flex items-center gap-2 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isUploading ? (
+                      <span className="animate-spin inline-block w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full"></span>
+                    ) : <span>📎</span>}
+                    {isUploading ? "Uploading..." : "Attach Document"}
+                  </button>
+                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: QUICK STATS */}
+          {/* RIGHT COLUMN: QUICK STATS & DOCUMENTS */}
           <div className="lg:col-span-4 space-y-6">
+            
+            {/* DOCUMENTS LIST */}
+            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Court Documents</h3>
+              <div className="space-y-3">
+                {courtCase.documents?.map((doc) => (
+                  <div key={doc.id} className="flex items-center gap-2 group">
+                    <a 
+                      href={doc.url} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="flex-1 flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-blue-50 transition border border-slate-100"
+                    >
+                      <span className="text-[10px] font-bold text-slate-700 truncate max-w-[140px]">{doc.name}</span>
+                      <span className="text-[9px] font-black text-blue-600 opacity-0 group-hover:opacity-100 transition">VIEW ↗</span>
+                    </a>
+                    
+                    <button 
+                      onClick={() => handleDeleteDoc(doc.id)}
+                      className="p-3 text-slate-300 hover:text-red-500 bg-white border border-slate-100 rounded-xl transition shadow-sm opacity-0 group-hover:opacity-100"
+                      title="Delete document"
+                    >
+                      <span className="text-[10px]">🗑️</span>
+                    </button>
+                  </div>
+                ))}
+                {!courtCase.documents?.length && <p className="text-slate-400 text-[10px] italic">No files uploaded yet.</p>}
+              </div>
+            </div>
+
             <div className="bg-[#0B1F3A] text-white p-8 rounded-[40px] shadow-xl">
               <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6">File Summary</h3>
               <div className="space-y-6">

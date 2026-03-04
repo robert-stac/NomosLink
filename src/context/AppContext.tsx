@@ -150,7 +150,8 @@ interface AppContextType {
   addTransactionProgress: (id: string, message: string) => void;
   editTransactionProgress: (txId: string, noteId: string, message: string) => void;
   deleteTransactionProgress: (txId: string, noteId: string) => void;
-  uploadTransactionDocument: (id: string, file: File) => void;
+  uploadTransactionDocument: (id: string, file: File) => Promise<void>;
+  deleteTransactionDocument: (txId: string, docId: string) => Promise<void>;
 
   courtCases: CourtCase[];
   addCourtCase: (c: CourtCase) => void;
@@ -158,6 +159,9 @@ interface AppContextType {
   updateCourtCase: (id: string, data: Partial<CourtCase>) => void;
   deleteCourtCase: (id: string) => void;
   addCourtCaseProgress: (id: string, message: string) => void;
+  deleteCourtCaseProgress: (caseId: string, noteId: string) => void; 
+  uploadCourtCaseDocument: (caseId: string, file: File) => Promise<void>; 
+  deleteCourtCaseDocument: (caseId: string, docId: string) => Promise<void>;
 
   letters: Letter[];
   addLetter: (l: Letter) => void;
@@ -165,6 +169,8 @@ interface AppContextType {
   updateLetter: (id: string, data: Partial<Letter>) => void;
   deleteLetter: (id: string) => void;
   addLetterProgress: (id: string, message: string) => void;
+  uploadLetterDocument: (letterId: string, file: File) => Promise<void>;
+  deleteLetterDocument: (letterId: string, docId: string) => Promise<void>;
 
   invoices: Invoice[];
   addInvoice: (inv: Invoice) => void;
@@ -373,6 +379,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const lawyers = users.filter(u => u.role !== "admin");
 
+  /* =======================
+      TRANSACTIONS LOGIC
+  ======================= */
   const addTransaction = async (tx: Transaction) => {
     const { id, archived, ...cleanData } = tx as any;
     const { data, error } = await supabase.from('transactions').insert([cleanData]).select().single();
@@ -410,7 +419,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const updated = {
           ...t,
           progressNotes: [...(t.progressNotes || []), {
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             message, authorId: currentUser.id, authorName: currentUser.name, authorRole: currentUser.role,
             date: new Date().toLocaleString()
           }]
@@ -425,10 +434,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const uploadTransactionDocument = async (txId: string, file: File) => {
+    try {
+      const filePath = `tx-docs/${txId}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('transactions').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('transactions').getPublicUrl(filePath);
+      const newDoc: AppDocument = { id: crypto.randomUUID(), name: file.name, url: publicUrl, date: new Date().toLocaleDateString() };
+
+      setTransactions(prev => prev.map(t => {
+        if (t.id === txId) {
+          const updatedDocs = [...(t.documents || []), newDoc];
+          supabase.from('transactions').update({ documents: updatedDocs }).eq('id', txId).then();
+          return { ...t, documents: updatedDocs };
+        }
+        return t;
+      }));
+    } catch (err) { console.error("Tx Upload failed", err); }
+  };
+
+  const deleteTransactionDocument = async (txId: string, docId: string) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id === txId) {
+        const updatedDocs = (t.documents || []).filter(d => d.id !== docId);
+        supabase.from('transactions').update({ documents: updatedDocs }).eq('id', txId).then();
+        return { ...t, documents: updatedDocs };
+      }
+      return t;
+    }));
+  };
+
+  /* =======================
+      COURT CASES LOGIC
+  ======================= */
   const addCourtCase = (c: CourtCase) => {
     setCourtCases(prev => [...prev, c]);
     instantSave('court_cases', c);
   };
+
   const editCourtCase = (id: string, data: Partial<CourtCase>) =>
     setCourtCases(prev => prev.map(c => {
       if (c.id === id) {
@@ -438,11 +482,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return c;
     }));
+
   const deleteCourtCase = (id: string) => {
     setCourtCases(prev => prev.filter(c => c.id !== id));
     if (navigator.onLine) supabase.from('court_cases').delete().eq('id', id).then();
   };
 
+  const addCourtCaseProgress = (id: string, message: string) => {
+    if (!currentUser) return;
+    setCourtCases(prev => prev.map(c => {
+      if (c.id === id) {
+        const newNote: ProgressNote = {
+          id: crypto.randomUUID(),
+          message,
+          authorId: currentUser.id,
+          authorName: currentUser.name,
+          authorRole: currentUser.role,
+          date: new Date().toLocaleString()
+        };
+        const updated = {
+          ...c,
+          progressNotes: [...(c.progressNotes || []), newNote]
+        };
+        supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+        if (c.lawyerId && c.lawyerId !== currentUser.id) {
+          sendNotification(c.lawyerId, `Court Update: ${c.fileName}`, 'file', c.id, 'case');
+        }
+        return updated;
+      }
+      return c;
+    }));
+  };
+
+  const deleteCourtCaseProgress = (caseId: string, noteId: string) => {
+    setCourtCases(prev => prev.map(c => {
+      if (c.id === caseId) {
+        const updatedNotes = (c.progressNotes || []).filter(n => n.id !== noteId);
+        supabase.from('court_cases').update({ progressNotes: updatedNotes }).eq('id', caseId).then();
+        return { ...c, progressNotes: updatedNotes };
+      }
+      return c;
+    }));
+  };
+
+  const uploadCourtCaseDocument = async (caseId: string, file: File) => {
+    try {
+      const filePath = `court-docs/${caseId}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
+      const newDoc: AppDocument = { id: crypto.randomUUID(), name: file.name, url: publicUrl, date: new Date().toLocaleDateString() };
+
+      setCourtCases(prev => prev.map(c => {
+        if (c.id === caseId) {
+          const updatedDocs = [...(c.documents || []), newDoc];
+          supabase.from('court_cases').update({ documents: updatedDocs }).eq('id', caseId).then();
+          return { ...c, documents: updatedDocs };
+        }
+        return c;
+      }));
+    } catch (err) { console.error("Upload failed", err); }
+  };
+
+  const deleteCourtCaseDocument = async (caseId: string, docId: string) => {
+    setCourtCases(prev => prev.map(c => {
+      if (c.id === caseId) {
+        const updatedDocs = (c.documents || []).filter(d => d.id !== docId);
+        supabase.from('court_cases').update({ documents: updatedDocs }).eq('id', caseId).then();
+        return { ...c, documents: updatedDocs };
+      }
+      return c;
+    }));
+  };
+
+  /* =======================
+      LETTERS LOGIC
+  ======================= */
   const addLetter = (l: Letter) => {
     setLetters(prev => [...prev, l]);
     instantSave('letters', l);
@@ -462,7 +578,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
   };
 
-  /* --- ADDED: LETTER PROGRESS LOGIC --- */
   const addLetterProgress = (id: string, message: string) => {
     if (!currentUser) return;
     setLetters(prev => prev.map(l => {
@@ -479,11 +594,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...l,
           progressNotes: [...(l.progressNotes || []), newNote]
         };
-        
-        // Sync specifically the progressNotes column to Supabase
         supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
-        
-        // Notify the assigned lawyer if someone else updated it
         if (l.lawyerId && l.lawyerId !== currentUser.id) {
           sendNotification(l.lawyerId, `Letter Update: ${l.subject}`, 'file', l.id, 'letter');
         }
@@ -493,6 +604,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const uploadLetterDocument = async (letterId: string, file: File) => {
+    try {
+      const filePath = `letter-docs/${letterId}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('letters').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('letters').getPublicUrl(filePath);
+      const newDoc: AppDocument = { id: crypto.randomUUID(), name: file.name, url: publicUrl, date: new Date().toLocaleDateString() };
+
+      setLetters(prev => prev.map(l => {
+        if (l.id === letterId) {
+          const updatedDocs = [...(l.documents || []), newDoc];
+          supabase.from('letters').update({ documents: updatedDocs }).eq('id', letterId).then();
+          return { ...l, documents: updatedDocs };
+        }
+        return l;
+      }));
+    } catch (err) { console.error("Letter Upload failed", err); }
+  };
+
+  const deleteLetterDocument = async (letterId: string, docId: string) => {
+    setLetters(prev => prev.map(l => {
+      if (l.id === letterId) {
+        const updatedDocs = (l.documents || []).filter(d => d.id !== docId);
+        supabase.from('letters').update({ documents: updatedDocs }).eq('id', letterId).then();
+        return { ...l, documents: updatedDocs };
+      }
+      return l;
+    }));
+  };
+
+  /* =======================
+      GENERAL LOGIC
+  ======================= */
   const addInvoice = (inv: Invoice) => {
     setInvoices(prev => [...prev, inv]);
     instantSave('invoices', inv);
@@ -557,10 +702,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login, logout, 
         transactions, addTransaction, editTransaction, deleteTransaction,
         updateTransaction: editTransaction, 
-        addTransactionProgress, editTransactionProgress: () => {}, deleteTransactionProgress: () => {}, uploadTransactionDocument: () => {},
-        courtCases, addCourtCase, editCourtCase, deleteCourtCase, addCourtCaseProgress: () => {},
+        addTransactionProgress, editTransactionProgress: () => {}, deleteTransactionProgress: () => {}, 
+        uploadTransactionDocument, deleteTransactionDocument,
+        courtCases, addCourtCase, editCourtCase, deleteCourtCase, addCourtCaseProgress, deleteCourtCaseProgress, uploadCourtCaseDocument, deleteCourtCaseDocument,
         updateCourtCase: editCourtCase, 
         letters, addLetter, editLetter, deleteLetter, addLetterProgress,
+        uploadLetterDocument, deleteLetterDocument,
         updateLetter: editLetter, 
         invoices, addInvoice, updateInvoice, deleteInvoice,
         clients, addClient, updateClient, deleteClient,

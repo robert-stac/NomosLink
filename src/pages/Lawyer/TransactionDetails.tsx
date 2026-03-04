@@ -13,12 +13,14 @@ export default function TransactionDetails() {
     editTransactionProgress,
     deleteTransactionProgress,
     uploadTransactionDocument,
-    users // Added to identify assigned counsel
+    deleteTransactionDocument, // Added for document management
+    users 
   } = useAppContext();
 
   const [note, setNote] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editMessage, setEditMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false); // New state for UX
 
   // 🔒 Safety checks
   if (!currentUser) return <div className="p-10 text-center font-bold">Not logged in.</div>;
@@ -42,6 +44,15 @@ export default function TransactionDetails() {
     if (!note.trim()) return;
     addTransactionProgress(transaction.id, note.trim());
     setNote("");
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true);
+    try {
+      await uploadTransactionDocument(transaction.id, file);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const downloadProgressReport = () => {
@@ -105,7 +116,7 @@ export default function TransactionDetails() {
             {!isManager ? (
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Financial Value</p>
-                <p className="text-xl font-black text-emerald-600">UGX {transaction.amount?.toLocaleString() ?? "0"}</p>
+                <p className="text-xl font-black text-emerald-600">UGX {transaction.billedAmount?.toLocaleString() ?? "0"}</p>
               </div>
             ) : (
                <div>
@@ -201,17 +212,40 @@ export default function TransactionDetails() {
               
               <div className="space-y-3 mb-6">
                 {transaction.documents?.length ? (
-                  transaction.documents.map((doc: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  transaction.documents.map((doc: any) => (
+                    <div key={doc.id} className="group flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
                       <div className="flex items-center gap-3">
                         <span className="text-xl">📄</span>
-                        <span className="text-xs font-bold text-slate-600 truncate max-w-[120px]">{doc.name}</span>
+                        <div className="flex flex-col overflow-hidden">
+                            <span className="text-xs font-bold text-slate-600 truncate max-w-[100px]">{doc.name}</span>
+                            <span className="text-[8px] text-slate-400 font-black uppercase">{doc.date}</span>
+                        </div>
                       </div>
-                      <button className="text-blue-600 text-[10px] font-black">OPEN</button>
+                      <div className="flex items-center gap-2">
+                        <a 
+                          href={doc.url} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-blue-600 text-[10px] font-black hover:underline"
+                        >
+                          OPEN
+                        </a>
+                        {(isOwner || isManager) && (
+                          <button 
+                            onClick={() => deleteTransactionDocument(transaction.id, doc.id)}
+                            className="text-red-400 hover:text-red-600 transition p-1"
+                            title="Delete Document"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-slate-400 font-bold text-center py-4">No documents yet.</p>
+                  <div className="text-center py-8">
+                    <p className="text-xs text-slate-400 font-bold">No documents yet.</p>
+                  </div>
                 )}
               </div>
 
@@ -220,13 +254,16 @@ export default function TransactionDetails() {
                   <input
                     type="file"
                     accept=".pdf"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    disabled={isUploading}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
                     onChange={(e) => {
-                      if (e.target.files?.[0]) uploadTransactionDocument(transaction.id, e.target.files[0]);
+                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0]);
                     }}
                   />
-                  <div className="bg-blue-50 text-blue-600 border-2 border-dashed border-blue-200 rounded-2xl p-4 text-center group-hover:bg-blue-100 transition">
-                    <p className="text-xs font-black uppercase tracking-widest">Upload PDF</p>
+                  <div className={`border-2 border-dashed rounded-2xl p-4 text-center transition ${isUploading ? 'bg-slate-50 border-slate-200' : 'bg-blue-50 text-blue-600 border-blue-200 group-hover:bg-blue-100'}`}>
+                    <p className="text-xs font-black uppercase tracking-widest">
+                        {isUploading ? "Uploading..." : "Upload PDF"}
+                    </p>
                   </div>
                 </div>
               )}
