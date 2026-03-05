@@ -435,26 +435,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       SEND NOTIFICATION
       Now also sends to all admins automatically
   ======================= */
-  const sendNotification = (
-    recipientId: string,
-    message: string,
-    type: 'alert' | 'task' | 'file' = 'alert',
-    relatedId?: string,
-    relatedType?: 'case' | 'transaction' | 'letter' | 'task'
-  ) => {
-    // Build list of recipients: the intended recipient + all admins (deduped)
-    const adminIds = getAdminIds();
-    const allRecipients = Array.from(new Set([recipientId, ...adminIds]));
+    const sendNotification = (
+      recipientId: string,
+      message: string,
+      type: 'alert' | 'task' | 'file' = 'alert',
+      relatedId?: string,
+      relatedType?: 'case' | 'transaction' | 'letter' | 'task'
+    ) => {
+      const adminIds = getAdminIds();
+      const allRecipients = Array.from(new Set([recipientId, ...adminIds]));
 
-    allRecipients.forEach(rid => {
-      setNotifications(prev => {
-        const isDuplicate = prev.some(n =>
-          n.recipientId === rid &&
-          n.message === message &&
-          (Date.now() - new Date(n.date).getTime() < 3000)
-        );
-        if (isDuplicate) return prev;
+      // Build all notifications at once
+      const newNotifs: AppNotification[] = [];
 
+      allRecipients.forEach(rid => {
         const newNotif: AppNotification = {
           id: `NOTIF-${Date.now()}-${rid}`,
           recipientId: rid,
@@ -465,27 +459,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           relatedId,
           relatedType
         };
-        instantSave('notifications', newNotif);
-        // Send background push to device even when app is closed
-          if (navigator.onLine) {
-            fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`
-              },
-              body: JSON.stringify({
-                userId: rid,
-                title: 'NomoSLink',
-                body: message,
-                url: '/'
-              })
-            }).catch(() => {}); // fail silently if device not subscribed yet
-          }
-        return [newNotif, ...prev];
+        newNotifs.push(newNotif);
       });
-    });
-  };
+
+      // Single state update for ALL recipients at once — prevents multiple re-renders
+      setNotifications(prev => {
+        const filtered = newNotifs.filter(newNotif =>
+          !prev.some(n =>
+            n.recipientId === newNotif.recipientId &&
+            n.message === message &&
+            (Date.now() - new Date(n.date).getTime() < 3000)
+          )
+        );
+        if (filtered.length === 0) return prev;
+        // Save to DB
+        filtered.forEach(n => instantSave('notifications', n));
+        return [...filtered, ...prev];
+      });
+
+      // Send push notifications
+      if (navigator.onLine) {
+        allRecipients.forEach(rid => {
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`
+            },
+            body: JSON.stringify({ userId: rid, title: 'NomoSLink', body: message, url: '/' })
+          }).catch(() => {});
+        });
+      }
+    };
 
   const markNotificationsAsRead = async (userId: string) => {
     setNotifications(prev => prev.map(n => n.recipientId === userId ? { ...n, read: true } : n));
