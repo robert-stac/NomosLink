@@ -12,9 +12,7 @@ export default function Transactions() {
     currentUser 
   } = useAppContext();
 
-  // --- SEARCH STATE ---
   const [searchQuery, setSearchQuery] = useState("");
-
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteViewId, setNoteViewId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
@@ -30,19 +28,18 @@ export default function Transactions() {
 
   const activeTransaction = transactions.find(t => t.id === noteViewId);
 
-  // --- FILTERING LOGIC ---
   const visibleTransactions = useMemo(() => {
-    // Filter out court cases (handled on the other page) and archived items
     let data = transactions.filter((t) => t.type !== "Court Case" && !t.archived);
     
     if (currentUser?.role === "lawyer") {
-      data = data.filter((t) => t.lawyerId === currentUser.id);
+      // FIX: Use String() comparison on both sides to avoid type mismatch
+      data = data.filter((t) => String(t.lawyerId) === String(currentUser.id));
     }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       data = data.filter((t) => {
-        const lawyerName = lawyers.find(l => l.id === t.lawyerId)?.name.toLowerCase() || "";
+        const lawyerName = lawyers.find(l => String(l.id) === String(t.lawyerId))?.name.toLowerCase() || "";
         return (
           t.fileName.toLowerCase().includes(query) ||
           t.type.toLowerCase().includes(query) ||
@@ -54,7 +51,6 @@ export default function Transactions() {
     return [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, currentUser, searchQuery, lawyers]);
 
-  // --- STATS LOGIC ---
   const stats = useMemo(() => {
     return visibleTransactions.reduce(
       (acc, t) => {
@@ -94,7 +90,7 @@ export default function Transactions() {
 
     const payload = {
       ...form,
-      id: editingId ?? Date.now().toString(), // Using Date.now for instant ID if not editing
+      id: editingId ?? Date.now().toString(),
       billedAmount: billed,
       paidAmount: paid,
       balance: billed - paid,
@@ -129,7 +125,6 @@ export default function Transactions() {
   return (
     <div className="p-4 md:p-8 bg-gray-50 min-h-screen font-sans">
       
-      {/* HEADER & SEARCH BAR */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Transactions</h1>
@@ -147,7 +142,6 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* SUMMARY CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
         <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
           <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Active Matters</p>
@@ -167,7 +161,6 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* ENTRY FORM */}
       <form onSubmit={handleSubmit} className="bg-white border rounded-2xl p-5 md:p-6 mb-8 shadow-sm">
         <h3 className="font-black mb-6 text-slate-800 text-[17px] uppercase tracking-[0.1em]">
           {editingId ? "Modify Transaction Record" : "New Transaction Entry"}
@@ -177,7 +170,6 @@ export default function Transactions() {
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">File / Client Name</label>
             <input name="fileName" placeholder="Client Name..." value={form.fileName} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" required />
           </div>
-
           <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Matter Type</label>
             <input name="type" list="cats" placeholder="e.g. Land Sale" value={form.type} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
@@ -185,7 +177,6 @@ export default function Transactions() {
               <option value="Letter of Demand" /><option value="Land Sale" /><option value="Company Reg" /><option value="Agreement Review" />
             </datalist>
           </div>
-
           <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Assigned Staff</label>
             <select name="lawyerId" value={form.lawyerId} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" required>
@@ -193,17 +184,14 @@ export default function Transactions() {
               {lawyers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
-
           <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Billed (UGX)</label>
             <input name="billedAmount" type="number" placeholder="0" value={form.billedAmount} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
           </div>
-
           <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Paid (UGX)</label>
             <input name="paidAmount" type="number" placeholder="0" value={form.paidAmount} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
           </div>
-
           <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Date</label>
             <input name="date" type="date" value={form.date} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
@@ -221,7 +209,6 @@ export default function Transactions() {
         </div>
       </form>
 
-      {/* TABLE */}
       <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[700px]">
@@ -243,7 +230,8 @@ export default function Transactions() {
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg">
-                        {lawyers.find(l => l.id.toString() === t.lawyerId?.toString())?.name || "Unassigned"}
+                      {/* FIX: Use String() comparison here too */}
+                      {lawyers.find(l => String(l.id) === String(t.lawyerId))?.name || "Unassigned"}
                     </span>
                   </td>
                   <td className={`px-6 py-4 text-right font-black text-sm ${((Number(t.billedAmount)||0)-(Number(t.paidAmount)||0)) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
@@ -268,9 +256,7 @@ export default function Transactions() {
                         });
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }} className="text-blue-600 hover:text-blue-800 text-[10px] font-black uppercase">Edit</button>
-                      
                       <button onClick={() => handleArchive(t.id)} className="text-slate-400 hover:text-slate-600 text-[10px] font-black uppercase">Archive</button>
-                      
                       <button onClick={() => { if(confirm("Permanently delete this transaction?")) deleteTransaction(t.id); }} className="text-red-300 hover:text-red-600 text-[10px] font-black uppercase">Delete</button>
                     </div>
                   </td>
@@ -281,7 +267,6 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* ACTIVITY LOG MODAL */}
       {noteViewId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
@@ -292,7 +277,6 @@ export default function Transactions() {
               </div>
               <button onClick={() => setNoteViewId(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border text-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm">&times;</button>
             </div>
-            
             <div className="p-6 overflow-y-auto flex-1 space-y-4 bg-white">
               {activeTransaction?.progressNotes?.map((n: any) => (
                 <div key={n.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
@@ -304,13 +288,12 @@ export default function Transactions() {
                 </div>
               ))}
               {(!activeTransaction?.progressNotes || activeTransaction.progressNotes.length === 0) && (
-                 <div className="text-center py-10 opacity-40">
-                   <p className="text-3xl mb-2">📁</p>
-                   <p className="text-slate-400 font-bold italic text-xs uppercase tracking-widest">No history recorded.</p>
-                 </div>
+                <div className="text-center py-10 opacity-40">
+                  <p className="text-3xl mb-2">📁</p>
+                  <p className="text-slate-400 font-bold italic text-xs uppercase tracking-widest">No history recorded.</p>
+                </div>
               )}
             </div>
-
             <div className="p-6 border-t bg-slate-50">
               <div className="flex gap-2">
                 <input 
