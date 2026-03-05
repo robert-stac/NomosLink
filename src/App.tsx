@@ -87,7 +87,7 @@ export default function App() {
   // Safety: Allow the AppContext 100ms to validate the localStorage role 
   // before the router decides to redirect to login.
   useEffect(() => {
-    const timer = setTimeout(() => setIsInitialising(false), 150);
+    const timer = setTimeout(() => setIsInitialising(false), 300);
     return () => clearTimeout(timer);
   }, []);
 

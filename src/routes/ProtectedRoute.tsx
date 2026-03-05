@@ -2,41 +2,56 @@ import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
-// Ensure 'manager' is included in the type definition here
 interface Props {
   children: React.ReactNode;
   allowedRoles: ("admin" | "manager" | "lawyer" | "clerk" | "accountant")[];
+  isInitialising?: boolean;
 }
 
-export default function ProtectedRoute({ children, allowedRoles }: Props) {
+export default function ProtectedRoute({ children, allowedRoles, isInitialising = false }: Props) {
   const { currentUser, logout } = useAppContext();
 
-  // 1. If no user is found at all, send to login
+  // 1. Wait for the app to finish reading localStorage before making any redirect decision
+  if (isInitialising) {
+    return (
+      <div style={{
+        display: "flex",
+        height: "100vh",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "sans-serif",
+        color: "#666",
+        fontSize: "16px"
+      }}>
+        Loading NomosLink...
+      </div>
+    );
+  }
+
+  // 2. If no user is found after initialisation is complete, send to login
   if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
 
-  // 2. Check if the user's role is allowed for this specific route
+  // 3. Check if the user's role is allowed for this specific route
   const isAuthorized = allowedRoles.includes(currentUser.role);
 
   if (!isAuthorized) {
-    // If the role exists but isn't allowed here, we show the message.
-    // If the role is somehow undefined/null, we force a logout to clear the "ghost" session.
     if (!currentUser.role) {
       logout();
       return <Navigate to="/login" replace />;
     }
 
     return (
-      <div style={{ 
-        padding: "50px", 
-        textAlign: "center", 
+      <div style={{
+        padding: "50px",
+        textAlign: "center",
         fontFamily: "sans-serif",
-        color: "#333" 
+        color: "#333"
       }}>
         <h2>Access Denied</h2>
         <p>Your account role ({currentUser.role}) does not have permission to view this page.</p>
-        <button 
+        <button
           onClick={logout}
           style={{
             padding: "10px 20px",
@@ -54,6 +69,6 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
     );
   }
 
-  // 3. Authorized and authenticated
+  // 4. Authorized and authenticated
   return <>{children}</>;
 }
