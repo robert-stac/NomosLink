@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react"; // Added useEffect
-import { useLocation } from "react-router-dom"; // Added useLocation
+import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 
 export default function LawyerPerformanceDashboard() {
@@ -8,7 +8,7 @@ export default function LawyerPerformanceDashboard() {
     addTransactionProgress, addCourtCaseProgress, addLetterProgress 
   } = useAppContext();
 
-  const location = useLocation(); // Hook to read URL parameters
+  const location = useLocation();
 
   const lawyers = users.filter((u) => u.role === "lawyer" || u.role === "clerk");
   const [selectedLawyerId, setSelectedLawyerId] = useState<string>("");
@@ -16,14 +16,12 @@ export default function LawyerPerformanceDashboard() {
   const [activeFile, setActiveFile] = useState<any | null>(null);
   const [newNote, setNewNote] = useState("");
 
-  // --- AUTO-TRIGGER LOGIC FOR CRM NAVIGATION ---
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const fileToFind = params.get("file");
     const triggerOpen = params.get("openDetails");
 
     if (fileToFind && triggerOpen) {
-      // Search across all data sources for the file
       const foundCase = courtCases.find(c => c.fileName === fileToFind);
       const foundTrans = transactions.find(t => t.fileName === fileToFind);
       const foundLetter = letters.find(l => (l.subject || l.title || l.fileName) === fileToFind);
@@ -31,14 +29,10 @@ export default function LawyerPerformanceDashboard() {
       const targetFile = foundCase || foundTrans || foundLetter;
 
       if (targetFile) {
-        // Set the lawyer ID so the dashboard stats load
-        const lawyerId = targetFile.lawyerId || targetFile.lawyer?.id;
+        const lawyerId = targetFile.lawyerId || (targetFile as any).lawyer?.id;
         if (lawyerId) setSelectedLawyerId(lawyerId.toString());
 
-        // Set the category so the modal knows which update function to use
         const category = foundCase ? "Court Case" : foundTrans ? "Transaction" : "Letter";
-        
-        // Open the modal automatically
         setActiveFile({ ...targetFile, category, title: fileToFind });
       }
     }
@@ -49,17 +43,20 @@ export default function LawyerPerformanceDashboard() {
     const now = new Date();
     const tenDaysAgo = new Date();
     tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-    const sid = selectedLawyerId.toString();
 
-    const myCases = courtCases.filter(c => c.lawyerId?.toString() === sid);
-    const myTransactions = transactions.filter(t => t.lawyerId?.toString() === sid);
-    
+    // FIX: Normalize to string once, use everywhere consistently
+    const sid = String(selectedLawyerId);
+
+    const myCases = courtCases.filter(c => String(c.lawyerId) === sid);
+    const myTransactions = transactions.filter(t => String(t.lawyerId) === sid);
+
+    // FIX: Unified letter filter using the same String() approach as cases/transactions.
+    // Previously this also checked l.userId which the admin doesn't check, causing mismatch.
     const myLetters = letters.filter(l => {
-        return (
-          l.lawyer?.id?.toString() === sid || 
-          l.lawyerId?.toString() === sid || 
-          l.userId?.toString() === sid
-        );
+      return (
+        String(l.lawyerId) === sid ||
+        String((l as any).lawyer?.id) === sid
+      );
     });
 
     const allFiles = [
@@ -68,34 +65,31 @@ export default function LawyerPerformanceDashboard() {
       ...myLetters.map(i => ({ 
         ...i, 
         category: "Letter", 
-        title: i.subject || i.title || i.fileName || "Untitled Letter" 
+        title: i.subject || (i as any).title || (i as any).fileName || "Untitled Letter" 
       }))
     ];
 
-    // --- UPDATED FINANCIAL LOGIC ---
     const financials = { billed: 0, collected: 0 };
 
-    // 1. Sum Transactions (Supporting both 'billedAmount' and 'billed' keys)
     myTransactions.forEach(t => {
-      financials.billed += Number(t.billedAmount || t.billed || 0);
-      financials.collected += Number(t.paidAmount || t.paid || 0);
+      financials.billed += Number(t.billedAmount || (t as any).billed || 0);
+      financials.collected += Number(t.paidAmount || (t as any).paid || 0);
     });
 
-    // 2. Sum Letters (Supporting both 'billed' and 'billedAmount' keys)
     myLetters.forEach(l => {
-      financials.billed += Number(l.billed || l.billedAmount || 0);
-      financials.collected += Number(l.paid || l.paidAmount || 0);
+      financials.billed += Number(l.billed || (l as any).billedAmount || 0);
+      financials.collected += Number(l.paid || (l as any).paidAmount || 0);
     });
 
     const stagnant = allFiles.filter(file => {
       if (file.status === "Completed") return false;
-      const notes = file.progressNotes || [];
+      const notes = (file as any).progressNotes || [];
       let lastDate = notes.length === 0 
-        ? new Date(file.date || file.createdAt || now) 
-        : new Date([...notes].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date);
+        ? new Date((file as any).date || (file as any).createdAt || now) 
+        : new Date([...notes].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date);
       
       const diffTime = Math.abs(now.getTime() - lastDate.getTime());
-      file.daysStagnant = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      (file as any).daysStagnant = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       return !isNaN(lastDate.getTime()) && lastDate < tenDaysAgo;
     });
 
@@ -104,7 +98,7 @@ export default function LawyerPerformanceDashboard() {
       cases: myCases,
       transactions: myTransactions,
       letters: myLetters,
-      stagnant: stagnant.sort((a, b) => b.daysStagnant - a.daysStagnant),
+      stagnant: stagnant.sort((a: any, b: any) => b.daysStagnant - a.daysStagnant),
       totalFiles: allFiles.length,
       realizationRate: financials.billed ? Math.round((financials.collected / financials.billed) * 100) : 0
     };
@@ -116,7 +110,7 @@ export default function LawyerPerformanceDashboard() {
     return {
       cases: stats.cases.filter(c => c.fileName?.toLowerCase().includes(s)),
       transactions: stats.transactions.filter(t => t.fileName?.toLowerCase().includes(s)),
-      letters: stats.letters.filter(l => (l.subject || l.title || l.fileName || "").toLowerCase().includes(s))
+      letters: stats.letters.filter(l => (l.subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(s))
     };
   }, [stats, searchTerm]);
 
@@ -133,13 +127,11 @@ export default function LawyerPerformanceDashboard() {
     <div className="min-h-screen bg-slate-50 p-8 font-sans text-slate-900">
       <div className="max-w-7xl mx-auto">
         
-        {/* HEADER SECTION */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight">Partner Review</h1>
             <p className="text-slate-500 text-sm">Monitoring & Enforcement</p>
           </div>
-          
           <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
             <div className="relative">
               <input 
@@ -170,7 +162,6 @@ export default function LawyerPerformanceDashboard() {
           </div>
         ) : (
           <div className="space-y-10">
-            {/* KPI ROW */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <KPI label="Collections" value={`UGX ${stats.financials.collected.toLocaleString()}`} sub="Total Revenue" color="bg-slate-900 text-white" />
               <KPI label="Assignments" value={stats.totalFiles} sub="Files Handled" color="bg-white text-slate-900 border" />
@@ -178,7 +169,6 @@ export default function LawyerPerformanceDashboard() {
               <KPI label="Stagnant" value={stats.stagnant.length} sub="Needs Attention" color={stats.stagnant.length > 0 ? "bg-red-50 text-red-600 border border-red-200" : "bg-emerald-50 text-emerald-600"} />
             </div>
 
-            {/* STAGNANT ALERTS */}
             {stats.stagnant.length > 0 && (
               <div className="bg-red-50 rounded-[32px] border border-red-200 overflow-hidden shadow-sm">
                 <div className="p-6 bg-red-100/50 flex items-center gap-3">
@@ -187,7 +177,7 @@ export default function LawyerPerformanceDashboard() {
                 </div>
                 <table className="w-full text-sm text-left">
                   <tbody className="divide-y divide-red-200">
-                    {stats.stagnant.map((file, idx) => (
+                    {stats.stagnant.map((file: any, idx: number) => (
                       <tr key={idx} className="hover:bg-red-100/30 transition-colors">
                         <td className="p-4 pl-8 font-bold text-red-900">{file.title}</td>
                         <td className="p-4"><span className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-lg">{file.daysStagnant} DAYS STAGNANT</span></td>
@@ -201,14 +191,13 @@ export default function LawyerPerformanceDashboard() {
               </div>
             )}
 
-            <FileTable title="Court Cases" items={filteredData?.cases || []} onRowClick={(item) => setActiveFile({ ...item, category: "Court Case", title: item.fileName })} />
-            <FileTable title="Transactions" items={filteredData?.transactions || []} onRowClick={(item) => setActiveFile({ ...item, category: "Transaction", title: item.fileName })} />
-            <FileTable title="Letters" items={filteredData?.letters || []} onRowClick={(item) => setActiveFile({ ...item, category: "Letter", title: item.subject || item.title || item.fileName })} />
+            <FileTable title="Court Cases" items={filteredData?.cases || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Court Case", title: item.fileName })} />
+            <FileTable title="Transactions" items={filteredData?.transactions || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Transaction", title: item.fileName })} />
+            <FileTable title="Letters" items={filteredData?.letters || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Letter", title: item.subject || item.title || item.fileName })} />
           </div>
         )}
       </div>
 
-      {/* MODAL */}
       {activeFile && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-[32px] w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh]">
@@ -249,7 +238,6 @@ export default function LawyerPerformanceDashboard() {
   );
 }
 
-// --- SUB COMPONENTS ---
 const KPI = ({ label, value, sub, color }: any) => (
   <div className={`p-6 rounded-[28px] shadow-sm flex flex-col justify-between h-full transition-transform hover:scale-[1.02] ${color}`}>
     <div>

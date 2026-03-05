@@ -125,8 +125,10 @@ export default function LawyerDashboard() {
       cases: assignedCases,
       txs: transactions.filter(t => String(t.lawyerId) === userId),
       ltrs: letters.filter(l => {
-        const lid = l.lawyerId || (l as any).lawyer?.id;
-        return String(lid) === userId;
+        return (
+          String(l.lawyerId) === userId ||
+          String((l as any).lawyer?.id) === userId
+        );
       }),
       nextHearing: upcoming || null,
       urgentReminders

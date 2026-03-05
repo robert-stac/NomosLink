@@ -208,14 +208,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 /* =======================
     NORMALIZE TASK
-    -------------------------------------------------------
-    THE FIX: Supabase may return columns in snake_case
-    (assigned_to_id, assigned_by_id, etc.) depending on
-    how the table was created. This function ensures the
-    app always works with camelCase field names regardless
-    of what Supabase returns, so the clerk can always see
-    their assigned tasks.
-    -------------------------------------------------------
+    Handles both camelCase (app) and snake_case (Supabase) field names.
 ======================= */
 const normalizeTask = (raw: any): Task => ({
   ...raw,
@@ -227,6 +220,66 @@ const normalizeTask = (raw: any): Task => ({
   clerkNote:      raw.clerkNote      ?? raw.clerk_note        ?? undefined,
   status:         raw.status         ?? "Pending",
 });
+
+/* =======================
+    WEB PUSH NOTIFICATIONS
+    Sends real device push notifications (mobile + desktop)
+    when the browser supports it.
+======================= */
+
+
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function registerPushSubscription(userId: string) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (VAPID_PUBLIC_KEY === "YOUR_VAPID_PUBLIC_KEY_HERE") return; // skip if not configured
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) return; // already subscribed
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+
+    // Save the subscription to Supabase so the server can push to this device
+    await supabase.from('push_subscriptions').upsert({
+      userId,
+      subscription: JSON.stringify(subscription),
+      updatedAt: new Date().toISOString(),
+    }, { onConflict: 'userId' });
+
+  } catch (err) {
+    console.warn("Push subscription failed:", err);
+  }
+}
+
+// Trigger a local (in-browser) notification immediately when app is open
+function showLocalNotification(title: string, body: string) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  new Notification(title, {
+    body,
+    icon: '/icon.png', // add your app icon here
+    badge: '/badge.png',
+  });
+}
 
 /* =======================
     PROVIDER
@@ -256,17 +309,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [letters, setLetters] = useState<Letter[]>(() => JSON.parse(localStorage.getItem("letters") || "[]"));
   const [invoices, setInvoices] = useState<Invoice[]>(() => JSON.parse(localStorage.getItem("invoices") || "[]"));
   const [clients, setClients] = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
-
-  // FIX: Normalize tasks on load from localStorage too
   const [tasks, setTasks] = useState<Task[]>(() => {
     const stored = JSON.parse(localStorage.getItem("tasks") || "[]");
     return stored.map(normalizeTask);
   });
-
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
+
+  // Register service worker and push subscription when user logs in
+  useEffect(() => {
+    if (!currentUser) return;
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').then(() => {
+        registerPushSubscription(currentUser.id);
+      }).catch(err => console.warn("SW registration failed:", err));
+    }
+  }, [currentUser?.id]);
 
   const instantSave = async (table: string, payload: any) => {
     if (!navigator.onLine) return;
@@ -278,7 +338,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  /* 🔔 REALTIME SYNC — normalizeTask applied to all incoming payloads */
+  /* =======================
+      HELPER: Get all admin user IDs
+      Used to send notifications to all admins
+  ======================= */
+  const getAdminIds = () => users.filter(u => u.role === 'admin').map(u => u.id);
+
+  /* 🔔 REALTIME SYNC */
   useEffect(() => {
     const channel = supabase
       .channel('db-changes')
@@ -294,10 +360,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setTasks(prev => prev.filter(t => t.id !== payload.old.id));
         }
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setNotifications(prev => {
+            if (prev.find(n => n.id === payload.new.id)) return prev;
+            const newNotif = payload.new as AppNotification;
+            // Show local browser notification if it's for the current user
+            if (currentUser && newNotif.recipientId === currentUser.id) {
+              showLocalNotification('NomoSLink', newNotif.message);
+            }
+            return [newNotif, ...prev];
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new as AppNotification : n));
+        } else if (payload.eventType === 'DELETE') {
+          setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
+        }
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -336,7 +419,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (clientData) setClients(prev => merge(prev, clientData));
         if (letterData) setLetters(prev => merge(prev, letterData));
         if (userData) setUsers(prev => merge(prev, userData));
-        // FIX: normalize all tasks fetched from Supabase
         if (taskData) setTasks(prev => merge(prev, taskData).map(normalizeTask));
         if (invoiceData) setInvoices(prev => merge(prev, invoiceData));
         if (notifData) setNotifications(prev => merge(prev, notifData));
@@ -349,6 +431,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchInitialData();
   }, []);
 
+  /* =======================
+      SEND NOTIFICATION
+      Now also sends to all admins automatically
+  ======================= */
   const sendNotification = (
     recipientId: string,
     message: string,
@@ -356,21 +442,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     relatedId?: string,
     relatedType?: 'case' | 'transaction' | 'letter' | 'task'
   ) => {
-    setNotifications(prev => {
-      const isDuplicate = prev.some(n =>
-        n.recipientId === recipientId &&
-        n.message === message &&
-        (Date.now() - new Date(n.date).getTime() < 3000)
-      );
-      if (isDuplicate) return prev;
+    // Build list of recipients: the intended recipient + all admins (deduped)
+    const adminIds = getAdminIds();
+    const allRecipients = Array.from(new Set([recipientId, ...adminIds]));
 
-      const newNotif: AppNotification = {
-        id: `NOTIF-${Date.now()}`,
-        recipientId, message, type, date: new Date().toLocaleString(),
-        read: false, relatedId, relatedType
-      };
-      instantSave('notifications', newNotif);
-      return [newNotif, ...prev];
+    allRecipients.forEach(rid => {
+      setNotifications(prev => {
+        const isDuplicate = prev.some(n =>
+          n.recipientId === rid &&
+          n.message === message &&
+          (Date.now() - new Date(n.date).getTime() < 3000)
+        );
+        if (isDuplicate) return prev;
+
+        const newNotif: AppNotification = {
+          id: `NOTIF-${Date.now()}-${rid}`,
+          recipientId: rid,
+          message,
+          type,
+          date: new Date().toLocaleString(),
+          read: false,
+          relatedId,
+          relatedType
+        };
+        instantSave('notifications', newNotif);
+        // Send background push to device even when app is closed
+          if (navigator.onLine) {
+            fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`
+              },
+              body: JSON.stringify({
+                userId: rid,
+                title: 'NomoSLink',
+                body: message,
+                url: '/'
+              })
+            }).catch(() => {}); // fail silently if device not subscribed yet
+          }
+        return [newNotif, ...prev];
+      });
     });
   };
 
@@ -475,8 +588,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }]
         };
         supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
-        if (t.lawyerId && t.lawyerId !== currentUser.id) {
-          sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
+        // Notify the assigned lawyer + all admins
+        if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
+          sendNotification(t.lawyerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
+        } else {
+          // Still notify admins even if the updater is the lawyer
+          getAdminIds().forEach(adminId => {
+            if (String(adminId) !== String(currentUser.id)) {
+              sendNotification(adminId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
+            }
+          });
         }
         return updated;
       }
@@ -511,10 +632,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const filePath = `tx-docs/${txId}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage.from('transactions').upload(filePath, file);
       if (uploadError) throw uploadError;
-
       const { data: { publicUrl } } = supabase.storage.from('transactions').getPublicUrl(filePath);
       const newDoc: AppDocument = { id: crypto.randomUUID(), name: file.name, url: publicUrl, date: new Date().toLocaleDateString() };
-
       setTransactions(prev => prev.map(t => {
         if (t.id === txId) {
           const updatedDocs = [...(t.documents || []), newDoc];
@@ -574,8 +693,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
         supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
-        if (c.lawyerId && c.lawyerId !== currentUser.id) {
-          sendNotification(c.lawyerId, `Court Update: ${c.fileName}`, 'file', c.id, 'case');
+        // Notify assigned lawyer + all admins
+        if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
+          sendNotification(c.lawyerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+        } else {
+          getAdminIds().forEach(adminId => {
+            if (String(adminId) !== String(currentUser.id)) {
+              sendNotification(adminId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+            }
+          });
         }
         return updated;
       }
@@ -599,10 +725,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const filePath = `court-docs/${caseId}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
       if (uploadError) throw uploadError;
-
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
       const newDoc: AppDocument = { id: crypto.randomUUID(), name: file.name, url: publicUrl, date: new Date().toLocaleDateString() };
-
       setCourtCases(prev => prev.map(c => {
         if (c.id === caseId) {
           const updatedDocs = [...(c.documents || []), newDoc];
@@ -661,8 +785,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
         supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
-        if (l.lawyerId && l.lawyerId !== currentUser.id) {
-          sendNotification(l.lawyerId, `Letter Update: ${l.subject}`, 'file', l.id, 'letter');
+        // Notify assigned lawyer + all admins
+        if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
+          sendNotification(l.lawyerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
+        } else {
+          getAdminIds().forEach(adminId => {
+            if (String(adminId) !== String(currentUser.id)) {
+              sendNotification(adminId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
+            }
+          });
         }
         return updated;
       }
@@ -675,10 +806,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const filePath = `letter-docs/${letterId}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage.from('letters').upload(filePath, file);
       if (uploadError) throw uploadError;
-
       const { data: { publicUrl } } = supabase.storage.from('letters').getPublicUrl(filePath);
       const newDoc: AppDocument = { id: crypto.randomUUID(), name: file.name, url: publicUrl, date: new Date().toLocaleDateString() };
-
       setLetters(prev => prev.map(l => {
         if (l.id === letterId) {
           const updatedDocs = [...(l.documents || []), newDoc];
@@ -740,15 +869,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: "Pending",
       dateCreated: new Date().toISOString()
     };
-
-    // Add to local state immediately (normalized to ensure consistency)
     setTasks(prev => [...prev, normalizeTask(newTask)]);
-
-    // Persist to Supabase for cross-device visibility
     const { error } = await supabase.from('tasks').insert([newTask]);
     if (error) console.error("Cross-device sync failed:", error);
-
-    sendNotification(taskData.assignedToId, `New Task: ${taskData.title}`, 'task', newTask.id, 'task');
+    // Notify the clerk AND all admins
+    sendNotification(
+      taskData.assignedToId,
+      `📋 New Task from ${taskData.assignedByName}: "${taskData.title}"`,
+      'task', newTask.id, 'task'
+    );
   };
 
   const updateTask = (id: string, data: Partial<Task>) => {
@@ -767,8 +896,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     supabase.from('tasks').delete().eq('id', id).then();
   };
 
+  // When clerk completes a task, notify the lawyer who assigned it AND all admins
   const completeTask = (id: string, note: string) => {
+    const task = tasks.find(t => t.id === id);
     updateTask(id, { status: "Completed", clerkNote: note });
+    if (task) {
+      sendNotification(
+        task.assignedById,
+        `✅ Task Completed by ${task.assignedToName}: "${task.title}" — "${note}"`,
+        'task', task.id, 'task'
+      );
+    }
   };
 
   useEffect(() => {
