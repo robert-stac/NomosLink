@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
-// Assuming you have the NotificationBell component we created earlier
-import NotificationBell from "../NotificationBell"; 
+import NotificationBell from "../NotificationBell";
 
 /* =======================
    SUB-COMPONENT: FILE CARD
@@ -22,7 +21,7 @@ const FileCard = ({ title, subtitle, status, date, onView }: any) => (
     </div>
     <div className="flex justify-between items-center mt-6">
       <p className="text-[10px] font-black text-slate-300 uppercase">{date}</p>
-      <button 
+      <button
         onClick={onView}
         className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition active:scale-95"
       >
@@ -37,15 +36,13 @@ const FileCard = ({ title, subtitle, status, date, onView }: any) => (
 ======================= */
 export default function LawyerDashboard() {
   const navigate = useNavigate();
-  // RESTORED: Added notifications and markNotificationsAsRead from context
-  const { 
-    currentUser, courtCases, transactions, letters, logout, 
+  const {
+    currentUser, courtCases, transactions, letters, logout,
     users, tasks, addTask, deleteTask, updateTask,
-    notifications, markNotificationsAsRead 
+    notifications, markNotificationsAsRead
   } = useAppContext();
-  
-  const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters">("Cases");
 
+  const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters">("Cases");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({ title: "", description: "", assignedToId: "" });
@@ -53,12 +50,12 @@ export default function LawyerDashboard() {
   if (!currentUser) return null;
 
   const clerks = users.filter(u => u.role === "clerk");
- const myTasks = tasks.filter(t => String(t.assignedById) === String(currentUser.id));
+  const myTasks = tasks.filter(t => String(t.assignedById) === String(currentUser.id));
 
   const handleSaveTask = () => {
     const clerk = clerks.find(c => String(c.id) === String(taskForm.assignedToId));
     if (!taskForm.title || !clerk) return alert("Please fill title and select a clerk");
-    
+
     if (editingTaskId) {
       updateTask(editingTaskId, {
         title: taskForm.title,
@@ -99,14 +96,14 @@ export default function LawyerDashboard() {
   const myData = useMemo(() => {
     const userId = String(currentUser.id);
     const now = new Date();
-    now.setHours(0,0,0,0);
-    
+    now.setHours(0, 0, 0, 0);
+
     const tomorrow = new Date();
     tomorrow.setDate(now.getDate() + 1);
-    tomorrow.setHours(0,0,0,0);
+    tomorrow.setHours(0, 0, 0, 0);
 
     const assignedCases = courtCases.filter(c => String(c.lawyerId) === userId);
-    
+
     const upcoming = assignedCases
       .filter(c => c.nextCourtDate && !isNaN(new Date(c.nextCourtDate).getTime()))
       .map(c => ({
@@ -118,10 +115,10 @@ export default function LawyerDashboard() {
       .sort((a, b) => a.timestamp - b.timestamp)[0];
 
     const urgentReminders = assignedCases.filter(c => {
-        if (!c.nextCourtDate) return false;
-        const courtDate = new Date(c.nextCourtDate);
-        courtDate.setHours(0,0,0,0);
-        return courtDate.getTime() === now.getTime() || courtDate.getTime() === tomorrow.getTime();
+      if (!c.nextCourtDate) return false;
+      const courtDate = new Date(c.nextCourtDate);
+      courtDate.setHours(0, 0, 0, 0);
+      return courtDate.getTime() === now.getTime() || courtDate.getTime() === tomorrow.getTime();
     });
 
     return {
@@ -132,7 +129,7 @@ export default function LawyerDashboard() {
         return String(lid) === userId;
       }),
       nextHearing: upcoming || null,
-      urgentReminders 
+      urgentReminders
     };
   }, [courtCases, transactions, letters, currentUser.id]);
 
@@ -148,20 +145,18 @@ export default function LawyerDashboard() {
               </h1>
             </div>
             <div className="flex items-center gap-3">
-              {/* NOTIFICATION BELL ADDED HERE */}
-              <NotificationBell 
-                currentUser={currentUser} 
-                notifications={notifications} 
-                markAsRead={() => markNotificationsAsRead(currentUser.id)} 
+              <NotificationBell
+                currentUser={currentUser}
+                notifications={notifications}
+                markAsRead={() => markNotificationsAsRead(currentUser.id)}
               />
-
-              <button 
+              <button
                 onClick={() => setIsTaskModalOpen(true)}
                 className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-2xl transition font-black text-[10px] uppercase tracking-widest shadow-lg"
               >
                 + Assign Clerk Task
               </button>
-              <button 
+              <button
                 onClick={logout}
                 className="bg-white/10 hover:bg-red-500/20 text-white p-4 rounded-2xl transition group"
               >
@@ -179,7 +174,7 @@ export default function LawyerDashboard() {
               <p className="text-[9px] font-black text-blue-300 uppercase mb-1">Letters</p>
               <p className="text-2xl font-black text-white">{myData.ltrs.length}</p>
             </div>
-            <div 
+            <div
               onClick={() => myData.nextHearing && navigate(`/lawyer/cases/${myData.nextHearing.id}`)}
               className={`p-6 rounded-[30px] border transition-all cursor-pointer ${
                 myData.nextHearing ? "bg-blue-600 border-blue-400 shadow-lg shadow-blue-900/40 hover:bg-blue-500 active:scale-95" : "bg-white/5 border-white/10"
@@ -198,7 +193,7 @@ export default function LawyerDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 -mt-12 space-y-10">
-        
+
         {/* URGENT PREPARATION ALERT SECTION */}
         {myData.urgentReminders.length > 0 && (
           <div className="bg-red-50 border border-red-100 p-6 rounded-[32px] shadow-xl shadow-red-900/5 animate-in fade-in slide-in-from-top-4 duration-700">
@@ -212,7 +207,7 @@ export default function LawyerDashboard() {
               </div>
               <div className="flex gap-2">
                 {myData.urgentReminders.map(c => (
-                  <button 
+                  <button
                     key={c.id}
                     onClick={() => navigate(`/lawyer/cases/${c.id}`)}
                     className="bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition shadow-sm"
@@ -225,6 +220,7 @@ export default function LawyerDashboard() {
           </div>
         )}
 
+        {/* TASKS TABLE */}
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
           <h2 className="text-sm font-black text-slate-900 mb-6 uppercase tracking-[0.2em] italic">Instructions sent to clerks</h2>
           <div className="overflow-x-auto">
@@ -257,14 +253,14 @@ export default function LawyerDashboard() {
                       {task.clerkNote || "Awaiting update..."}
                     </td>
                     <td className="py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => openEditModal(task)} 
+                      <button
+                        onClick={() => openEditModal(task)}
                         className="text-blue-600 hover:text-blue-800 font-black uppercase text-[9px] tracking-widest"
                       >
                         Edit
                       </button>
-                      <button 
-                        onClick={() => deleteTask(task.id)} 
+                      <button
+                        onClick={() => deleteTask(task.id)}
                         className="text-red-400 hover:text-red-600 font-black uppercase text-[9px] tracking-widest"
                       >
                         Delete
@@ -279,6 +275,7 @@ export default function LawyerDashboard() {
           </div>
         </div>
 
+        {/* CASES / TRANSACTIONS / LETTERS TABS */}
         <div>
           <div className="bg-white p-2 rounded-[32px] shadow-xl flex gap-2 mb-10 border border-slate-100 max-w-md">
             {["Cases", "Transactions", "Letters"].map((tab) => (
@@ -308,28 +305,29 @@ export default function LawyerDashboard() {
         </div>
       </div>
 
+      {/* TASK MODAL */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl">
             <h3 className="text-2xl font-black text-slate-900 mb-6 italic">{editingTaskId ? "Edit Instruction" : "Assign Clerk"}</h3>
             <div className="space-y-4">
-              <input 
-                placeholder="What needs to be done?" 
-                className="w-full bg-slate-50 border-none p-5 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500" 
+              <input
+                placeholder="What needs to be done?"
+                className="w-full bg-slate-50 border-none p-5 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 value={taskForm.title}
-                onChange={e => setTaskForm({...taskForm, title: e.target.value})} 
+                onChange={e => setTaskForm({ ...taskForm, title: e.target.value })}
               />
-              <textarea 
-                placeholder="Detailed instructions..." 
-                className="w-full bg-slate-50 border-none p-5 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500" 
-                rows={3} 
+              <textarea
+                placeholder="Detailed instructions..."
+                className="w-full bg-slate-50 border-none p-5 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
                 value={taskForm.description}
-                onChange={e => setTaskForm({...taskForm, description: e.target.value})} 
+                onChange={e => setTaskForm({ ...taskForm, description: e.target.value })}
               />
-              <select 
-                className="w-full bg-slate-50 border-none p-5 rounded-2xl font-bold text-sm outline-none" 
+              <select
+                className="w-full bg-slate-50 border-none p-5 rounded-2xl font-bold text-sm outline-none"
                 value={taskForm.assignedToId}
-                onChange={e => setTaskForm({...taskForm, assignedToId: e.target.value})}
+                onChange={e => setTaskForm({ ...taskForm, assignedToId: e.target.value })}
               >
                 <option value="">Select a Clerk...</option>
                 {clerks.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -337,8 +335,8 @@ export default function LawyerDashboard() {
             </div>
             <div className="flex gap-4 mt-10">
               <button onClick={closeModal} className="flex-1 font-black text-slate-400 uppercase text-xs">Cancel</button>
-              <button 
-                onClick={handleSaveTask} 
+              <button
+                onClick={handleSaveTask}
                 className="flex-1 bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-lg"
               >
                 {editingTaskId ? "Update Task" : "Send Instruction"}

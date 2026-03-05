@@ -21,7 +21,7 @@ export interface AppNotification {
   message: string;
   date: string;
   read: boolean;
-  relatedId?: string;   
+  relatedId?: string;
   relatedType?: 'case' | 'transaction' | 'letter' | 'task';
 }
 
@@ -116,7 +116,7 @@ export interface Client {
   email: string;
   phone: string;
   address: string;
-  tinNumber?: string; 
+  tinNumber?: string;
   dateAdded: string;
 }
 
@@ -159,8 +159,8 @@ interface AppContextType {
   updateCourtCase: (id: string, data: Partial<CourtCase>) => void;
   deleteCourtCase: (id: string) => void;
   addCourtCaseProgress: (id: string, message: string) => void;
-  deleteCourtCaseProgress: (caseId: string, noteId: string) => void; 
-  uploadCourtCaseDocument: (caseId: string, file: File) => Promise<void>; 
+  deleteCourtCaseProgress: (caseId: string, noteId: string) => void;
+  uploadCourtCaseDocument: (caseId: string, file: File) => Promise<void>;
   deleteCourtCaseDocument: (caseId: string, docId: string) => Promise<void>;
 
   letters: Letter[];
@@ -200,11 +200,33 @@ interface AppContextType {
   setExpenses: React.Dispatch<React.SetStateAction<any[]>>;
   firmName: string;
   setFirmName: React.Dispatch<React.SetStateAction<string>>;
-  
+
   syncToCloud: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+/* =======================
+    NORMALIZE TASK
+    -------------------------------------------------------
+    THE FIX: Supabase may return columns in snake_case
+    (assigned_to_id, assigned_by_id, etc.) depending on
+    how the table was created. This function ensures the
+    app always works with camelCase field names regardless
+    of what Supabase returns, so the clerk can always see
+    their assigned tasks.
+    -------------------------------------------------------
+======================= */
+const normalizeTask = (raw: any): Task => ({
+  ...raw,
+  assignedToId:   raw.assignedToId   ?? raw.assigned_to_id   ?? "",
+  assignedToName: raw.assignedToName ?? raw.assigned_to_name ?? "",
+  assignedById:   raw.assignedById   ?? raw.assigned_by_id   ?? "",
+  assignedByName: raw.assignedByName ?? raw.assigned_by_name ?? "",
+  dateCreated:    raw.dateCreated    ?? raw.date_created      ?? "",
+  clerkNote:      raw.clerkNote      ?? raw.clerk_note        ?? undefined,
+  status:         raw.status         ?? "Pending",
+});
 
 /* =======================
     PROVIDER
@@ -228,13 +250,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const stored = localStorage.getItem("users");
     return stored ? JSON.parse(stored) : [{ id: "d70d4e47-1422-4501-961a-c1e69a1c15d7", name: "System Admin", email: "admin@nomoslink.com", role: "admin", password: "password123" }];
   });
- 
+
   const [transactions, setTransactions] = useState<Transaction[]>(() => JSON.parse(localStorage.getItem("transactions") || "[]"));
   const [courtCases, setCourtCases] = useState<CourtCase[]>(() => JSON.parse(localStorage.getItem("courtCases") || "[]"));
   const [letters, setLetters] = useState<Letter[]>(() => JSON.parse(localStorage.getItem("letters") || "[]"));
   const [invoices, setInvoices] = useState<Invoice[]>(() => JSON.parse(localStorage.getItem("invoices") || "[]"));
   const [clients, setClients] = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
-  const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem("tasks") || "[]"));
+
+  // FIX: Normalize tasks on load from localStorage too
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const stored = JSON.parse(localStorage.getItem("tasks") || "[]");
+    return stored.map(normalizeTask);
+  });
+
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
@@ -250,7 +278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  /* 🔔 REALTIME SYNC EFFECT */
+  /* 🔔 REALTIME SYNC — normalizeTask applied to all incoming payloads */
   useEffect(() => {
     const channel = supabase
       .channel('db-changes')
@@ -258,12 +286,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (payload.eventType === 'INSERT') {
           setTasks(prev => {
             if (prev.find(t => t.id === payload.new.id)) return prev;
-            return [...prev, payload.new as Task];
+            return [...prev, normalizeTask(payload.new)];
           });
         } else if (payload.eventType === 'UPDATE') {
-          setTasks(prev => prev.map(t => t.id === payload.new.id ? payload.new as Task : t));
+          setTasks(prev => prev.map(t => t.id === payload.new.id ? normalizeTask(payload.new) : t));
         } else if (payload.eventType === 'DELETE') {
-          setTasks(prev => prev.filter(t => t.id === payload.old.id));
+          setTasks(prev => prev.filter(t => t.id !== payload.old.id));
         }
       })
       .subscribe();
@@ -308,7 +336,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (clientData) setClients(prev => merge(prev, clientData));
         if (letterData) setLetters(prev => merge(prev, letterData));
         if (userData) setUsers(prev => merge(prev, userData));
-        if (taskData) setTasks(prev => merge(prev, taskData));
+        // FIX: normalize all tasks fetched from Supabase
+        if (taskData) setTasks(prev => merge(prev, taskData).map(normalizeTask));
         if (invoiceData) setInvoices(prev => merge(prev, invoiceData));
         if (notifData) setNotifications(prev => merge(prev, notifData));
         if (expenseData) setExpenses(prev => merge(prev, expenseData));
@@ -321,16 +350,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const sendNotification = (
-    recipientId: string, 
-    message: string, 
+    recipientId: string,
+    message: string,
     type: 'alert' | 'task' | 'file' = 'alert',
     relatedId?: string,
     relatedType?: 'case' | 'transaction' | 'letter' | 'task'
   ) => {
     setNotifications(prev => {
-      const isDuplicate = prev.some(n => 
-        n.recipientId === recipientId && 
-        n.message === message && 
+      const isDuplicate = prev.some(n =>
+        n.recipientId === recipientId &&
+        n.message === message &&
         (Date.now() - new Date(n.date).getTime() < 3000)
       );
       if (isDuplicate) return prev;
@@ -353,7 +382,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const syncToCloud = async () => {
-    if (!navigator.onLine || !currentUser) return; 
+    if (!navigator.onLine || !currentUser) return;
     try {
       await Promise.all([
         supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
@@ -412,7 +441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (data) setTransactions(prev => [...prev, data]);
   };
-  
+
   const editTransaction = (id: string, data: Partial<Transaction>) => {
     setTransactions(prev => prev.map(t => {
       if (t.id === id) {
@@ -421,7 +450,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const paid = Number(updated.paidAmount) || 0;
         const finalObj = { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid };
         const { progressNotes, documents, ...dbSafe } = finalObj as any;
-        instantSave('transactions', dbSafe); 
+        instantSave('transactions', dbSafe);
         return finalObj;
       }
       return t;
@@ -447,7 +476,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
         if (t.lawyerId && t.lawyerId !== currentUser.id) {
-            sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
+          sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
         }
         return updated;
       }
@@ -543,10 +572,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           authorRole: currentUser.role,
           date: new Date().toLocaleString()
         };
-        const updated = {
-          ...c,
-          progressNotes: [...(c.progressNotes || []), newNote]
-        };
+        const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
         supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
         if (c.lawyerId && c.lawyerId !== currentUser.id) {
           sendNotification(c.lawyerId, `Court Update: ${c.fileName}`, 'file', c.id, 'case');
@@ -633,10 +659,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           authorRole: currentUser.role,
           date: new Date().toLocaleString()
         };
-        const updated = {
-          ...l,
-          progressNotes: [...(l.progressNotes || []), newNote]
-        };
+        const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
         supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
         if (l.lawyerId && l.lawyerId !== currentUser.id) {
           sendNotification(l.lawyerId, `Letter Update: ${l.subject}`, 'file', l.id, 'letter');
@@ -707,18 +730,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('clients').delete().eq('id', id).then();
   };
 
+  /* =======================
+      TASKS LOGIC
+  ======================= */
   const addTask = async (taskData: Omit<Task, "id" | "status" | "dateCreated">) => {
-    const newTask: Task = { 
-        ...taskData, 
-        id: crypto.randomUUID(), 
-        status: "Pending", 
-        dateCreated: new Date().toISOString() 
+    const newTask: Task = {
+      ...taskData,
+      id: crypto.randomUUID(),
+      status: "Pending",
+      dateCreated: new Date().toISOString()
     };
-    
-    // Sync to state immediately for responsiveness
-    setTasks(prev => [...prev, newTask]);
-    
-    // Wait for DB to ensure cross-device visibility
+
+    // Add to local state immediately (normalized to ensure consistency)
+    setTasks(prev => [...prev, normalizeTask(newTask)]);
+
+    // Persist to Supabase for cross-device visibility
     const { error } = await supabase.from('tasks').insert([newTask]);
     if (error) console.error("Cross-device sync failed:", error);
 
@@ -734,6 +760,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return t;
     }));
+  };
+
+  const deleteTask = (id: string) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+    supabase.from('tasks').delete().eq('id', id).then();
+  };
+
+  const completeTask = (id: string, note: string) => {
+    updateTask(id, { status: "Completed", clerkNote: note });
   };
 
   useEffect(() => {
@@ -754,20 +789,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         currentUser, setCurrentUser, users, setUsers, lawyers, addUser, deleteUser,
-        login, logout, 
+        login, logout,
         transactions, addTransaction, editTransaction, deleteTransaction,
-        updateTransaction: editTransaction, 
-        addTransactionProgress, editTransactionProgress, deleteTransactionProgress, 
+        updateTransaction: editTransaction,
+        addTransactionProgress, editTransactionProgress, deleteTransactionProgress,
         uploadTransactionDocument, deleteTransactionDocument,
         courtCases, addCourtCase, editCourtCase, deleteCourtCase, addCourtCaseProgress, deleteCourtCaseProgress, uploadCourtCaseDocument, deleteCourtCaseDocument,
-        updateCourtCase: editCourtCase, 
+        updateCourtCase: editCourtCase,
         letters, addLetter, editLetter, deleteLetter, addLetterProgress,
         uploadLetterDocument, deleteLetterDocument,
-        updateLetter: editLetter, 
+        updateLetter: editLetter,
         invoices, addInvoice, updateInvoice, deleteInvoice,
         clients, addClient, updateClient, deleteClient,
-        commLogs, addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); }, 
-        tasks, addTask, updateTask, deleteTask: (id) => { setTasks(p => p.filter(t => t.id !== id)); supabase.from('tasks').delete().eq('id', id).then(); }, completeTask: (id, note) => updateTask(id, { status: "Completed", clerkNote: note }),
+        commLogs, addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); },
+        tasks, addTask, updateTask, deleteTask, completeTask,
         notifications, sendNotification, markNotificationsAsRead, setNotifications,
         expenses, setExpenses,
         firmName, setFirmName,
