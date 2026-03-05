@@ -186,7 +186,7 @@ interface AppContextType {
   addCommLog: (log: CommunicationLog) => void;
 
   tasks: Task[];
-  addTask: (task: Omit<Task, "id" | "status" | "dateCreated">) => void;
+  addTask: (task: Omit<Task, "id" | "status" | "dateCreated">) => Promise<void>;
   updateTask: (id: string, data: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   completeTask: (taskId: string, note: string) => void;
@@ -249,6 +249,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error(`Instant save to ${table} failed:`, e);
     }
   };
+
+  /* 🔔 REALTIME SYNC EFFECT */
+  useEffect(() => {
+    const channel = supabase
+      .channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setTasks(prev => {
+            if (prev.find(t => t.id === payload.new.id)) return prev;
+            return [...prev, payload.new as Task];
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          setTasks(prev => prev.map(t => t.id === payload.new.id ? payload.new as Task : t));
+        } else if (payload.eventType === 'DELETE') {
+          setTasks(prev => prev.filter(t => t.id === payload.old.id));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -429,6 +450,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             sendNotification(t.lawyerId, `File Update: ${t.fileName}`, 'file', t.id, 'transaction');
         }
         return updated;
+      }
+      return t;
+    }));
+  };
+
+  const editTransactionProgress = (txId: string, noteId: string, message: string) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id === txId) {
+        const updatedNotes = (t.progressNotes || []).map(n => n.id === noteId ? { ...n, message } : n);
+        supabase.from('transactions').update({ progressNotes: updatedNotes }).eq('id', txId).then();
+        return { ...t, progressNotes: updatedNotes };
+      }
+      return t;
+    }));
+  };
+
+  const deleteTransactionProgress = (txId: string, noteId: string) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id === txId) {
+        const updatedNotes = (t.progressNotes || []).filter(n => n.id !== noteId);
+        supabase.from('transactions').update({ progressNotes: updatedNotes }).eq('id', txId).then();
+        return { ...t, progressNotes: updatedNotes };
       }
       return t;
     }));
@@ -664,12 +707,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('clients').delete().eq('id', id).then();
   };
 
-  const addTask = (taskData: Omit<Task, "id" | "status" | "dateCreated">) => {
-    const newTask: Task = { ...taskData, id: `TASK-${Date.now()}`, status: "Pending", dateCreated: new Date().toLocaleString() };
+  const addTask = async (taskData: Omit<Task, "id" | "status" | "dateCreated">) => {
+    const newTask: Task = { 
+        ...taskData, 
+        id: crypto.randomUUID(), 
+        status: "Pending", 
+        dateCreated: new Date().toISOString() 
+    };
+    
+    // Sync to state immediately for responsiveness
     setTasks(prev => [...prev, newTask]);
-    instantSave('tasks', newTask);
+    
+    // Wait for DB to ensure cross-device visibility
+    const { error } = await supabase.from('tasks').insert([newTask]);
+    if (error) console.error("Cross-device sync failed:", error);
+
     sendNotification(taskData.assignedToId, `New Task: ${taskData.title}`, 'task', newTask.id, 'task');
   };
+
   const updateTask = (id: string, data: Partial<Task>) => {
     setTasks(prev => prev.map(t => {
       if (t.id === id) {
@@ -702,7 +757,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login, logout, 
         transactions, addTransaction, editTransaction, deleteTransaction,
         updateTransaction: editTransaction, 
-        addTransactionProgress, editTransactionProgress: () => {}, deleteTransactionProgress: () => {}, 
+        addTransactionProgress, editTransactionProgress, deleteTransactionProgress, 
         uploadTransactionDocument, deleteTransactionDocument,
         courtCases, addCourtCase, editCourtCase, deleteCourtCase, addCourtCaseProgress, deleteCourtCaseProgress, uploadCourtCaseDocument, deleteCourtCaseDocument,
         updateCourtCase: editCourtCase, 
