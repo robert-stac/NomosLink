@@ -53,10 +53,10 @@ export default function LawyerDashboard() {
   if (!currentUser) return null;
 
   const clerks = users.filter(u => u.role === "clerk");
-  const myTasks = tasks.filter(t => t.assignedById === currentUser.id);
+ const myTasks = tasks.filter(t => String(t.assignedById) === String(currentUser.id));
 
   const handleSaveTask = () => {
-    const clerk = clerks.find(c => c.id === taskForm.assignedToId);
+    const clerk = clerks.find(c => String(c.id) === String(taskForm.assignedToId));
     if (!taskForm.title || !clerk) return alert("Please fill title and select a clerk");
     
     if (editingTaskId) {
