@@ -366,7 +366,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (prev.find(n => n.id === payload.new.id)) return prev;
             const newNotif = payload.new as AppNotification;
             // Show local browser notification if it's for the current user
-            if (currentUser && newNotif.recipientId === currentUser.id) {
+            if (currentUser && newNotif.recipientId === currentUser.id  && document.hidden) {
               showLocalNotification('NomoSLink', newNotif.message);
             }
             return [newNotif, ...prev];
