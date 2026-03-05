@@ -11,5 +11,17 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Unregister any old broken service workers
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          registrations.forEach(reg => {
+            if (!reg.active?.scriptURL?.includes('sw.js')) {
+              reg.unregister();
+            }
+          });
+        });
+      }
+    </script>
   </body>
 </html>
