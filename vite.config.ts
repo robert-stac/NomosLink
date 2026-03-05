@@ -7,54 +7,32 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      navigateFallback: 'index.html',
-      navigateFallbackDenylist: [
-        /^\/api\//,
-        /supabase\.co/,
-        /functions\/v1/,
-      ],
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallbackDenylist: [/^\/api\//, /supabase\.co/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkOnly',
-          },
-        ],
+      // Use our custom SW file so push handlers are included
+      strategies: 'injectManifest',
+      srcDir: 'public',
+      filename: 'sw-custom.js',
+      injectManifest: {
+        injectionPoint: undefined,
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
         name: 'NomosLink Legal Management',
         short_name: 'NomosLink',
         description: 'Advanced Legal Case and Staff Management System',
-        theme_color: '#0B1F3A', // Your dark blue brand color
+        theme_color: '#0B1F3A',
         background_color: '#ffffff',
         display: 'standalone',
         scope: '/',
         start_url: '/',
         icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
     }),
   ],
   build: {
-    chunkSizeWarningLimit: 1000, // Raises the limit to 1000kb
+    chunkSizeWarningLimit: 1000,
   },
 });
