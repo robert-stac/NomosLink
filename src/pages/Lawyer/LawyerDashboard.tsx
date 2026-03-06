@@ -3,9 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import NotificationBell from "../NotificationBell";
 
-/* =======================
-   SUB-COMPONENT: FILE CARD
-======================= */
 const FileCard = ({ title, subtitle, status, date, onView }: any) => (
   <div className="bg-white p-6 rounded-[32px] border border-slate-100 hover:shadow-xl hover:shadow-blue-900/5 transition-all group">
     <div className="flex justify-between items-start mb-4">
@@ -31,9 +28,6 @@ const FileCard = ({ title, subtitle, status, date, onView }: any) => (
   </div>
 );
 
-/* =======================
-   MAIN DASHBOARD
-======================= */
 export default function LawyerDashboard() {
   const navigate = useNavigate();
   const {
@@ -43,6 +37,7 @@ export default function LawyerDashboard() {
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters">("Cases");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({ title: "", description: "", assignedToId: "" });
@@ -55,7 +50,6 @@ export default function LawyerDashboard() {
   const handleSaveTask = () => {
     const clerk = clerks.find(c => String(c.id) === String(taskForm.assignedToId));
     if (!taskForm.title || !clerk) return alert("Please fill title and select a clerk");
-
     if (editingTaskId) {
       updateTask(editingTaskId, {
         title: taskForm.title,
@@ -73,17 +67,12 @@ export default function LawyerDashboard() {
         assignedByName: currentUser.name
       });
     }
-
     closeModal();
   };
 
   const openEditModal = (task: any) => {
     setEditingTaskId(task.id);
-    setTaskForm({
-      title: task.title,
-      description: task.description,
-      assignedToId: task.assignedToId
-    });
+    setTaskForm({ title: task.title, description: task.description, assignedToId: task.assignedToId });
     setIsTaskModalOpen(true);
   };
 
@@ -97,17 +86,19 @@ export default function LawyerDashboard() {
     const userId = String(currentUser.id);
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-
     const tomorrow = new Date();
     tomorrow.setDate(now.getDate() + 1);
     tomorrow.setHours(0, 0, 0, 0);
 
-    const assignedCases = courtCases.filter(c => String(c.lawyerId) === userId);
+    const assignedCases = courtCases.filter(c =>
+      String(c.lawyerId) === userId && !c.archived
+    );
 
     const upcoming = assignedCases
       .filter(c => c.nextCourtDate && !isNaN(new Date(c.nextCourtDate).getTime()))
       .map(c => ({
         id: c.id,
+        fileName: c.fileName,
         dateStr: c.nextCourtDate,
         timestamp: new Date(c.nextCourtDate!).getTime()
       }))
@@ -123,20 +114,37 @@ export default function LawyerDashboard() {
 
     return {
       cases: assignedCases,
-      txs: transactions.filter(t => String(t.lawyerId) === userId),
-      ltrs: letters.filter(l => {
-        return (
-          String(l.lawyerId) === userId ||
-          String((l as any).lawyer?.id) === userId
-        );
-      }),
+      txs: transactions.filter(t => String(t.lawyerId) === userId && !t.archived),
+      ltrs: letters.filter(l =>
+        (String(l.lawyerId) === userId || String((l as any).lawyer?.id) === userId) && !l.archived
+      ),
       nextHearing: upcoming || null,
       urgentReminders
     };
   }, [courtCases, transactions, letters, currentUser.id]);
 
+  // Search filter applied on top of the tab data
+  const filteredCases = myData.cases.filter(c =>
+    c.fileName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const filteredTxs = myData.txs.filter(t =>
+    t.fileName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.type?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const filteredLtrs = myData.ltrs.filter(l =>
+    l.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    l.type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    l.recipient?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const currentCount =
+    activeTab === "Cases" ? filteredCases.length :
+    activeTab === "Transactions" ? filteredTxs.length :
+    filteredLtrs.length;
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
+      {/* HEADER */}
       <div className="bg-[#0B1F3A] pt-16 pb-24 px-6 md:px-12 rounded-b-[60px] shadow-2xl">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-10">
@@ -179,7 +187,9 @@ export default function LawyerDashboard() {
             <div
               onClick={() => myData.nextHearing && navigate(`/lawyer/cases/${myData.nextHearing.id}`)}
               className={`p-6 rounded-[30px] border transition-all cursor-pointer ${
-                myData.nextHearing ? "bg-blue-600 border-blue-400 shadow-lg shadow-blue-900/40 hover:bg-blue-500 active:scale-95" : "bg-white/5 border-white/10"
+                myData.nextHearing
+                  ? "bg-blue-600 border-blue-400 shadow-lg shadow-blue-900/40 hover:bg-blue-500 active:scale-95"
+                  : "bg-white/5 border-white/10"
               }`}
             >
               <div className="flex justify-between items-start">
@@ -196,7 +206,7 @@ export default function LawyerDashboard() {
 
       <div className="max-w-7xl mx-auto px-6 -mt-12 space-y-10">
 
-        {/* URGENT PREPARATION ALERT SECTION */}
+        {/* URGENT ALERT */}
         {myData.urgentReminders.length > 0 && (
           <div className="bg-red-50 border border-red-100 p-6 rounded-[32px] shadow-xl shadow-red-900/5 animate-in fade-in slide-in-from-top-4 duration-700">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -204,7 +214,7 @@ export default function LawyerDashboard() {
                 <div className="bg-red-500 text-white p-3 rounded-2xl text-xl animate-bounce">⚠️</div>
                 <div>
                   <h3 className="text-red-900 font-black text-xs uppercase tracking-widest">Urgent Preparation Required</h3>
-                  <p className="text-red-600/80 text-[11px] font-bold">You have hearings scheduled for today or tomorrow. Please review your files.</p>
+                  <p className="text-red-600/80 text-[11px] font-bold">You have hearings scheduled for today or tomorrow.</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -251,22 +261,10 @@ export default function LawyerDashboard() {
                         {task.status}
                       </span>
                     </td>
-                    <td className="py-4 italic text-slate-400">
-                      {task.clerkNote || "Awaiting update..."}
-                    </td>
+                    <td className="py-4 italic text-slate-400">{task.clerkNote || "Awaiting update..."}</td>
                     <td className="py-4 text-right space-x-2">
-                      <button
-                        onClick={() => openEditModal(task)}
-                        className="text-blue-600 hover:text-blue-800 font-black uppercase text-[9px] tracking-widest"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteTask(task.id)}
-                        className="text-red-400 hover:text-red-600 font-black uppercase text-[9px] tracking-widest"
-                      >
-                        Delete
-                      </button>
+                      <button onClick={() => openEditModal(task)} className="text-blue-600 hover:text-blue-800 font-black uppercase text-[9px] tracking-widest">Edit</button>
+                      <button onClick={() => deleteTask(task.id)} className="text-red-400 hover:text-red-600 font-black uppercase text-[9px] tracking-widest">Delete</button>
                     </td>
                   </tr>
                 )) : (
@@ -277,32 +275,77 @@ export default function LawyerDashboard() {
           </div>
         </div>
 
-        {/* CASES / TRANSACTIONS / LETTERS TABS */}
+        {/* TABS + SEARCH */}
         <div>
-          <div className="bg-white p-2 rounded-[32px] shadow-xl flex gap-2 mb-10 border border-slate-100 max-w-md">
-            {["Cases", "Transactions", "Letters"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`flex-1 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest transition-all ${
-                  activeTab === tab ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:text-slate-600"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            {/* Tab Switcher */}
+            <div className="flex gap-8 border-b border-slate-200">
+              {["Cases", "Transactions", "Letters"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => { setActiveTab(tab as any); setSearchQuery(""); }}
+                  className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
+                    activeTab === tab
+                      ? "border-slate-900 text-slate-900"
+                      : "border-transparent text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={`Search ${activeTab.toLowerCase()}...`}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10 py-3 rounded-2xl border border-slate-200 bg-white shadow-sm text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition-all w-72"
+              />
+              <span className="absolute left-3.5 top-3.5 text-slate-400 text-sm">🔍</span>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 font-black text-lg leading-none"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </div>
 
+          {/* Results count when searching */}
+          {searchQuery && (
+            <p className="text-xs font-bold text-slate-400 mb-4 uppercase tracking-widest">
+              {currentCount} result{currentCount !== 1 ? "s" : ""} for "{searchQuery}"
+            </p>
+          )}
+
+          {/* File Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {activeTab === "Cases" && myData.cases.map(c => (
-              <FileCard key={c.id} title={c.fileName} subtitle="Litigation Matter" status={c.status} date={c.nextCourtDate || "Date TBD"} onView={() => navigate(`/lawyer/cases/${c.id}`)} />
-            ))}
-            {activeTab === "Transactions" && myData.txs.map(t => (
-              <FileCard key={t.id} title={t.fileName} subtitle={t.type} status={t.status} date={t.date} onView={() => navigate(`/lawyer/transactions/${t.id}`)} />
-            ))}
-            {activeTab === "Letters" && myData.ltrs.map(l => (
-              <FileCard key={l.id} title={l.subject} subtitle={l.type} status={l.status} date={l.date} onView={() => navigate(`/lawyer/letters/${l.id}`)} />
-            ))}
+            {activeTab === "Cases" && (
+              filteredCases.length > 0
+                ? filteredCases.map(c => (
+                    <FileCard key={c.id} title={c.fileName} subtitle="Litigation Matter" status={c.status} date={c.nextCourtDate || "Date TBD"} onView={() => navigate(`/lawyer/cases/${c.id}`)} />
+                  ))
+                : <p className="col-span-3 text-center text-slate-300 font-bold italic py-10">No cases found{searchQuery ? ` for "${searchQuery}"` : ""}.</p>
+            )}
+            {activeTab === "Transactions" && (
+              filteredTxs.length > 0
+                ? filteredTxs.map(t => (
+                    <FileCard key={t.id} title={t.fileName} subtitle={t.type} status={(t as any).status} date={t.date} onView={() => navigate(`/lawyer/transactions/${t.id}`)} />
+                  ))
+                : <p className="col-span-3 text-center text-slate-300 font-bold italic py-10">No transactions found{searchQuery ? ` for "${searchQuery}"` : ""}.</p>
+            )}
+            {activeTab === "Letters" && (
+              filteredLtrs.length > 0
+                ? filteredLtrs.map(l => (
+                    <FileCard key={l.id} title={l.subject} subtitle={l.type} status={l.status} date={l.date} onView={() => navigate(`/lawyer/letters/${l.id}`)} />
+                  ))
+                : <p className="col-span-3 text-center text-slate-300 font-bold italic py-10">No letters found{searchQuery ? ` for "${searchQuery}"` : ""}.</p>
+            )}
           </div>
         </div>
       </div>

@@ -3,9 +3,9 @@ import { useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 
 export default function LawyerPerformanceDashboard() {
-  const { 
-    users, transactions, courtCases, letters, 
-    addTransactionProgress, addCourtCaseProgress, addLetterProgress 
+  const {
+    users, transactions, courtCases, letters,
+    addTransactionProgress, addCourtCaseProgress, addLetterProgress
   } = useAppContext();
 
   const location = useLocation();
@@ -16,27 +16,30 @@ export default function LawyerPerformanceDashboard() {
   const [activeFile, setActiveFile] = useState<any | null>(null);
   const [newNote, setNewNote] = useState("");
 
+  // ✅ Pre-filter archived items before any stats or display
+  const activeTransactions = transactions.filter(t => !t.archived);
+  const activeCases = courtCases.filter(c => !c.archived);
+  const activeLetters = letters.filter(l => !l.archived);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const fileToFind = params.get("file");
     const triggerOpen = params.get("openDetails");
 
     if (fileToFind && triggerOpen) {
-      const foundCase = courtCases.find(c => c.fileName === fileToFind);
-      const foundTrans = transactions.find(t => t.fileName === fileToFind);
-      const foundLetter = letters.find(l => (l.subject || l.title || l.fileName) === fileToFind);
-
+      const foundCase  = activeCases.find(c => c.fileName === fileToFind);
+      const foundTrans = activeTransactions.find(t => t.fileName === fileToFind);
+      const foundLetter = activeLetters.find(l => (l.subject || (l as any).title || (l as any).fileName) === fileToFind);
       const targetFile = foundCase || foundTrans || foundLetter;
 
       if (targetFile) {
         const lawyerId = targetFile.lawyerId || (targetFile as any).lawyer?.id;
         if (lawyerId) setSelectedLawyerId(lawyerId.toString());
-
         const category = foundCase ? "Court Case" : foundTrans ? "Transaction" : "Letter";
         setActiveFile({ ...targetFile, category, title: fileToFind });
       }
     }
-  }, [location, courtCases, transactions, letters]);
+  }, [location, activeCases, activeTransactions, activeLetters]);
 
   const stats = useMemo(() => {
     if (!selectedLawyerId) return null;
@@ -44,50 +47,41 @@ export default function LawyerPerformanceDashboard() {
     const tenDaysAgo = new Date();
     tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
 
-    // FIX: Normalize to string once, use everywhere consistently
     const sid = String(selectedLawyerId);
 
-    const myCases = courtCases.filter(c => String(c.lawyerId) === sid);
-    const myTransactions = transactions.filter(t => String(t.lawyerId) === sid);
-
-    // FIX: Unified letter filter using the same String() approach as cases/transactions.
-    // Previously this also checked l.userId which the admin doesn't check, causing mismatch.
-    const myLetters = letters.filter(l => {
-      return (
-        String(l.lawyerId) === sid ||
-        String((l as any).lawyer?.id) === sid
-      );
-    });
+    // ✅ All filtered from active (non-archived) arrays
+    const myCases        = activeCases.filter(c => String(c.lawyerId) === sid);
+    const myTransactions = activeTransactions.filter(t => String(t.lawyerId) === sid);
+    const myLetters      = activeLetters.filter(l =>
+      String(l.lawyerId) === sid || String((l as any).lawyer?.id) === sid
+    );
 
     const allFiles = [
       ...myCases.map(i => ({ ...i, category: "Court Case", title: i.fileName })),
       ...myTransactions.map(i => ({ ...i, category: "Transaction", title: i.fileName })),
-      ...myLetters.map(i => ({ 
-        ...i, 
-        category: "Letter", 
-        title: i.subject || (i as any).title || (i as any).fileName || "Untitled Letter" 
+      ...myLetters.map(i => ({
+        ...i,
+        category: "Letter",
+        title: i.subject || (i as any).title || (i as any).fileName || "Untitled Letter"
       }))
     ];
 
     const financials = { billed: 0, collected: 0 };
-
     myTransactions.forEach(t => {
-      financials.billed += Number(t.billedAmount || (t as any).billed || 0);
-      financials.collected += Number(t.paidAmount || (t as any).paid || 0);
+      financials.billed    += Number(t.billedAmount || (t as any).billed || 0);
+      financials.collected += Number(t.paidAmount   || (t as any).paid   || 0);
     });
-
     myLetters.forEach(l => {
-      financials.billed += Number(l.billed || (l as any).billedAmount || 0);
-      financials.collected += Number(l.paid || (l as any).paidAmount || 0);
+      financials.billed    += Number(l.billed || (l as any).billedAmount || 0);
+      financials.collected += Number(l.paid   || (l as any).paidAmount   || 0);
     });
 
     const stagnant = allFiles.filter(file => {
       if (file.status === "Completed") return false;
       const notes = (file as any).progressNotes || [];
-      let lastDate = notes.length === 0 
-        ? new Date((file as any).date || (file as any).createdAt || now) 
+      let lastDate = notes.length === 0
+        ? new Date((file as any).date || (file as any).createdAt || now)
         : new Date([...notes].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date);
-      
       const diffTime = Math.abs(now.getTime() - lastDate.getTime());
       (file as any).daysStagnant = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       return !isNaN(lastDate.getTime()) && lastDate < tenDaysAgo;
@@ -102,23 +96,23 @@ export default function LawyerPerformanceDashboard() {
       totalFiles: allFiles.length,
       realizationRate: financials.billed ? Math.round((financials.collected / financials.billed) * 100) : 0
     };
-  }, [selectedLawyerId, courtCases, transactions, letters]);
+  }, [selectedLawyerId, activeCases, activeTransactions, activeLetters]);
 
   const filteredData = useMemo(() => {
     if (!stats) return null;
     const s = searchTerm.toLowerCase();
     return {
-      cases: stats.cases.filter(c => c.fileName?.toLowerCase().includes(s)),
+      cases:        stats.cases.filter(c => c.fileName?.toLowerCase().includes(s)),
       transactions: stats.transactions.filter(t => t.fileName?.toLowerCase().includes(s)),
-      letters: stats.letters.filter(l => (l.subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(s))
+      letters:      stats.letters.filter(l => (l.subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(s))
     };
   }, [stats, searchTerm]);
 
   const handlePostNote = () => {
     if (!newNote.trim() || !activeFile) return;
-    if (activeFile.category === "Court Case") addCourtCaseProgress(activeFile.id, newNote);
+    if (activeFile.category === "Court Case")   addCourtCaseProgress(activeFile.id, newNote);
     else if (activeFile.category === "Transaction") addTransactionProgress(activeFile.id, newNote);
-    else if (activeFile.category === "Letter") addLetterProgress(activeFile.id, newNote);
+    else if (activeFile.category === "Letter")  addLetterProgress(activeFile.id, newNote);
     setNewNote("");
     setActiveFile(null);
   };
@@ -126,15 +120,15 @@ export default function LawyerPerformanceDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 font-sans text-slate-900">
       <div className="max-w-7xl mx-auto">
-        
+
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight">Partner Review</h1>
-            <p className="text-slate-500 text-sm">Monitoring & Enforcement</p>
+            <p className="text-slate-500 text-sm">Monitoring & Enforcement — Active Files Only</p>
           </div>
           <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
             <div className="relative">
-              <input 
+              <input
                 type="text" placeholder="Search files..." value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 pr-4 py-3 rounded-2xl border border-slate-200 w-full md:w-64 outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm transition-all focus:border-blue-400"
@@ -163,10 +157,10 @@ export default function LawyerPerformanceDashboard() {
         ) : (
           <div className="space-y-10">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <KPI label="Collections" value={`UGX ${stats.financials.collected.toLocaleString()}`} sub="Total Revenue" color="bg-slate-900 text-white" />
-              <KPI label="Assignments" value={stats.totalFiles} sub="Files Handled" color="bg-white text-slate-900 border" />
-              <KPI label="Realization" value={`${stats.realizationRate}%`} sub="Billed vs Paid" color={stats.realizationRate > 80 ? "bg-emerald-600 text-white" : "bg-orange-500 text-white"} />
-              <KPI label="Stagnant" value={stats.stagnant.length} sub="Needs Attention" color={stats.stagnant.length > 0 ? "bg-red-50 text-red-600 border border-red-200" : "bg-emerald-50 text-emerald-600"} />
+              <KPI label="Collections"  value={`UGX ${stats.financials.collected.toLocaleString()}`} sub="Total Revenue"    color="bg-slate-900 text-white" />
+              <KPI label="Assignments"  value={stats.totalFiles}            sub="Active Files"     color="bg-white text-slate-900 border" />
+              <KPI label="Realization"  value={`${stats.realizationRate}%`} sub="Billed vs Paid"   color={stats.realizationRate > 80 ? "bg-emerald-600 text-white" : "bg-orange-500 text-white"} />
+              <KPI label="Stagnant"     value={stats.stagnant.length}       sub="Needs Attention"  color={stats.stagnant.length > 0 ? "bg-red-50 text-red-600 border border-red-200" : "bg-emerald-50 text-emerald-600"} />
             </div>
 
             {stats.stagnant.length > 0 && (
@@ -191,9 +185,9 @@ export default function LawyerPerformanceDashboard() {
               </div>
             )}
 
-            <FileTable title="Court Cases" items={filteredData?.cases || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Court Case", title: item.fileName })} />
-            <FileTable title="Transactions" items={filteredData?.transactions || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Transaction", title: item.fileName })} />
-            <FileTable title="Letters" items={filteredData?.letters || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Letter", title: item.subject || item.title || item.fileName })} />
+            <FileTable title="Court Cases"   items={filteredData?.cases || []}        onRowClick={(item: any) => setActiveFile({ ...item, category: "Court Case",   title: item.fileName })} />
+            <FileTable title="Transactions"  items={filteredData?.transactions || []}  onRowClick={(item: any) => setActiveFile({ ...item, category: "Transaction",  title: item.fileName })} />
+            <FileTable title="Letters"       items={filteredData?.letters || []}       onRowClick={(item: any) => setActiveFile({ ...item, category: "Letter",       title: item.subject || item.title || item.fileName })} />
           </div>
         )}
       </div>
@@ -223,10 +217,11 @@ export default function LawyerPerformanceDashboard() {
             </div>
             <div className="p-8 border-t bg-slate-50 rounded-b-[32px]">
               <div className="flex gap-3">
-                <input 
-                  placeholder="Post instruction to staff..." 
+                <input
+                  placeholder="Post instruction to staff..."
                   className="flex-1 bg-white border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500"
-                  value={newNote} onChange={(e) => setNewNote(e.target.value)}
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
                 />
                 <button onClick={handlePostNote} className="bg-slate-900 hover:bg-black text-white px-8 py-4 rounded-2xl font-bold transition-all">Post</button>
               </div>
@@ -257,7 +252,12 @@ const FileTable = ({ title, items, onRowClick }: any) => (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-left">
         <thead className="bg-slate-50 text-slate-400 font-bold uppercase text-[10px] tracking-widest border-b">
-          <tr><th className="p-6 pl-8">Matter</th><th className="p-6">Status</th><th className="p-6 text-center">Notes</th><th className="p-6 text-right pr-8">Action</th></tr>
+          <tr>
+            <th className="p-6 pl-8">Matter</th>
+            <th className="p-6">Status</th>
+            <th className="p-6 text-center">Notes</th>
+            <th className="p-6 text-right pr-8">Action</th>
+          </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {items.map((item: any, idx: number) => (
@@ -276,7 +276,9 @@ const FileTable = ({ title, items, onRowClick }: any) => (
               </td>
             </tr>
           ))}
-          {items.length === 0 && <tr><td colSpan={4} className="p-10 text-center text-slate-400 italic">No matches found.</td></tr>}
+          {items.length === 0 && (
+            <tr><td colSpan={4} className="p-10 text-center text-slate-400 italic">No active files found.</td></tr>
+          )}
         </tbody>
       </table>
     </div>
