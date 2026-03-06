@@ -315,6 +315,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Helper: get all admin IDs from the latest users list (via ref, no re-render)
   const getAdminIds = () => usersRef.current.filter(u => u.role === 'admin').map(u => u.id);
 
+  // Helper: get all manager IDs
+  const getManagerIds = () => usersRef.current.filter(u => u.role === 'manager').map(u => u.id);
+
+  /* =======================
+      SEND EMAIL
+      Calls the Supabase send-email Edge Function via Resend.
+      Only fires when online. Silently fails if no email on recipient.
+  ======================= */
+  const sendEmail = (to: string, subject: string, html: string) => {
+    if (!navigator.onLine || !to) return;
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`,
+      },
+      body: JSON.stringify({ to, subject, html }),
+    }).catch(() => {});
+  };
+
+  /* =======================
+      EMAIL TEMPLATE
+      Clean, branded HTML email for progress note alerts.
+  ======================= */
+  const buildProgressEmail = (
+    recipientName: string,
+    authorName: string,
+    authorRole: string,
+    fileTitle: string,
+    fileType: string,
+    message: string,
+  ) => `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">
+      <div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">
+        <h2 style="color:white;margin:0;font-size:20px;font-weight:900;letter-spacing:-0.5px;">NomosLink</h2>
+        <p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">File Update Notification</p>
+      </div>
+      <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
+        <p style="color:#64748b;font-size:14px;">Hi <strong>${recipientName}</strong>,</p>
+        <p style="color:#64748b;font-size:14px;">A new update has been posted to one of your files by <strong>${authorName}</strong> (${authorRole}).</p>
+        
+        <div style="background:#f1f5f9;border-left:4px solid #0B1F3A;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
+          <p style="margin:0 0 6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">${fileType}</p>
+          <p style="margin:0 0 12px;font-size:16px;font-weight:900;color:#0B1F3A;">${fileTitle}</p>
+          <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">"${message}"</p>
+        </div>
+
+        <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
+          This is an automated notification from NomosLink Legal Management System.<br/>
+          Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  `;
+
   const instantSave = async (table: string, payload: any) => {
     if (!navigator.onLine) return;
     try {
@@ -621,14 +676,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }],
       };
       supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+
+      const isManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+      // Notify + email the assigned lawyer if the note was added by manager/admin
       if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
         sendNotification(t.lawyerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
-      } else {
-        getAdminIds().forEach(adminId => {
-          if (String(adminId) !== String(currentUser.id))
-            sendNotification(adminId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
-        });
+        if (isManagerOrAdmin) {
+          const lawyer = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
+          if (lawyer?.email) {
+            sendEmail(
+              lawyer.email,
+              `File Update: ${t.fileName}`,
+              buildProgressEmail(lawyer.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message)
+            );
+          }
+        }
       }
+
+      // Notify admins
+      getAdminIds().forEach(adminId => {
+        if (String(adminId) !== String(currentUser.id))
+          sendNotification(adminId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
+      });
+
+      // Email manager if this file belongs to them and someone else posted the note
+      getManagerIds().forEach(managerId => {
+        if (String(managerId) === String(t.lawyerId) && String(managerId) !== String(currentUser.id)) {
+          const manager = usersRef.current.find(u => String(u.id) === managerId);
+          if (manager?.email) {
+            sendEmail(
+              manager.email,
+              `File Update on Your Matter: ${t.fileName}`,
+              buildProgressEmail(manager.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message)
+            );
+          }
+        }
+      });
+
       return updated;
     }));
   };
@@ -703,14 +788,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
       supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+
+      const isManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+      // Notify + email the assigned lawyer if the note was added by manager/admin
       if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
         sendNotification(c.lawyerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
-      } else {
-        getAdminIds().forEach(adminId => {
-          if (String(adminId) !== String(currentUser.id))
-            sendNotification(adminId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
-        });
+        if (isManagerOrAdmin) {
+          const lawyer = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
+          if (lawyer?.email) {
+            sendEmail(
+              lawyer.email,
+              `File Update: ${c.fileName}`,
+              buildProgressEmail(lawyer.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message)
+            );
+          }
+        }
       }
+
+      // Notify admins
+      getAdminIds().forEach(adminId => {
+        if (String(adminId) !== String(currentUser.id))
+          sendNotification(adminId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+      });
+
+      // Email manager if this file belongs to them and someone else posted the note
+      getManagerIds().forEach(managerId => {
+        if (String(managerId) === String(c.lawyerId) && String(managerId) !== String(currentUser.id)) {
+          const manager = usersRef.current.find(u => String(u.id) === managerId);
+          if (manager?.email) {
+            sendEmail(
+              manager.email,
+              `File Update on Your Matter: ${c.fileName}`,
+              buildProgressEmail(manager.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message)
+            );
+          }
+        }
+      });
+
       return updated;
     }));
   };
@@ -777,14 +892,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
       supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+
+      const isManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+      // Notify + email the assigned lawyer if the note was added by manager/admin
       if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
         sendNotification(l.lawyerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
-      } else {
-        getAdminIds().forEach(adminId => {
-          if (String(adminId) !== String(currentUser.id))
-            sendNotification(adminId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
-        });
+        if (isManagerOrAdmin) {
+          const lawyer = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
+          if (lawyer?.email) {
+            sendEmail(
+              lawyer.email,
+              `File Update: ${l.subject}`,
+              buildProgressEmail(lawyer.name, currentUser.name, currentUser.role, l.subject, 'Letter', message)
+            );
+          }
+        }
       }
+
+      // Notify admins
+      getAdminIds().forEach(adminId => {
+        if (String(adminId) !== String(currentUser.id))
+          sendNotification(adminId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
+      });
+
+      // Email manager if this file belongs to them and someone else posted the note
+      getManagerIds().forEach(managerId => {
+        if (String(managerId) === String(l.lawyerId) && String(managerId) !== String(currentUser.id)) {
+          const manager = usersRef.current.find(u => String(u.id) === managerId);
+          if (manager?.email) {
+            sendEmail(
+              manager.email,
+              `File Update on Your Matter: ${l.subject}`,
+              buildProgressEmail(manager.name, currentUser.name, currentUser.role, l.subject, 'Letter', message)
+            );
+          }
+        }
+      });
+
       return updated;
     }));
   };
