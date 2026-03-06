@@ -4,26 +4,16 @@ import { useAppContext } from "../context/AppContext";
 
 const Clients: React.FC = () => {
   const { 
-    clients, 
-    courtCases, 
-    transactions, 
-    letters, 
-    invoices, 
-    addClient, 
-    deleteClient, 
-    addCommLog, 
-    commLogs,
-    currentUser 
+    clients, courtCases, transactions, letters, invoices, 
+    addClient, deleteClient, addCommLog, commLogs, currentUser 
   } = useAppContext();
   const navigate = useNavigate();
 
-  // --- UI STATE ---
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [commNote, setCommNote] = useState("");
 
-  // --- FORM STATE ---
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -32,11 +22,10 @@ const Clients: React.FC = () => {
   const filteredClients = useMemo(() => {
     return (clients || []).filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      c.email.toLowerCase().includes(searchTerm.toLowerCase())
+      (c.email || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [clients, searchTerm]);
 
-  // --- PDF/REPORT GENERATION ---
   const handleDownloadReport = (client: any) => {
     const reportDate = new Date().toLocaleString();
     const logEntries = commLogs
@@ -93,10 +82,10 @@ CONFIDENTIAL LEGAL DOCUMENT
       clientId: selectedClient.id,
       note: commNote,
       date: new Date().toLocaleString(),
-      authorName: currentUser?.name || "Admin" 
+      authorName: currentUser?.name || "Admin"
     };
     addCommLog(logEntry);
-    setCommNote(""); 
+    setCommNote("");
   };
 
   const resetForm = () => {
@@ -107,7 +96,7 @@ CONFIDENTIAL LEGAL DOCUMENT
 
   return (
     <div className="min-h-screen bg-[#F4F7F9] p-8 font-sans relative">
-      {/* HEADER SECTION */}
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-10">
         <div>
           <h1 className="text-4xl font-black text-[#0B1F3A] tracking-tight">Client Portfolio</h1>
@@ -121,7 +110,7 @@ CONFIDENTIAL LEGAL DOCUMENT
         </button>
       </div>
 
-      {/* SEARCH BAR */}
+      {/* SEARCH */}
       <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-8 flex items-center">
         <input 
           type="text" 
@@ -184,13 +173,28 @@ CONFIDENTIAL LEGAL DOCUMENT
         })}
       </div>
 
-      {/* CLIENT DETAIL SIDEBAR (DRAWER) */}
+      {/* CLIENT DETAIL DRAWER */}
       {selectedClient && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-[#0B1F3A] bg-opacity-40 backdrop-blur-sm" onClick={() => setSelectedClient(null)}></div>
-          <div className="relative w-full max-w-2xl bg-white h-screen shadow-2xl overflow-y-auto p-10">
-            <button onClick={() => setSelectedClient(null)} className="absolute top-8 right-8 text-gray-400 hover:text-black text-2xl">✕</button>
-            
+          {/* Backdrop — clicking closes drawer */}
+          <div
+            className="absolute inset-0 bg-[#0B1F3A] bg-opacity-40 backdrop-blur-sm"
+            onClick={() => setSelectedClient(null)}
+          />
+
+          {/* Drawer panel — stopPropagation prevents backdrop from stealing clicks */}
+          <div
+            className="relative w-full max-w-2xl bg-white h-screen shadow-2xl overflow-y-auto p-10"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* X CLOSE BUTTON */}
+            <button
+              onClick={() => setSelectedClient(null)}
+              className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-600 text-gray-500 text-xl font-black transition-colors z-10"
+            >
+              ✕
+            </button>
+
             <div className="mb-10">
               <div className="flex justify-between items-start">
                 <div>
@@ -199,7 +203,7 @@ CONFIDENTIAL LEGAL DOCUMENT
                 </div>
                 <button 
                   onClick={() => handleDownloadReport(selectedClient)}
-                  className="mt-4 p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors title='Download Summary Report'"
+                  className="mt-4 p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
                 >
                   📥 <span className="text-[10px] font-black uppercase ml-1">Export Report</span>
                 </button>
@@ -212,52 +216,51 @@ CONFIDENTIAL LEGAL DOCUMENT
 
             {/* QUICK STATS */}
             <div className="grid grid-cols-3 gap-4 mb-10">
-                <div className="bg-gray-50 p-4 rounded-2xl text-center">
-                    <p className="text-[9px] font-black text-gray-400 uppercase">Total Files</p>
-                    <p className="text-xl font-bold text-[#0B1F3A]">{selectedClient.totalFilesCount}</p>
-                </div>
-                <div className="bg-red-50 p-4 rounded-2xl text-center">
-                    <p className="text-[9px] font-black text-red-400 uppercase">Outstanding</p>
-                    <p className="text-xl font-bold text-red-600">{formatCurrency(selectedClient.totalOwed)}</p>
-                </div>
-                <div className="bg-green-50 p-4 rounded-2xl text-center">
-                    <p className="text-[9px] font-black text-green-400 uppercase">Status</p>
-                    <p className="text-xl font-bold text-green-700">Active</p>
-                </div>
+              <div className="bg-gray-50 p-4 rounded-2xl text-center">
+                <p className="text-[9px] font-black text-gray-400 uppercase">Total Files</p>
+                <p className="text-xl font-bold text-[#0B1F3A]">{selectedClient.totalFilesCount}</p>
+              </div>
+              <div className="bg-red-50 p-4 rounded-2xl text-center">
+                <p className="text-[9px] font-black text-red-400 uppercase">Outstanding</p>
+                <p className="text-xl font-bold text-red-600">{formatCurrency(selectedClient.totalOwed)}</p>
+              </div>
+              <div className="bg-green-50 p-4 rounded-2xl text-center">
+                <p className="text-[9px] font-black text-green-400 uppercase">Status</p>
+                <p className="text-xl font-bold text-green-700">Active</p>
+              </div>
             </div>
 
-            {/* COMMUNICATION LOG SECTION */}
+            {/* COMMUNICATION LOG */}
             <div className="mb-10 p-6 bg-blue-50 rounded-3xl border border-blue-100">
-                <h4 className="font-black text-[#0B1F3A] uppercase text-xs tracking-widest mb-4">Add Internal Note / Comm Log</h4>
-                <textarea 
-                    className="w-full bg-white border-none rounded-xl p-4 text-sm mb-3 focus:ring-2 focus:ring-blue-500" 
-                    placeholder="E.g. Called client regarding overdue payment..."
-                    rows={3}
-                    value={commNote}
-                    onChange={(e) => setCommNote(e.target.value)}
-                />
-                <button 
-                  onClick={handleSaveLog}
-                  className="bg-[#0B1F3A] text-white text-[10px] font-black px-4 py-2 rounded-lg hover:bg-blue-800"
-                >
-                    SAVE LOG ENTRY
-                </button>
+              <h4 className="font-black text-[#0B1F3A] uppercase text-xs tracking-widest mb-4">Add Internal Note / Comm Log</h4>
+              <textarea 
+                className="w-full bg-white border-none rounded-xl p-4 text-sm mb-3 focus:ring-2 focus:ring-blue-500" 
+                placeholder="E.g. Called client regarding overdue payment..."
+                rows={3}
+                value={commNote}
+                onChange={(e) => setCommNote(e.target.value)}
+              />
+              <button 
+                onClick={handleSaveLog}
+                className="bg-[#0B1F3A] text-white text-[10px] font-black px-4 py-2 rounded-lg hover:bg-blue-800"
+              >
+                SAVE LOG ENTRY
+              </button>
 
-                {/* LOG HISTORY LIST */}
-                <div className="mt-6 space-y-3 max-h-48 overflow-y-auto">
-                  {commLogs?.filter((l: any) => l.clientId === selectedClient.id).map((log: any) => (
-                    <div key={log.id} className="bg-white/60 p-3 rounded-lg border border-blue-100 text-xs">
-                      <div className="flex justify-between font-black text-gray-400 mb-1 uppercase text-[8px]">
-                        <span>{log.authorName || log.author}</span>
-                        <span>{log.date}</span>
-                      </div>
-                      <p className="text-gray-700">{log.note}</p>
+              <div className="mt-6 space-y-3 max-h-48 overflow-y-auto">
+                {commLogs?.filter((l: any) => l.clientId === selectedClient.id).map((log: any) => (
+                  <div key={log.id} className="bg-white/60 p-3 rounded-lg border border-blue-100 text-xs">
+                    <div className="flex justify-between font-black text-gray-400 mb-1 uppercase text-[8px]">
+                      <span>{log.authorName || log.author}</span>
+                      <span>{log.date}</span>
                     </div>
-                  ))}
-                </div>
+                    <p className="text-gray-700">{log.note}</p>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* LINKED MATTERS SECTION */}
+            {/* LINKED MATTERS */}
             <h4 className="font-black text-[#0B1F3A] uppercase text-xs tracking-widest mb-4">Linked Matter History</h4>
             <div className="space-y-3 mb-10">
               {selectedClient.cases.map((c: any) => (
@@ -274,7 +277,6 @@ CONFIDENTIAL LEGAL DOCUMENT
                   </button>
                 </div>
               ))}
-
               {selectedClient.transactions.map((t: any) => (
                 <div key={t.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <div>
@@ -289,7 +291,6 @@ CONFIDENTIAL LEGAL DOCUMENT
                   </button>
                 </div>
               ))}
-
               {selectedClient.letters.map((l: any) => (
                 <div key={l.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <div>
@@ -304,48 +305,48 @@ CONFIDENTIAL LEGAL DOCUMENT
                   </button>
                 </div>
               ))}
-
               {selectedClient.totalFilesCount === 0 && (
                 <p className="text-gray-400 text-sm italic py-4">No matters linked to this client name.</p>
               )}
             </div>
 
             <button 
-                onClick={() => { if(window.confirm("Delete this client?")) { deleteClient(selectedClient.id); setSelectedClient(null); }}}
-                className="mt-10 text-red-300 hover:text-red-600 text-xs font-bold uppercase tracking-widest"
+              onClick={() => { if(window.confirm("Delete this client?")) { deleteClient(selectedClient.id); setSelectedClient(null); }}}
+              className="mt-10 text-red-300 hover:text-red-600 text-xs font-bold uppercase tracking-widest"
             >
-                Permanently Delete Client Record
+              Permanently Delete Client Record
             </button>
           </div>
         </div>
       )}
 
-      {/* ADD CLIENT MODAL (Unchanged) */}
+      {/* ADD CLIENT MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#0B1F3A] bg-opacity-90 backdrop-blur-md" onClick={() => setShowAddModal(false)}></div>
-          <form onSubmit={handleAddClient} className="relative bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl space-y-6">
+          <div className="absolute inset-0 bg-[#0B1F3A] bg-opacity-90 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
+          <form onSubmit={handleAddClient} className="relative bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setShowAddModal(false)} className="absolute top-6 right-6 w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-600 text-gray-500 text-lg font-black transition-colors">✕</button>
             <h2 className="text-2xl font-black text-[#0B1F3A]">New Client Onboarding</h2>
             <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Entity Name</label>
-                <input required className="w-full bg-gray-50 border-none p-4 rounded-xl" value={name} onChange={e => setName(e.target.value)} placeholder="Full Name or Company Ltd" />
+              <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Entity Name</label>
+              <input required className="w-full bg-gray-50 border-none p-4 rounded-xl" value={name} onChange={e => setName(e.target.value)} placeholder="Full Name or Company Ltd" />
             </div>
             <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Client Type</label>
-                    <select className="w-full bg-gray-50 border-none p-4 rounded-xl font-bold" value={type} onChange={e => setType(e.target.value as any)}>
-                        <option value="Individual">Individual</option>
-                        <option value="Corporate">Corporate</option>
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Phone #</label>
-                    <input className="w-full bg-gray-50 border-none p-4 rounded-xl" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+256..." />
-                </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Client Type</label>
+                <select className="w-full bg-gray-50 border-none p-4 rounded-xl font-bold" value={type} onChange={e => setType(e.target.value as any)}>
+                  <option value="Individual">Individual</option>
+                  <option value="Corporate">Corporate</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Phone #</label>
+                <input className="w-full bg-gray-50 border-none p-4 rounded-xl" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+256..." />
+              </div>
             </div>
             <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Email Address</label>
-                <input required type="email" className="w-full bg-gray-50 border-none p-4 rounded-xl" value={email} onChange={e => setEmail(e.target.value)} placeholder="client@example.com" />
+              <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Email Address</label>
+              <input type="email" className="w-full bg-gray-50 border-none p-4 rounded-xl" value={email} onChange={e => setEmail(e.target.value)} placeholder="client@example.com (optional)" />
             </div>
             <button type="submit" className="w-full bg-[#0B1F3A] text-white font-black py-5 rounded-2xl shadow-lg hover:bg-blue-900 transition-all">
               FINISH REGISTRATION
