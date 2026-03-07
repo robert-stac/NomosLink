@@ -83,6 +83,30 @@ export default function ManagerDashboard() {
     document.body.removeChild(link);
   };
 
+  const getDaysRemaining = (dateString: string) => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const target = new Date(dateString); target.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return { text: "Today", urgent: true };
+    if (diffDays === 1) return { text: "Tomorrow", urgent: true };
+    if (diffDays < 0) return { text: "Past Due", urgent: true };
+    return { text: `In ${diffDays} days`, urgent: false };
+  };
+
+  // Compute Upcoming Courts (Next 14 Days)
+  const upcomingCourts = (() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const twoWeeksFromNow = new Date(); twoWeeksFromNow.setDate(today.getDate() + 14);
+
+    return filteredCases
+      .filter(c => {
+        if (!c.nextCourtDate) return false;
+        const d = new Date(c.nextCourtDate);
+        return d >= today && d <= twoWeeksFromNow;
+      })
+      .sort((a, b) => new Date(a.nextCourtDate || 0).getTime() - new Date(b.nextCourtDate || 0).getTime());
+  })();
+
   return (
     <div className="p-4 space-y-6">
       <header className="bg-white p-6 rounded-lg shadow-sm border">
@@ -130,9 +154,8 @@ export default function ManagerDashboard() {
         </div>
         <div
           onClick={() => setShowOnlyStagnant(!showOnlyStagnant)}
-          className={`p-4 rounded-lg border shadow-sm cursor-pointer transition-all border-l-4 ${
-            showOnlyStagnant ? 'bg-red-50 border-red-500 ring-2 ring-red-200' : 'bg-white border-l-red-500 hover:bg-red-50'
-          }`}
+          className={`p-4 rounded-lg border shadow-sm cursor-pointer transition-all border-l-4 ${showOnlyStagnant ? 'bg-red-50 border-red-500 ring-2 ring-red-200' : 'bg-white border-l-red-500 hover:bg-red-50'
+            }`}
         >
           <div className="flex justify-between items-start">
             <p className="text-xs font-bold text-red-500 uppercase">Stagnant Files (30+ Days)</p>
@@ -146,17 +169,49 @@ export default function ManagerDashboard() {
         </div>
       </div>
 
+      {/* UPCOMING COURT DATES (14 Days) */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border mt-6">
+        <h3 className="text-lg font-bold text-slate-700 mb-4">Upcoming Court Dates (14 Days)</h3>
+        {upcomingCourts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {upcomingCourts.map((c: any) => {
+              const countdown = getDaysRemaining(c.nextCourtDate);
+              const assignedLawyer = users.find(u => u.id === c.lawyerId)?.name || "Unassigned";
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => navigate(`/lawyer/cases/${c.id}`)}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:border-blue-500 transition-colors cursor-pointer bg-slate-50"
+                  title={`Assigned to: ${assignedLawyer}`}
+                >
+                  <div>
+                    <div className="font-bold text-slate-800 text-sm">{c.fileName}</div>
+                    <div className={`text-xs font-bold mt-1 ${countdown.urgent ? "text-red-500" : "text-blue-600"}`}>
+                      {countdown.text} • <span className="font-normal text-gray-500">{assignedLawyer}</span>
+                    </div>
+                  </div>
+                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+                    {new Date(c.nextCourtDate).toLocaleDateString('en-GB')}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-center text-gray-500 italic py-6">No upcoming hearings scheduled in the next 14 days.</p>
+        )}
+      </div>
+
       {/* STAFF FILTER PILLS */}
       <div className="flex gap-3 overflow-x-auto pb-2">
         {legalStaff.map(staff => (
           <button
             key={staff.id}
             onClick={() => setSelectedLawyerId(staff.id)}
-            className={`flex-shrink-0 px-4 py-2 rounded-full border text-sm font-medium transition-all ${
-              selectedLawyerId === staff.id
+            className={`flex-shrink-0 px-4 py-2 rounded-full border text-sm font-medium transition-all ${selectedLawyerId === staff.id
                 ? "bg-blue-600 text-white border-blue-600 shadow-md"
                 : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-            }`}
+              }`}
           >
             {staff.name} {staff.id === currentUser?.id ? "(You)" : ""}
           </button>

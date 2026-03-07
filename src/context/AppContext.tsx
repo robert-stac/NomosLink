@@ -90,6 +90,7 @@ export interface Letter {
   type: "Incoming" | "Outgoing";
   lawyerId?: string;
   status: "Pending" | "Completed";
+  archived?: boolean;
   date?: string;
   billed?: number;
   paid?: number;
@@ -211,13 +212,13 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 ======================= */
 const normalizeTask = (raw: any): Task => ({
   ...raw,
-  assignedToId:   raw.assignedToId   ?? raw.assigned_to_id   ?? "",
+  assignedToId: raw.assignedToId ?? raw.assigned_to_id ?? "",
   assignedToName: raw.assignedToName ?? raw.assigned_to_name ?? "",
-  assignedById:   raw.assignedById   ?? raw.assigned_by_id   ?? "",
+  assignedById: raw.assignedById ?? raw.assigned_by_id ?? "",
   assignedByName: raw.assignedByName ?? raw.assigned_by_name ?? "",
-  dateCreated:    raw.dateCreated    ?? raw.date_created      ?? "",
-  clerkNote:      raw.clerkNote      ?? raw.clerk_note        ?? undefined,
-  status:         raw.status         ?? "Pending",
+  dateCreated: raw.dateCreated ?? raw.date_created ?? "",
+  clerkNote: raw.clerkNote ?? raw.clerk_note ?? undefined,
+  status: raw.status ?? "Pending",
 });
 
 /* =======================
@@ -294,21 +295,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }];
   });
 
-  const [transactions, setTransactions]   = useState<Transaction[]>(() => JSON.parse(localStorage.getItem("transactions") || "[]"));
-  const [courtCases, setCourtCases]       = useState<CourtCase[]>(() => JSON.parse(localStorage.getItem("courtCases") || "[]"));
-  const [letters, setLetters]             = useState<Letter[]>(() => JSON.parse(localStorage.getItem("letters") || "[]"));
-  const [invoices, setInvoices]           = useState<Invoice[]>(() => JSON.parse(localStorage.getItem("invoices") || "[]"));
-  const [clients, setClients]             = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
-  const [tasks, setTasks]                 = useState<Task[]>(() => JSON.parse(localStorage.getItem("tasks") || "[]").map(normalizeTask));
-  const [commLogs, setCommLogs]           = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
+  const [transactions, setTransactions] = useState<Transaction[]>(() => JSON.parse(localStorage.getItem("transactions") || "[]"));
+  const [courtCases, setCourtCases] = useState<CourtCase[]>(() => JSON.parse(localStorage.getItem("courtCases") || "[]"));
+  const [letters, setLetters] = useState<Letter[]>(() => JSON.parse(localStorage.getItem("letters") || "[]"));
+  const [invoices, setInvoices] = useState<Invoice[]>(() => JSON.parse(localStorage.getItem("invoices") || "[]"));
+  const [clients, setClients] = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
+  const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem("tasks") || "[]").map(normalizeTask));
+  const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
-  const [expenses, setExpenses]           = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
-  const [firmName, setFirmName]           = useState("Buwembo & Co. Advocates");
+  const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
+  const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
 
   // Refs to prevent stale closures and avoid re-render loops
-  const localNotifIds  = useRef<Set<string>>(new Set());
+  const localNotifIds = useRef<Set<string>>(new Set());
   const currentUserRef = useRef<User | null>(currentUser);
-  const usersRef       = useRef<User[]>(users);
+  const usersRef = useRef<User[]>(users);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
 
@@ -332,7 +333,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`,
       },
       body: JSON.stringify({ to, subject, html }),
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   /* =======================
@@ -482,12 +483,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return [...cloud, ...local.filter((i: any) => !cloudIds.has(i.id))];
         };
 
-        if (courtData)   setCourtCases(prev => merge(prev, courtData));
-        if (txData)      setTransactions(prev => merge(prev, txData));
-        if (clientData)  setClients(prev => merge(prev, clientData));
-        if (letterData)  setLetters(prev => merge(prev, letterData));
-        if (userData)    setUsers(prev => merge(prev, userData));
-        if (taskData)    setTasks(prev => merge(prev, taskData).map(normalizeTask));
+        if (courtData) setCourtCases(prev => merge(prev, courtData));
+        if (txData) setTransactions(prev => merge(prev, txData));
+        if (clientData) setClients(prev => merge(prev, clientData));
+        if (letterData) setLetters(prev => merge(prev, letterData));
+        if (userData) setUsers(prev => merge(prev, userData));
+        if (taskData) setTasks(prev => merge(prev, taskData).map(normalizeTask));
         if (invoiceData) setInvoices(prev => merge(prev, invoiceData));
         if (expenseData) setExpenses(prev => merge(prev, expenseData));
       } catch (err) {
@@ -577,7 +578,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`,
           },
           body: JSON.stringify({ userId: rid, title: 'NomoSLink', body: message, url: '/' }),
-        }).catch(() => {});
+        }).catch(() => { });
       });
     }
   };
@@ -628,7 +629,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.location.href = "/";
   };
 
-  const addUser    = (user: User) => { setUsers(prev => [...prev, user]); instantSave('users', user); };
+  const addUser = (user: User) => { setUsers(prev => [...prev, user]); instantSave('users', user); };
   const deleteUser = async (id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
     if (navigator.onLine) await supabase.from('users').delete().eq('id', id);
@@ -650,8 +651,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (t.id !== id) return t;
       const updated = { ...t, ...data };
       const billed = Number(updated.billedAmount) || 0;
-      const paid   = Number(updated.paidAmount)   || 0;
-      const final  = { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid };
+      const paid = Number(updated.paidAmount) || 0;
+      const final = { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid };
       const { progressNotes, documents, ...dbSafe } = final as any;
       instantSave('transactions', dbSafe);
       return final;
@@ -677,41 +678,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
 
-      const isManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
-      // Notify + email the assigned lawyer if the note was added by manager/admin
+      // Notify assigned user (in-app)
       if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
         sendNotification(t.lawyerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
-        if (isManagerOrAdmin) {
-          const lawyer = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
-          if (lawyer?.email) {
+
+        // Email conditions for assigned user
+        const assignedUser = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
+        if (assignedUser?.email) {
+          const isAssignedLawyer = assignedUser.role === 'lawyer';
+          const isAssignedManager = assignedUser.role === 'manager';
+          const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+          if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
             sendEmail(
-              lawyer.email,
+              assignedUser.email,
               `File Update: ${t.fileName}`,
-              buildProgressEmail(lawyer.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message)
+              buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message)
             );
           }
         }
       }
 
-      // Notify admins
+      // Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
-      });
-
-      // Email manager if this file belongs to them and someone else posted the note
-      getManagerIds().forEach(managerId => {
-        if (String(managerId) === String(t.lawyerId) && String(managerId) !== String(currentUser.id)) {
-          const manager = usersRef.current.find(u => String(u.id) === managerId);
-          if (manager?.email) {
-            sendEmail(
-              manager.email,
-              `File Update on Your Matter: ${t.fileName}`,
-              buildProgressEmail(manager.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message)
-            );
-          }
-        }
       });
 
       return updated;
@@ -764,8 +755,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       COURT CASES
   ======================= */
-  const addCourtCase    = (c: CourtCase) => { setCourtCases(prev => [...prev, c]); instantSave('court_cases', c); };
-  const editCourtCase   = (id: string, data: Partial<CourtCase>) =>
+  const addCourtCase = (c: CourtCase) => { setCourtCases(prev => [...prev, c]); instantSave('court_cases', c); };
+  const editCourtCase = (id: string, data: Partial<CourtCase>) =>
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...data };
@@ -789,41 +780,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
       supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
 
-      const isManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
-      // Notify + email the assigned lawyer if the note was added by manager/admin
+      // Notify assigned user (in-app)
       if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
         sendNotification(c.lawyerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
-        if (isManagerOrAdmin) {
-          const lawyer = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
-          if (lawyer?.email) {
+
+        // Email conditions for assigned user
+        const assignedUser = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
+        if (assignedUser?.email) {
+          const isAssignedLawyer = assignedUser.role === 'lawyer';
+          const isAssignedManager = assignedUser.role === 'manager';
+          const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+          if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
             sendEmail(
-              lawyer.email,
+              assignedUser.email,
               `File Update: ${c.fileName}`,
-              buildProgressEmail(lawyer.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message)
+              buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message)
             );
           }
         }
       }
 
-      // Notify admins
+      // Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
-      });
-
-      // Email manager if this file belongs to them and someone else posted the note
-      getManagerIds().forEach(managerId => {
-        if (String(managerId) === String(c.lawyerId) && String(managerId) !== String(currentUser.id)) {
-          const manager = usersRef.current.find(u => String(u.id) === managerId);
-          if (manager?.email) {
-            sendEmail(
-              manager.email,
-              `File Update on Your Matter: ${c.fileName}`,
-              buildProgressEmail(manager.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message)
-            );
-          }
-        }
       });
 
       return updated;
@@ -867,8 +848,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       LETTERS
   ======================= */
-  const addLetter    = (l: Letter) => { setLetters(prev => [...prev, l]); instantSave('letters', l); };
-  const editLetter   = (id: string, data: Partial<Letter>) =>
+  const addLetter = (l: Letter) => { setLetters(prev => [...prev, l]); instantSave('letters', l); };
+  const editLetter = (id: string, data: Partial<Letter>) =>
     setLetters(prev => prev.map(l => {
       if (l.id !== id) return l;
       const updated = { ...l, ...data };
@@ -893,41 +874,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
       supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
 
-      const isManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
-      // Notify + email the assigned lawyer if the note was added by manager/admin
+      // Notify assigned user (in-app)
       if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
         sendNotification(l.lawyerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
-        if (isManagerOrAdmin) {
-          const lawyer = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
-          if (lawyer?.email) {
+
+        // Email conditions for assigned user
+        const assignedUser = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
+        if (assignedUser?.email) {
+          const isAssignedLawyer = assignedUser.role === 'lawyer';
+          const isAssignedManager = assignedUser.role === 'manager';
+          const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+          if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
             sendEmail(
-              lawyer.email,
+              assignedUser.email,
               `File Update: ${l.subject}`,
-              buildProgressEmail(lawyer.name, currentUser.name, currentUser.role, l.subject, 'Letter', message)
+              buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, l.subject, 'Letter', message)
             );
           }
         }
       }
 
-      // Notify admins
+      // Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
-      });
-
-      // Email manager if this file belongs to them and someone else posted the note
-      getManagerIds().forEach(managerId => {
-        if (String(managerId) === String(l.lawyerId) && String(managerId) !== String(currentUser.id)) {
-          const manager = usersRef.current.find(u => String(u.id) === managerId);
-          if (manager?.email) {
-            sendEmail(
-              manager.email,
-              `File Update on Your Matter: ${l.subject}`,
-              buildProgressEmail(manager.name, currentUser.name, currentUser.role, l.subject, 'Letter', message)
-            );
-          }
-        }
       });
 
       return updated;
@@ -962,9 +933,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       INVOICES
   ======================= */
-  const addInvoice    = (inv: Invoice) => { setInvoices(prev => [...prev, inv]); instantSave('invoices', inv); };
+  const addInvoice = (inv: Invoice) => { setInvoices(prev => [...prev, inv]); instantSave('invoices', inv); };
   const updateInvoice = (inv: Invoice) => { setInvoices(prev => prev.map(i => i.id === inv.id ? inv : i)); instantSave('invoices', inv); };
-  const deleteInvoice = (id: string)   => {
+  const deleteInvoice = (id: string) => {
     setInvoices(prev => prev.filter(i => i.id !== id));
     if (navigator.onLine) supabase.from('invoices').delete().eq('id', id).then();
   };
@@ -972,9 +943,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       CLIENTS
   ======================= */
-  const addClient    = (client: Client) => { setClients(prev => [...prev, client]); instantSave('clients', client); };
+  const addClient = (client: Client) => { setClients(prev => [...prev, client]); instantSave('clients', client); };
   const updateClient = (client: Client) => { setClients(prev => prev.map(c => c.id === client.id ? client : c)); instantSave('clients', client); };
-  const deleteClient = (id: string)    => {
+  const deleteClient = (id: string) => {
     setClients(prev => prev.filter(c => c.id !== id));
     if (navigator.onLine) supabase.from('clients').delete().eq('id', id).then();
   };
@@ -1031,15 +1002,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notification update loop.
   ======================= */
   useEffect(() => {
-    localStorage.setItem("users",        JSON.stringify(users));
+    localStorage.setItem("users", JSON.stringify(users));
     localStorage.setItem("transactions", JSON.stringify(transactions));
-    localStorage.setItem("courtCases",   JSON.stringify(courtCases));
-    localStorage.setItem("letters",      JSON.stringify(letters));
-    localStorage.setItem("invoices",     JSON.stringify(invoices));
-    localStorage.setItem("clients",      JSON.stringify(clients));
-    localStorage.setItem("tasks",        JSON.stringify(tasks));
-    localStorage.setItem("commLogs",     JSON.stringify(commLogs));
-    localStorage.setItem("expenses",     JSON.stringify(expenses));
+    localStorage.setItem("courtCases", JSON.stringify(courtCases));
+    localStorage.setItem("letters", JSON.stringify(letters));
+    localStorage.setItem("invoices", JSON.stringify(invoices));
+    localStorage.setItem("clients", JSON.stringify(clients));
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+    localStorage.setItem("commLogs", JSON.stringify(commLogs));
+    localStorage.setItem("expenses", JSON.stringify(expenses));
     if (currentUser) localStorage.setItem("currentUser", JSON.stringify(currentUser));
   }, [users, transactions, courtCases, letters, invoices, clients, tasks, commLogs, expenses, currentUser]);
 
