@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useAppContext } from "../context/AppContext";
 import { useNavigate } from "react-router-dom";
+import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, transactions, courtCases, letters, currentUser } = useAppContext();
+  const { users, transactions, courtCases, letters, currentUser, notifications, markNotificationsAsRead } = useAppContext();
   const navigate = useNavigate();
 
   const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(null);
@@ -139,6 +140,14 @@ export default function ManagerDashboard() {
                 </button>
               )}
             </div>
+
+            {/* IN-APP NOTIFICATIONS */}
+            <NotificationBell
+              currentUser={currentUser}
+              notifications={notifications}
+              markAsRead={() => currentUser && markNotificationsAsRead(currentUser.id)}
+            />
+
           </div>
         </div>
       </header>
@@ -209,8 +218,8 @@ export default function ManagerDashboard() {
             key={staff.id}
             onClick={() => setSelectedLawyerId(staff.id)}
             className={`flex-shrink-0 px-4 py-2 rounded-full border text-sm font-medium transition-all ${selectedLawyerId === staff.id
-                ? "bg-blue-600 text-white border-blue-600 shadow-md"
-                : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
+              ? "bg-blue-600 text-white border-blue-600 shadow-md"
+              : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
               }`}
           >
             {staff.name} {staff.id === currentUser?.id ? "(You)" : ""}

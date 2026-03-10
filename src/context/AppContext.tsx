@@ -289,7 +289,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return stored ? JSON.parse(stored) : [{
       id: "d70d4e47-1422-4501-961a-c1e69a1c15d7",
       name: "System Admin",
-      email: "admin@nomoslink.com",
+      email: "admin@buwembo.com",
       role: "admin",
       password: "password123"
     }];
@@ -364,7 +364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         </div>
 
         <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
-          This is an automated notification from NomosLink Legal Management System.<br/>
+          This is an automated notification from NomosLink Legal Management System for <strong>Buwembo & Co. Advocates</strong>.<br/>
           Please do not reply to this email.
         </p>
       </div>
@@ -699,6 +699,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      // Notify managers who previously commented on this file (in-app only)
+      const commentedManagers = new Set(
+        (t.progressNotes || [])
+          .filter(n => n.authorRole === 'manager')
+          .map(n => String(n.authorId))
+      );
+      commentedManagers.delete(String(currentUser.id)); // Don't notify self
+      if (t.lawyerId) commentedManagers.delete(String(t.lawyerId)); // Already notified above if assigned
+
+      commentedManagers.forEach(managerId => {
+        sendNotification(managerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
+      });
+
       // Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
@@ -801,6 +814,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      // Notify managers who previously commented on this file (in-app only)
+      const commentedManagers = new Set(
+        (c.progressNotes || [])
+          .filter(n => n.authorRole === 'manager')
+          .map(n => String(n.authorId))
+      );
+      commentedManagers.delete(String(currentUser.id)); // Don't notify self
+      if (c.lawyerId) commentedManagers.delete(String(c.lawyerId)); // Already notified above if assigned
+
+      commentedManagers.forEach(managerId => {
+        sendNotification(managerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+      });
+
       // Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
@@ -894,6 +920,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       }
+
+      // Notify managers who previously commented on this file (in-app only)
+      const commentedManagers = new Set(
+        (l.progressNotes || [])
+          .filter(n => n.authorRole === 'manager')
+          .map(n => String(n.authorId))
+      );
+      commentedManagers.delete(String(currentUser.id)); // Don't notify self
+      if (l.lawyerId) commentedManagers.delete(String(l.lawyerId)); // Already notified above if assigned
+
+      commentedManagers.forEach(managerId => {
+        sendNotification(managerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
+      });
 
       // Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
