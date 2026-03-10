@@ -223,8 +223,6 @@ const normalizeTask = (raw: any): Task => ({
 
 /* =======================
     WEB PUSH HELPERS
-    VitePWA registers the SW automatically.
-    We only need to subscribe the device here.
 ======================= */
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
@@ -241,25 +239,20 @@ async function registerPushSubscription(userId: string) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === "YOUR_VAPID_PUBLIC_KEY_HERE") return;
   try {
-    // VitePWA registers the SW — we just wait for it to be ready
     const registration = await navigator.serviceWorker.ready;
     const existing = await registration.pushManager.getSubscription();
-    if (existing) return; // already subscribed, nothing to do
-
+    if (existing) return;
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return;
-
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
-
     await supabase.from('push_subscriptions').upsert({
       userId,
       subscription: JSON.stringify(subscription),
       updatedAt: new Date().toISOString(),
     }, { onConflict: 'userId' });
-
   } catch (err) {
     console.warn("Push subscription failed:", err);
   }
@@ -306,23 +299,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
 
-  // Refs to prevent stale closures and avoid re-render loops
   const localNotifIds = useRef<Set<string>>(new Set());
   const currentUserRef = useRef<User | null>(currentUser);
   const usersRef = useRef<User[]>(users);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
 
-  // Helper: get all admin IDs from the latest users list (via ref, no re-render)
   const getAdminIds = () => usersRef.current.filter(u => u.role === 'admin').map(u => u.id);
-
-  // Helper: get all manager IDs
   const getManagerIds = () => usersRef.current.filter(u => u.role === 'manager').map(u => u.id);
 
   /* =======================
       SEND EMAIL
-      Calls the Supabase send-email Edge Function via Resend.
-      Only fires when online. Silently fails if no email on recipient.
   ======================= */
   const sendEmail = (to: string, subject: string, html: string) => {
     if (!navigator.onLine || !to) return;
@@ -338,7 +325,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /* =======================
       EMAIL TEMPLATE
-      Clean, branded HTML email for progress note alerts.
   ======================= */
   const buildProgressEmail = (
     recipientName: string,
@@ -356,13 +342,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
         <p style="color:#64748b;font-size:14px;">Hi <strong>${recipientName}</strong>,</p>
         <p style="color:#64748b;font-size:14px;">A new update has been posted to one of your files by <strong>${authorName}</strong> (${authorRole}).</p>
-        
         <div style="background:#f1f5f9;border-left:4px solid #0B1F3A;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
           <p style="margin:0 0 6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">${fileType}</p>
           <p style="margin:0 0 12px;font-size:16px;font-weight:900;color:#0B1F3A;">${fileTitle}</p>
           <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">"${message}"</p>
         </div>
-
         <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
           This is an automated notification from NomosLink Legal Management System for <strong>Buwembo & Co. Advocates</strong>.<br/>
           Please do not reply to this email.
@@ -383,13 +367,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /* =======================
       PUSH SUBSCRIPTION
-      VitePWA handles SW registration — we just
-      subscribe the device for push after login.
-      NO manual service-worker.js registration here.
   ======================= */
   useEffect(() => {
     if (!currentUser) return;
-    // Wait briefly for VitePWA's SW to be ready before subscribing
     const timer = setTimeout(() => {
       registerPushSubscription(currentUser.id);
     }, 2000);
@@ -397,9 +377,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser?.id]);
 
   /* =======================
+      HELPER: Build set of manager IDs to notify for a file
+      Includes managers assigned to the file (lawyerId) +
+      managers who have previously commented on it.
+      Excludes the current user (don't notify self).
+  ======================= */
+  const getManagersToNotify = (
+    lawyerId: string | undefined,
+    progressNotes: ProgressNote[],
+    currentUserId: string
+  ): Set<string> => {
+    const managers = new Set<string>();
+
+    // Managers who previously commented
+    progressNotes
+      .filter(n => n.authorRole === 'manager')
+      .forEach(n => managers.add(String(n.authorId)));
+
+    // Manager assigned to this file via lawyerId
+    if (lawyerId) {
+      const assignedUser = usersRef.current.find(u => String(u.id) === String(lawyerId));
+      if (assignedUser?.role === 'manager') managers.add(String(lawyerId));
+    }
+
+    // Never notify the person who just posted the note
+    managers.delete(String(currentUserId));
+
+    return managers;
+  };
+
+  /* =======================
       TASKS REALTIME
-      Subscribed once on mount — never resubscribes.
-      Keeps all users' task lists in sync across devices.
   ======================= */
   useEffect(() => {
     const channel = supabase
@@ -415,12 +423,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []); // empty — subscribe once, never resubscribe
+  }, []);
 
   /* =======================
       NOTIFICATIONS REALTIME
-      Filtered to current user only.
-      Prevents flooding when other users get notifications.
   ======================= */
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -433,10 +439,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         filter: `recipientId=eq.${currentUser.id}`,
       }, (payload) => {
         setNotifications(prev => {
-          if (prev.find(n => n.id === payload.new.id)) return prev; // already exists locally
-          if (localNotifIds.current.has(payload.new.id)) return prev; // we created this, skip echo
+          if (prev.find(n => n.id === payload.new.id)) return prev;
+          if (localNotifIds.current.has(payload.new.id)) return prev;
           const newNotif = payload.new as AppNotification;
-          // Show browser popup only when tab is in background
           if (document.hidden) {
             if ('Notification' in window && Notification.permission === 'granted') {
               new Notification('NomoSLink', { body: newNotif.message, icon: '/icon.png' });
@@ -447,12 +452,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [currentUser?.id]); // re-subscribes only if user changes (login/logout)
+  }, [currentUser?.id]);
 
   /* =======================
       INITIAL DATA FETCH
-      Runs once on mount. Notifications are NOT
-      fetched here — they are fetched per-user below.
   ======================= */
   useEffect(() => {
     (async () => {
@@ -495,12 +498,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error("Initial load failed.", err);
       }
     })();
-  }, []); // run once on mount only
+  }, []);
 
   /* =======================
       NOTIFICATIONS FETCH
-      Per-user, last 50 only.
-      Runs when a user logs in.
   ======================= */
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -515,10 +516,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /* =======================
       SEND NOTIFICATION
-      - Builds notifications for recipient + all admins
-      - Only updates local state for the current user
-      - Saves all to DB so other users see them on next load
-      - Sends background push to each recipient's device
   ======================= */
   const sendNotification = (
     recipientId: string,
@@ -542,7 +539,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       relatedType,
     }));
 
-    // Update local state only for the current user's notifications
     const myId = currentUserRef.current?.id;
     setNotifications(prev => {
       const mine = newNotifs.filter(n => n.recipientId === myId);
@@ -561,14 +557,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...fresh, ...prev];
     });
 
-    // Persist ALL recipients' notifications to DB
     newNotifs.forEach(n => {
       localNotifIds.current.add(n.id);
       setTimeout(() => localNotifIds.current.delete(n.id), 10000);
       supabase.from('notifications').upsert(n, { onConflict: 'id' }).then();
     });
 
-    // Send background push to each recipient's device
     if (navigator.onLine) {
       allRecipients.forEach(rid => {
         fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
@@ -678,17 +672,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
 
-      // Notify assigned user (in-app)
+      const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+      // 1. Notify + email the assigned user if it's not the author
       if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
         sendNotification(t.lawyerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
-
-        // Email conditions for assigned user
         const assignedUser = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
         if (assignedUser?.email) {
           const isAssignedLawyer = assignedUser.role === 'lawyer';
           const isAssignedManager = assignedUser.role === 'manager';
-          const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
           if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
             sendEmail(
               assignedUser.email,
@@ -699,20 +691,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // Notify managers who previously commented on this file (in-app only)
-      const commentedManagers = new Set(
-        (t.progressNotes || [])
-          .filter(n => n.authorRole === 'manager')
-          .map(n => String(n.authorId))
-      );
-      commentedManagers.delete(String(currentUser.id)); // Don't notify self
-      if (t.lawyerId) commentedManagers.delete(String(t.lawyerId)); // Already notified above if assigned
-
-      commentedManagers.forEach(managerId => {
+      // 2. Notify managers assigned to OR who commented on this file (excluding self + already notified)
+      const managersToNotify = getManagersToNotify(t.lawyerId, t.progressNotes || [], currentUser.id);
+      if (t.lawyerId) managersToNotify.delete(String(t.lawyerId)); // already handled above
+      managersToNotify.forEach(managerId => {
         sendNotification(managerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
       });
 
-      // Notify admins (in-app only)
+      // 3. Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
@@ -793,17 +779,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
       supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
 
-      // Notify assigned user (in-app)
+      const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+      // 1. Notify + email the assigned user if it's not the author
       if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
         sendNotification(c.lawyerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
-
-        // Email conditions for assigned user
         const assignedUser = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
         if (assignedUser?.email) {
           const isAssignedLawyer = assignedUser.role === 'lawyer';
           const isAssignedManager = assignedUser.role === 'manager';
-          const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
           if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
             sendEmail(
               assignedUser.email,
@@ -814,20 +798,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // Notify managers who previously commented on this file (in-app only)
-      const commentedManagers = new Set(
-        (c.progressNotes || [])
-          .filter(n => n.authorRole === 'manager')
-          .map(n => String(n.authorId))
-      );
-      commentedManagers.delete(String(currentUser.id)); // Don't notify self
-      if (c.lawyerId) commentedManagers.delete(String(c.lawyerId)); // Already notified above if assigned
-
-      commentedManagers.forEach(managerId => {
+      // 2. Notify managers assigned to OR who commented on this file (excluding self + already notified)
+      const managersToNotify = getManagersToNotify(c.lawyerId, c.progressNotes || [], currentUser.id);
+      if (c.lawyerId) managersToNotify.delete(String(c.lawyerId)); // already handled above
+      managersToNotify.forEach(managerId => {
         sendNotification(managerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
       });
 
-      // Notify admins (in-app only)
+      // 3. Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
@@ -900,17 +878,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
       supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
 
-      // Notify assigned user (in-app)
+      const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+
+      // 1. Notify + email the assigned user if it's not the author
       if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
         sendNotification(l.lawyerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
-
-        // Email conditions for assigned user
         const assignedUser = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
         if (assignedUser?.email) {
           const isAssignedLawyer = assignedUser.role === 'lawyer';
           const isAssignedManager = assignedUser.role === 'manager';
-          const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
           if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
             sendEmail(
               assignedUser.email,
@@ -921,20 +897,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // Notify managers who previously commented on this file (in-app only)
-      const commentedManagers = new Set(
-        (l.progressNotes || [])
-          .filter(n => n.authorRole === 'manager')
-          .map(n => String(n.authorId))
-      );
-      commentedManagers.delete(String(currentUser.id)); // Don't notify self
-      if (l.lawyerId) commentedManagers.delete(String(l.lawyerId)); // Already notified above if assigned
-
-      commentedManagers.forEach(managerId => {
+      // 2. Notify managers assigned to OR who commented on this file (excluding self + already notified)
+      const managersToNotify = getManagersToNotify(l.lawyerId, l.progressNotes || [], currentUser.id);
+      if (l.lawyerId) managersToNotify.delete(String(l.lawyerId)); // already handled above
+      managersToNotify.forEach(managerId => {
         sendNotification(managerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
       });
 
-      // Notify admins (in-app only)
+      // 3. Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
@@ -1037,8 +1007,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /* =======================
       LOCALSTORAGE PERSISTENCE
-      Split into two effects to prevent the
-      notification update loop.
   ======================= */
   useEffect(() => {
     localStorage.setItem("users", JSON.stringify(users));
@@ -1053,7 +1021,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser) localStorage.setItem("currentUser", JSON.stringify(currentUser));
   }, [users, transactions, courtCases, letters, invoices, clients, tasks, commLogs, expenses, currentUser]);
 
-  // Notifications debounced separately — prevents re-render loop
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem("notifications", JSON.stringify(notifications));
