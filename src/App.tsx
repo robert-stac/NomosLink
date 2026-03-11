@@ -27,7 +27,7 @@ import Login from "./pages/Login";
 // Lawyer Pages
 import LawyerDashboard from "./pages/Lawyer/LawyerDashboard";
 import TransactionDetails from "./pages/Lawyer/TransactionDetails";
-import LawyerCourtCaseDetails from "./pages/Lawyer/LawyerCourtCaseDetails";
+import CourtCaseDetails from "./pages/Lawyer/CourtCaseDetails";
 import LawyerLetterDetails from "./pages/Lawyer/LawyerLetterDetails";
 
 // Clerk Page
@@ -80,16 +80,12 @@ function AdminLayout({ children, isOnline }: { children: React.ReactNode; isOnli
     APP COMPONENT
 ======================= */
 export default function App() {
-  const { currentUser } = useAppContext();
+  const { currentUser, initialDataLoaded } = useAppContext();
   const isOnline = useOnlineStatus();
-  const [isInitialising, setIsInitialising] = useState(true);
 
-  // Safety: Allow the AppContext 100ms to validate the localStorage role 
+  // Wait for the AppContext to finish reading data from Supabase/LocalStorage
   // before the router decides to redirect to login.
-  useEffect(() => {
-    const timer = setTimeout(() => setIsInitialising(false), 300);
-    return () => clearTimeout(timer);
-  }, []);
+  const isInitialising = !initialDataLoaded;
 
   // Helper to determine the main landing page for Management roles
   const getDashboardComponent = () => {
@@ -281,7 +277,7 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager"]}>
               <div style={{ paddingTop: isOnline ? 0 : "40px" }}>
-                <LawyerCourtCaseDetails />
+                <CourtCaseDetails />
               </div>
             </ProtectedRoute>
           } 
@@ -314,7 +310,7 @@ export default function App() {
         <Route
           path="/performance"
           element={
-            <ProtectedRoute allowedRoles={["admin", "lawyer"]}>
+            <ProtectedRoute allowedRoles={["admin", "lawyer", "manager"]}>
               <AdminLayout isOnline={isOnline}>
                 <LawyerPerformanceDashboard />
               </AdminLayout>

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, transactions, courtCases, letters, currentUser, notifications, markNotificationsAsRead } = useAppContext();
+  const { users, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead } = useAppContext();
   const navigate = useNavigate();
 
   const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(null);
@@ -19,7 +19,7 @@ export default function ManagerDashboard() {
     return lastNoteDate < thirtyDaysAgo;
   };
 
-  const legalStaff = users.filter(u => u.role === "lawyer" || u.role === "manager");
+  const legalStaff = users.filter(u => u.role === "lawyer" || u.role === "manager" || u.role === "clerk");
 
   // ✅ Always exclude archived items from manager view
   const activeTransactions = transactions.filter(t => !t.archived);
@@ -227,60 +227,99 @@ export default function ManagerDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* TRANSACTIONS */}
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
-            Transactions
-            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">{filteredTransactions.length}</span>
-          </h2>
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-            {filteredTransactions.map(tx => (
-              <div key={tx.id} onClick={() => navigate(`/lawyer/transactions/${tx.id}`)} className="p-3 border rounded-md hover:border-blue-500 cursor-pointer bg-slate-50 relative">
-                {isStagnant(tx) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
-                <p className="font-semibold text-sm text-blue-900">{tx.fileName}</p>
-                <p className="text-[11px] text-gray-500 line-clamp-1 italic mt-1">{tx.progressNotes?.slice(-1)[0]?.message || "No updates"}</p>
-              </div>
-            ))}
-            {filteredTransactions.length === 0 && <p className="text-slate-400 text-xs italic text-center py-4">No active transactions.</p>}
+      <div className={`grid gap-6 ${
+        selectedLawyerId 
+          ? users.find(u => u.id === selectedLawyerId)?.role === 'clerk'
+            ? 'grid-cols-1 max-w-2xl mx-auto' 
+            : 'grid-cols-1 lg:grid-cols-3'
+          : 'grid-cols-1 lg:grid-cols-4'
+      }`}>
+        {/* TASKS (Clerk specific) */}
+        {(!selectedLawyerId || users.find(u => u.id === selectedLawyerId)?.role === 'clerk') && (
+          <div className="bg-white p-4 rounded-lg shadow border">
+            <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
+              Clerk Tasks
+              <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full">
+                {tasks.filter(t => !selectedLawyerId || t.assignedToId === selectedLawyerId).length}
+              </span>
+            </h2>
+            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+              {tasks.filter(t => !selectedLawyerId || t.assignedToId === selectedLawyerId).map(task => (
+                <div key={task.id} className="p-3 border rounded-md bg-slate-50 relative">
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="font-semibold text-sm text-emerald-900">{task.title}</p>
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${task.status === 'Completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
+                      {task.status}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 line-clamp-2">{task.description}</p>
+                  {task.clerkNote && <p className="text-[10px] text-emerald-600 mt-2 italic font-bold">Report: {task.clerkNote}</p>}
+                  <p className="text-[9px] text-slate-400 mt-2 font-black uppercase tracking-tighter">Assigned To: {task.assignedToName}</p>
+                </div>
+              ))}
+              {tasks.filter(t => !selectedLawyerId || t.assignedToId === selectedLawyerId).length === 0 && <p className="text-slate-400 text-xs italic text-center py-4">No tasks found.</p>}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* COURT CASES */}
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
-            Court Cases
-            <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full">{filteredCases.length}</span>
-          </h2>
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-            {filteredCases.map(c => (
-              <div key={c.id} onClick={() => navigate(`/lawyer/cases/${c.id}`)} className="p-3 border rounded-md hover:border-red-500 cursor-pointer bg-slate-50 relative">
-                {isStagnant(c) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
-                <p className="font-semibold text-sm text-red-900">{c.fileName}</p>
-                <div className="flex justify-between mt-1"><span className="text-[10px] bg-white border px-1 rounded text-gray-600">Next: {c.nextCourtDate || "None"}</span></div>
+        {/* ONLY SHOW THESE IF NOT A CLERK OR IF NO ONE IS SELECTED */}
+        {(!selectedLawyerId || users.find(u => u.id === selectedLawyerId)?.role !== 'clerk') && (
+          <>
+            {/* TRANSACTIONS */}
+            <div className="bg-white p-4 rounded-lg shadow border">
+              <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
+                Transactions
+                <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">{filteredTransactions.length}</span>
+              </h2>
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {filteredTransactions.map(tx => (
+                  <div key={tx.id} onClick={() => navigate(`/lawyer/transactions/${tx.id}`)} className="p-3 border rounded-md hover:border-blue-500 cursor-pointer bg-slate-50 relative">
+                    {isStagnant(tx) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
+                    <p className="font-semibold text-sm text-blue-900">{tx.fileName}</p>
+                    <p className="text-[11px] text-gray-500 line-clamp-1 italic mt-1">{tx.progressNotes?.slice(-1)[0]?.message || "No updates"}</p>
+                  </div>
+                ))}
+                {filteredTransactions.length === 0 && <p className="text-slate-400 text-xs italic text-center py-4">No active transactions.</p>}
               </div>
-            ))}
-            {filteredCases.length === 0 && <p className="text-slate-400 text-xs italic text-center py-4">No active court cases.</p>}
-          </div>
-        </div>
+            </div>
 
-        {/* LETTERS */}
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
-            Letters & Documents
-            <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full">{filteredLetters.length}</span>
-          </h2>
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-            {filteredLetters.map(l => (
-              <div key={l.id} onClick={() => navigate(`/lawyer/letters/${l.id}`)} className="p-3 border rounded-md hover:border-amber-500 cursor-pointer bg-slate-50 relative">
-                {isStagnant(l) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
-                <p className="font-semibold text-sm text-amber-900">{l.subject}</p>
-                <p className="text-[11px] text-gray-600 mt-1 uppercase font-bold">{l.type}</p>
+            {/* COURT CASES */}
+            <div className="bg-white p-4 rounded-lg shadow border">
+              <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
+                Court Cases
+                <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full">{filteredCases.length}</span>
+              </h2>
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {filteredCases.map(c => (
+                  <div key={c.id} onClick={() => navigate(`/lawyer/cases/${c.id}`)} className="p-3 border rounded-md hover:border-red-500 cursor-pointer bg-slate-50 relative">
+                    {isStagnant(c) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
+                    <p className="font-semibold text-sm text-red-900">{c.fileName}</p>
+                    <div className="flex justify-between mt-1"><span className="text-[10px] bg-white border px-1 rounded text-gray-600">Next: {c.nextCourtDate || "None"}</span></div>
+                  </div>
+                ))}
+                {filteredCases.length === 0 && <p className="text-slate-400 text-xs italic text-center py-4">No active court cases.</p>}
               </div>
-            ))}
-            {filteredLetters.length === 0 && <p className="text-slate-400 text-xs italic text-center py-4">No active letters.</p>}
-          </div>
-        </div>
+            </div>
+
+            {/* LETTERS */}
+            <div className="bg-white p-4 rounded-lg shadow border">
+              <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
+                Letters & Documents
+                <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full">{filteredLetters.length}</span>
+              </h2>
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {filteredLetters.map(l => (
+                  <div key={l.id} onClick={() => navigate(`/lawyer/letters/${l.id}`)} className="p-3 border rounded-md hover:border-amber-500 cursor-pointer bg-slate-50 relative">
+                    {isStagnant(l) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
+                    <p className="font-semibold text-sm text-amber-900">{l.subject}</p>
+                    <p className="text-[11px] text-gray-600 mt-1 uppercase font-bold">{l.type}</p>
+                  </div>
+                ))}
+                {filteredLetters.length === 0 && <p className="text-slate-400 text-xs italic text-center py-4">No active letters.</p>}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

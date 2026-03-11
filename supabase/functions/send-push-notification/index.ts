@@ -1,11 +1,11 @@
-// Called from your app whenever a notification needs to be pushed
-// to a device that may have the app closed.
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Web push implementation for Deno
-// Uses the Web Push Protocol with VAPID authentication
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 async function sendWebPush(
   subscription: any,
   payload: string,
@@ -16,32 +16,15 @@ async function sendWebPush(
   const endpoint = subscription.endpoint;
   const p256dh = subscription.keys?.p256dh;
   const auth = subscription.keys?.auth;
-
-  if (!endpoint || !p256dh || !auth) {
-    throw new Error("Invalid subscription object");
-  }
-
-  // Import web-push compatible library for Deno
+  if (!endpoint || !p256dh || !auth) throw new Error("Invalid subscription object");
   const webpush = await import("https://esm.sh/web-push@3.6.6");
-
-  webpush.default.setVapidDetails(
-    vapidSubject,
-    vapidPublicKey,
-    vapidPrivateKey
-  );
-
+  webpush.default.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
   await webpush.default.sendNotification(subscription, payload);
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-      },
-    });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -50,11 +33,10 @@ serve(async (req) => {
     if (!userId || !title || !body) {
       return new Response(
         JSON.stringify({ error: "userId, title, and body are required" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    // Initialize Supabase client with service role key
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -67,11 +49,10 @@ serve(async (req) => {
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return new Response(
         JSON.stringify({ error: "VAPID keys not configured" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    // Fetch this user's push subscription from the database
     const { data: subData, error: subError } = await supabase
       .from("push_subscriptions")
       .select("subscription")
@@ -81,7 +62,7 @@ serve(async (req) => {
     if (subError || !subData) {
       return new Response(
         JSON.stringify({ error: "No subscription found for this user", details: subError }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
+        { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
@@ -92,14 +73,14 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, userId }),
-      { status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
 
   } catch (err: any) {
     console.error("Push failed:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Push notification failed" }),
-      { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });

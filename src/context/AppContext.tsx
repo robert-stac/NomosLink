@@ -54,6 +54,27 @@ export interface AppDocument {
   date: string;
 }
 
+// ── NEW ──────────────────────────────────────────────────────
+export interface DraftRequest {
+  id: string;
+  caseId: string;
+  caseFileName: string;
+  title: string;
+  description: string;
+  deadline: string;
+  assignedToId: string;
+  assignedToName: string;
+  requestedById: string;
+  requestedByName: string;
+  status: "Pending" | "Completed";
+  documentUrl?: string;
+  documentName?: string;
+  hoursSpent?: number;
+  dateCreated: string;
+  dateCompleted?: string;
+}
+// ─────────────────────────────────────────────────────────────
+
 export interface Transaction {
   id: string;
   fileName: string;
@@ -142,6 +163,7 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   setUsers: (users: User[]) => void;
+  initialDataLoaded: boolean;
 
   transactions: Transaction[];
   addTransaction: (tx: Transaction) => Promise<void>;
@@ -191,6 +213,13 @@ interface AppContextType {
   updateTask: (id: string, data: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   completeTask: (taskId: string, note: string) => void;
+
+  // ── NEW ──────────────────────────────────────────────────────
+  draftRequests: DraftRequest[];
+  addDraftRequest: (draft: Omit<DraftRequest, "id" | "status" | "dateCreated">) => Promise<void>;
+  completeDraftRequest: (id: string, hoursSpent?: number, documentUrl?: string, documentName?: string) => void;
+  deleteDraftRequest: (id: string) => void;
+  // ─────────────────────────────────────────────────────────────
 
   notifications: AppNotification[];
   sendNotification: (recipientId: string, message: string, type: 'alert' | 'task' | 'file', relatedId?: string, relatedType?: 'case' | 'transaction' | 'letter' | 'task') => void;
@@ -288,12 +317,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }];
   });
 
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>(() => JSON.parse(localStorage.getItem("transactions") || "[]"));
   const [courtCases, setCourtCases] = useState<CourtCase[]>(() => JSON.parse(localStorage.getItem("courtCases") || "[]"));
   const [letters, setLetters] = useState<Letter[]>(() => JSON.parse(localStorage.getItem("letters") || "[]"));
   const [invoices, setInvoices] = useState<Invoice[]>(() => JSON.parse(localStorage.getItem("invoices") || "[]"));
   const [clients, setClients] = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
   const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem("tasks") || "[]").map(normalizeTask));
+  // ── NEW ──────────────────────────────────────────────────────
+  const [draftRequests, setDraftRequests] = useState<DraftRequest[]>(() => JSON.parse(localStorage.getItem("draftRequests") || "[]"));
+  // ─────────────────────────────────────────────────────────────
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
@@ -324,7 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /* =======================
-      EMAIL TEMPLATE
+      EMAIL TEMPLATES
   ======================= */
   const buildProgressEmail = (
     recipientName: string,
@@ -355,6 +388,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     </div>
   `;
 
+  const buildTaskEmail = (userName: string, assignerName: string, title: string, description: string, status: 'assigned' | 'completed', note?: string) => {
+    const isCompleted = status === 'completed';
+    return `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">
+        <div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">
+          <h2 style="color:white;margin:0;font-size:20px;font-weight:900;">NomosLink</h2>
+          <p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Task Notification</p>
+        </div>
+        <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
+          <p style="color:#64748b;font-size:14px;">Hi <strong>${userName}</strong>,</p>
+          <p style="color:#64748b;font-size:14px;">
+            ${isCompleted 
+              ? `Your assigned task "<strong>${title}</strong>" has been marked as <strong>Completed</strong>.` 
+              : `You have been assigned a new task: "<strong>${title}</strong>" by <strong>${assignerName}</strong>.`}
+          </p>
+          <div style="background:#f1f5f9;border-left:4px solid #10b981;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Task Description</p>
+            <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">${description}</p>
+            ${note ? `
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Completion Report</p>
+                <p style="margin:0;font-size:14px;color:#059669;font-style:italic;">"${note}"</p>
+              </div>
+            ` : ''}
+          </div>
+          <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
+            This is an automated notification from NomosLink for <strong>Buwembo & Co. Advocates</strong>.<br/>
+            Please do not reply to this email.
+          </p>
+        </div>
+      </div>
+    `;
+  };
+
+  const buildDraftEmail = (
+    recipientName: string,
+    senderName: string,
+    title: string,
+    description: string,
+    deadline: string,
+    caseFileName: string,
+    type: 'assigned' | 'completed',
+    hoursSpent?: number,
+  ) => `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">
+      <div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">
+        <h2 style="color:white;margin:0;font-size:20px;font-weight:900;">NomosLink</h2>
+        <p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">
+          ${type === 'assigned' ? 'Draft Request' : 'Draft Completed'}
+        </p>
+      </div>
+      <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
+        <p style="color:#64748b;font-size:14px;">Hi <strong>${recipientName}</strong>,</p>
+        <p style="color:#64748b;font-size:14px;">
+          ${type === 'assigned'
+      ? `<strong>${senderName}</strong> has assigned you a new drafting request.`
+      : `<strong>${senderName}</strong> has completed a drafting request.`
+    }
+        </p>
+        <div style="background:#f1f5f9;border-left:4px solid #2563EB;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Court Case</p>
+          <p style="margin:0 0 12px;font-size:15px;font-weight:900;color:#0B1F3A;">${caseFileName}</p>
+          <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#1e293b;">${title}</p>
+          <p style="margin:0 0 6px;font-size:13px;color:#475569;">${description}</p>
+          ${type === 'assigned' ? `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">⏰ Deadline: <strong>${deadline}</strong></p>` : ''}
+          ${type === 'completed' && hoursSpent ? `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">⏱ Hours spent: <strong>${hoursSpent}</strong></p>` : ''}
+        </div>
+        <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
+          This is an automated notification from NomosLink for <strong>Buwembo & Co. Advocates</strong>.<br/>
+          Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  `;
+  // ─────────────────────────────────────────────────────────────
+
   const instantSave = async (table: string, payload: any) => {
     if (!navigator.onLine) return;
     try {
@@ -378,9 +487,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /* =======================
       HELPER: Build set of manager IDs to notify for a file
-      Includes managers assigned to the file (lawyerId) +
-      managers who have previously commented on it.
-      Excludes the current user (don't notify self).
   ======================= */
   const getManagersToNotify = (
     lawyerId: string | undefined,
@@ -388,21 +494,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     currentUserId: string
   ): Set<string> => {
     const managers = new Set<string>();
-
-    // Managers who previously commented
     progressNotes
       .filter(n => n.authorRole === 'manager')
       .forEach(n => managers.add(String(n.authorId)));
-
-    // Manager assigned to this file via lawyerId
     if (lawyerId) {
       const assignedUser = usersRef.current.find(u => String(u.id) === String(lawyerId));
       if (assignedUser?.role === 'manager') managers.add(String(lawyerId));
     }
-
-    // Never notify the person who just posted the note
     managers.delete(String(currentUserId));
-
     return managers;
   };
 
@@ -469,6 +568,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { data: taskData },
           { data: invoiceData },
           { data: expenseData },
+          { data: draftData }, // ── NEW
         ] = await Promise.all([
           supabase.from('court_cases').select('*'),
           supabase.from('transactions').select('*'),
@@ -478,6 +578,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabase.from('tasks').select('*'),
           supabase.from('invoices').select('*'),
           supabase.from('expenses').select('*').order('date', { ascending: false }),
+          supabase.from('draft_requests').select('*'), // ── NEW
         ]);
 
         const merge = (local: any[], cloud: any[] | null) => {
@@ -494,8 +595,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (taskData) setTasks(prev => merge(prev, taskData).map(normalizeTask));
         if (invoiceData) setInvoices(prev => merge(prev, invoiceData));
         if (expenseData) setExpenses(prev => merge(prev, expenseData));
+        if (draftData) setDraftRequests(prev => merge(prev, draftData)); // ── NEW
+        setInitialDataLoaded(true);
       } catch (err) {
         console.error("Initial load failed.", err);
+        setInitialDataLoaded(true); // Still set to true so app doesn't hang
       }
     })();
   }, []);
@@ -596,6 +700,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('court_cases').upsert(courtCases, { onConflict: 'id' }),
         supabase.from('users').upsert(users, { onConflict: 'id' }),
         supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
+        supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }), // ── NEW
       ]);
       console.log("Full sync successful.");
     } catch (e) {
@@ -674,7 +779,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
 
-      // 1. Notify + email the assigned user if it's not the author
       if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
         sendNotification(t.lawyerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
         const assignedUser = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
@@ -691,14 +795,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // 2. Notify managers assigned to OR who commented on this file (excluding self + already notified)
       const managersToNotify = getManagersToNotify(t.lawyerId, t.progressNotes || [], currentUser.id);
-      if (t.lawyerId) managersToNotify.delete(String(t.lawyerId)); // already handled above
+      if (t.lawyerId) managersToNotify.delete(String(t.lawyerId));
       managersToNotify.forEach(managerId => {
         sendNotification(managerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
       });
 
-      // 3. Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
@@ -781,7 +883,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
 
-      // 1. Notify + email the assigned user if it's not the author
       if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
         sendNotification(c.lawyerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
         const assignedUser = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
@@ -798,17 +899,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // 2. Notify managers assigned to OR who commented on this file (excluding self + already notified)
       const managersToNotify = getManagersToNotify(c.lawyerId, c.progressNotes || [], currentUser.id);
-      if (c.lawyerId) managersToNotify.delete(String(c.lawyerId)); // already handled above
+      if (c.lawyerId) managersToNotify.delete(String(c.lawyerId));
       managersToNotify.forEach(managerId => {
         sendNotification(managerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
       });
 
-      // 3. Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+      });
+
+      // Notify Assisting Lawyers (Assistants on Draft Requests)
+      const assistantIds = new Set(draftRequests.filter(d => d.caseId === c.id).map(d => d.assignedToId));
+      assistantIds.forEach(aid => {
+        if (String(aid) !== String(currentUser.id) && String(aid) !== String(c.lawyerId)) {
+          sendNotification(aid, `⚖️ Case Update (Assisting): ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+        }
       });
 
       return updated;
@@ -880,7 +987,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
 
-      // 1. Notify + email the assigned user if it's not the author
       if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
         sendNotification(l.lawyerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
         const assignedUser = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
@@ -897,14 +1003,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // 2. Notify managers assigned to OR who commented on this file (excluding self + already notified)
       const managersToNotify = getManagersToNotify(l.lawyerId, l.progressNotes || [], currentUser.id);
-      if (l.lawyerId) managersToNotify.delete(String(l.lawyerId)); // already handled above
+      if (l.lawyerId) managersToNotify.delete(String(l.lawyerId));
       managersToNotify.forEach(managerId => {
         sendNotification(managerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
       });
 
-      // 3. Notify admins (in-app only)
       getAdminIds().forEach(adminId => {
         if (String(adminId) !== String(currentUser.id))
           sendNotification(adminId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
@@ -972,6 +1076,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTasks(prev => [...prev, normalizeTask(newTask)]);
     const { error } = await supabase.from('tasks').insert([newTask]);
     if (error) console.error("Cross-device sync failed:", error);
+
+    // Email notification to assigned user
+    const assignedUser = usersRef.current.find(u => String(u.id) === String(taskData.assignedToId));
+    if (assignedUser?.email) {
+      sendEmail(
+        assignedUser.email,
+        `📋 New Task: ${taskData.title}`,
+        buildTaskEmail(assignedUser.name, taskData.assignedByName, taskData.title, taskData.description, 'assigned')
+      );
+    }
+
     sendNotification(
       taskData.assignedToId,
       `📋 New Task from ${taskData.assignedByName}: "${taskData.title}"`,
@@ -1002,7 +1117,112 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `✅ Task Completed by ${task.assignedToName}: "${task.title}" — "${note}"`,
         'task', task.id, 'task'
       );
+      // Notify managers about clerk task completion
+      getManagerIds().forEach(mid => {
+        if (String(mid) !== String(task.assignedById) && String(mid) !== String(currentUserRef.current?.id)) {
+          sendNotification(mid, `✅ Clerk Task Completed: "${task.title}" by ${task.assignedToName}`, 'task', task.id);
+        }
+      });
     }
+  };
+
+  /* =======================
+      DRAFT REQUESTS  ── NEW
+  ======================= */
+  const addDraftRequest = async (draftData: Omit<DraftRequest, "id" | "status" | "dateCreated">) => {
+    const newDraft: DraftRequest = {
+      ...draftData,
+      id: crypto.randomUUID(),
+      status: "Pending",
+      dateCreated: new Date().toISOString(),
+    };
+    setDraftRequests(prev => [...prev, newDraft]);
+    await supabase.from('draft_requests').insert([newDraft]);
+
+    // Email + notification to assigned assistant
+    const assignedUser = usersRef.current.find(u => String(u.id) === String(draftData.assignedToId));
+    if (assignedUser?.email) {
+      sendEmail(
+        assignedUser.email,
+        `New Draft Request: ${draftData.title}`,
+        buildDraftEmail(
+          assignedUser.name, draftData.requestedByName, draftData.title,
+          draftData.description, draftData.deadline, draftData.caseFileName, 'assigned'
+        )
+      );
+    }
+    sendNotification(
+      draftData.assignedToId,
+      `📝 New Draft Request: "${draftData.title}" on ${draftData.caseFileName} — Due ${draftData.deadline}`,
+      'task', newDraft.id
+    );
+
+    // In-app notification to managers (excluding the requester if they're a manager)
+    getManagerIds().forEach(mid => {
+      if (String(mid) !== String(currentUserRef.current?.id)) {
+        sendNotification(
+          mid,
+          `📝 Draft Request by ${draftData.requestedByName}: "${draftData.title}" → ${draftData.assignedToName}`,
+          'task', newDraft.id
+        );
+      }
+    });
+  };
+
+  const completeDraftRequest = (
+    id: string,
+    hoursSpent?: number, // Still kept in signature for compatibility but ignored
+    documentUrl?: string,
+    documentName?: string,
+  ) => {
+    const draft = draftRequests.find(d => d.id === id);
+    if (!draft) return;
+
+    const start = new Date(draft.dateCreated);
+    const end = new Date();
+    const diffMs = end.getTime() - start.getTime();
+    const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10; // Round to 1 decimal
+
+    const updated: DraftRequest = {
+      ...draft,
+      status: "Completed",
+      hoursSpent: calculatedHours,
+      documentUrl,
+      documentName,
+      dateCompleted: new Date().toISOString(),
+    };
+    setDraftRequests(prev => prev.map(d => d.id === id ? updated : d));
+    instantSave('draft_requests', updated);
+
+    // Email + notification to the requester
+    const requester = usersRef.current.find(u => String(u.id) === String(draft.requestedById));
+    if (requester?.email) {
+      sendEmail(
+        requester.email,
+        `Draft Completed: ${draft.title}`,
+        buildDraftEmail(
+          requester.name, draft.assignedToName, draft.title,
+          draft.description, draft.deadline, draft.caseFileName, 'completed', calculatedHours
+        )
+      );
+    }
+    sendNotification(
+      draft.requestedById,
+      `✅ Draft Completed by ${draft.assignedToName}: "${draft.title}" on ${draft.caseFileName} — ${calculatedHours}hrs`,
+      'task', id
+    );
+
+    // In-app notification to managers
+    getManagerIds().forEach(mid => {
+      if (String(mid) !== String(draft.requestedById)) {
+        sendNotification(mid, `✅ Draft Completed: "${draft.title}" by ${draft.assignedToName}`, 'task', id);
+      }
+    });
+  };
+
+  const deleteDraftRequest = (id: string) => {
+    setDraftRequests(prev => prev.filter(d => d.id !== id));
+    if (navigator.onLine) supabase.from('draft_requests').delete().eq('id', id).then();
   };
 
   /* =======================
@@ -1016,10 +1236,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("invoices", JSON.stringify(invoices));
     localStorage.setItem("clients", JSON.stringify(clients));
     localStorage.setItem("tasks", JSON.stringify(tasks));
+    localStorage.setItem("draftRequests", JSON.stringify(draftRequests)); // ── NEW
     localStorage.setItem("commLogs", JSON.stringify(commLogs));
     localStorage.setItem("expenses", JSON.stringify(expenses));
     if (currentUser) localStorage.setItem("currentUser", JSON.stringify(currentUser));
-  }, [users, transactions, courtCases, letters, invoices, clients, tasks, commLogs, expenses, currentUser]);
+  }, [users, transactions, courtCases, letters, invoices, clients, tasks, draftRequests, commLogs, expenses, currentUser]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1044,10 +1265,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clients, addClient, updateClient, deleteClient,
         commLogs, addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); },
         tasks, addTask, updateTask, deleteTask, completeTask,
+        draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest, // ── NEW
         notifications, sendNotification, markNotificationsAsRead, setNotifications,
         expenses, setExpenses,
         firmName, setFirmName,
         syncToCloud,
+        initialDataLoaded,
       }}
     >
       {children}

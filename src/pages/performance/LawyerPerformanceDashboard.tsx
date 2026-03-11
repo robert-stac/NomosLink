@@ -4,19 +4,17 @@ import { useAppContext } from "../../context/AppContext";
 
 export default function LawyerPerformanceDashboard() {
   const {
-    users, transactions, courtCases, letters,
+    users, transactions, courtCases, letters, draftRequests, tasks,
     addTransactionProgress, addCourtCaseProgress, addLetterProgress
   } = useAppContext();
 
   const location = useLocation();
-
   const lawyers = users.filter((u) => u.role === "lawyer" || u.role === "clerk");
   const [selectedLawyerId, setSelectedLawyerId] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFile, setActiveFile] = useState<any | null>(null);
   const [newNote, setNewNote] = useState("");
 
-  // ✅ Pre-filter archived items before any stats or display
   const activeTransactions = transactions.filter(t => !t.archived);
   const activeCases = courtCases.filter(c => !c.archived);
   const activeLetters = letters.filter(l => !l.archived);
@@ -25,13 +23,11 @@ export default function LawyerPerformanceDashboard() {
     const params = new URLSearchParams(location.search);
     const fileToFind = params.get("file");
     const triggerOpen = params.get("openDetails");
-
     if (fileToFind && triggerOpen) {
-      const foundCase  = activeCases.find(c => c.fileName === fileToFind);
+      const foundCase = activeCases.find(c => c.fileName === fileToFind);
       const foundTrans = activeTransactions.find(t => t.fileName === fileToFind);
       const foundLetter = activeLetters.find(l => (l.subject || (l as any).title || (l as any).fileName) === fileToFind);
       const targetFile = foundCase || foundTrans || foundLetter;
-
       if (targetFile) {
         const lawyerId = targetFile.lawyerId || (targetFile as any).lawyer?.id;
         if (lawyerId) setSelectedLawyerId(lawyerId.toString());
@@ -44,75 +40,68 @@ export default function LawyerPerformanceDashboard() {
   const stats = useMemo(() => {
     if (!selectedLawyerId) return null;
     const now = new Date();
-    const tenDaysAgo = new Date();
-    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-
+    const tenDaysAgo = new Date(); tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
     const sid = String(selectedLawyerId);
 
-    // ✅ All filtered from active (non-archived) arrays
-    const myCases        = activeCases.filter(c => String(c.lawyerId) === sid);
+    const myCases = activeCases.filter(c => String(c.lawyerId) === sid);
     const myTransactions = activeTransactions.filter(t => String(t.lawyerId) === sid);
-    const myLetters      = activeLetters.filter(l =>
-      String(l.lawyerId) === sid || String((l as any).lawyer?.id) === sid
-    );
+    const myLetters = activeLetters.filter(l => String(l.lawyerId) === sid || String((l as any).lawyer?.id) === sid);
+
+    // Draft requests assigned to this lawyer
+    const myDrafts = draftRequests.filter(d => String(d.assignedToId) === sid);
+    const completedDrafts = myDrafts.filter(d => d.status === 'Completed');
+    const pendingDrafts = myDrafts.filter(d => d.status === 'Pending');
+    const totalDraftHours = completedDrafts.reduce((sum, d) => sum + (d.hoursSpent || 0), 0);
+
+    // Tasks assigned to this staff member (Clerks & Lawyers)
+    const myTasks = tasks.filter(t => String(t.assignedToId) === sid);
+    const completedTasks = myTasks.filter(t => t.status === 'Completed');
+    const pendingTasks = myTasks.filter(t => t.status === 'Pending');
 
     const allFiles = [
       ...myCases.map(i => ({ ...i, category: "Court Case", title: i.fileName })),
       ...myTransactions.map(i => ({ ...i, category: "Transaction", title: i.fileName })),
-      ...myLetters.map(i => ({
-        ...i,
-        category: "Letter",
-        title: i.subject || (i as any).title || (i as any).fileName || "Untitled Letter"
-      }))
+      ...myLetters.map(i => ({ ...i, category: "Letter", title: i.subject || (i as any).title || (i as any).fileName || "Untitled Letter" }))
     ];
 
     const financials = { billed: 0, collected: 0 };
-    myTransactions.forEach(t => {
-      financials.billed    += Number(t.billedAmount || (t as any).billed || 0);
-      financials.collected += Number(t.paidAmount   || (t as any).paid   || 0);
-    });
-    myLetters.forEach(l => {
-      financials.billed    += Number(l.billed || (l as any).billedAmount || 0);
-      financials.collected += Number(l.paid   || (l as any).paidAmount   || 0);
-    });
+    myTransactions.forEach(t => { financials.billed += Number(t.billedAmount || (t as any).billed || 0); financials.collected += Number(t.paidAmount || (t as any).paid || 0); });
+    myLetters.forEach(l => { financials.billed += Number(l.billed || (l as any).billedAmount || 0); financials.collected += Number(l.paid || (l as any).paidAmount || 0); });
 
     const stagnant = allFiles.filter(file => {
-      if (file.status === "Completed") return false;
+      if ((file as any).status === "Completed") return false;
       const notes = (file as any).progressNotes || [];
-      let lastDate = notes.length === 0
-        ? new Date((file as any).date || (file as any).createdAt || now)
-        : new Date([...notes].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date);
+      let lastDate = notes.length === 0 ? new Date((file as any).date || (file as any).createdAt || now) : new Date([...notes].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date);
       const diffTime = Math.abs(now.getTime() - lastDate.getTime());
       (file as any).daysStagnant = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       return !isNaN(lastDate.getTime()) && lastDate < tenDaysAgo;
     });
 
     return {
-      financials,
-      cases: myCases,
-      transactions: myTransactions,
-      letters: myLetters,
+      financials, cases: myCases, transactions: myTransactions, letters: myLetters,
       stagnant: stagnant.sort((a: any, b: any) => b.daysStagnant - a.daysStagnant),
       totalFiles: allFiles.length,
-      realizationRate: financials.billed ? Math.round((financials.collected / financials.billed) * 100) : 0
+      realizationRate: financials.billed ? Math.round((financials.collected / financials.billed) * 100) : 0,
+      drafts: { all: myDrafts, completed: completedDrafts, pending: pendingDrafts, totalHours: totalDraftHours },
+      tasks: { all: myTasks, completed: completedTasks, pending: pendingTasks, completionRate: myTasks.length ? Math.round((completedTasks.length / myTasks.length) * 100) : 0 }
     };
-  }, [selectedLawyerId, activeCases, activeTransactions, activeLetters]);
+  }, [selectedLawyerId, activeCases, activeTransactions, activeLetters, draftRequests, tasks]);
 
   const filteredData = useMemo(() => {
     if (!stats) return null;
     const s = searchTerm.toLowerCase();
     return {
-      cases:        stats.cases.filter(c => c.fileName?.toLowerCase().includes(s)),
+      cases: stats.cases.filter(c => c.fileName?.toLowerCase().includes(s)),
       transactions: stats.transactions.filter(t => t.fileName?.toLowerCase().includes(s)),
-      letters:      stats.letters.filter(l => (l.subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(s))
+      letters: stats.letters.filter(l => (l.subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(s))
     };
   }, [stats, searchTerm]);
 
   const handlePostNote = () => {
     if (!newNote.trim() || !activeFile) return;
-    if (activeFile.category === "Court Case")   addCourtCaseProgress(activeFile.id, newNote);
+    if (activeFile.category === "Court Case") addCourtCaseProgress(activeFile.id, newNote);
     else if (activeFile.category === "Transaction") addTransactionProgress(activeFile.id, newNote);
-    else if (activeFile.category === "Letter")  addLetterProgress(activeFile.id, newNote);
+    else if (activeFile.category === "Letter") addLetterProgress(activeFile.id, newNote);
     setNewNote("");
     setActiveFile(null);
   };
@@ -128,20 +117,12 @@ export default function LawyerPerformanceDashboard() {
           </div>
           <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
             <div className="relative">
-              <input
-                type="text" placeholder="Search files..." value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-3 rounded-2xl border border-slate-200 w-full md:w-64 outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm transition-all focus:border-blue-400"
-              />
+              <input type="text" placeholder="Search files..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-3 rounded-2xl border border-slate-200 w-full md:w-64 outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm transition-all focus:border-blue-400" />
               <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
             </div>
             <div className="bg-white p-1 rounded-2xl shadow-sm border border-slate-200 flex items-center">
               <span className="px-4 text-[10px] font-bold text-slate-400 uppercase">Staff:</span>
-              <select
-                value={selectedLawyerId}
-                onChange={(e) => setSelectedLawyerId(e.target.value)}
-                className="bg-transparent font-bold p-2 min-w-[180px] outline-none text-sm cursor-pointer"
-              >
+              <select value={selectedLawyerId} onChange={(e) => setSelectedLawyerId(e.target.value)} className="bg-transparent font-bold p-2 min-w-[180px] outline-none text-sm cursor-pointer">
                 <option value="">Select Staff...</option>
                 {lawyers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
@@ -156,13 +137,122 @@ export default function LawyerPerformanceDashboard() {
           </div>
         ) : (
           <div className="space-y-10">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <KPI label="Collections"  value={`UGX ${stats.financials.collected.toLocaleString()}`} sub="Total Revenue"    color="bg-slate-900 text-white" />
-              <KPI label="Assignments"  value={stats.totalFiles}            sub="Active Files"     color="bg-white text-slate-900 border" />
-              <KPI label="Realization"  value={`${stats.realizationRate}%`} sub="Billed vs Paid"   color={stats.realizationRate > 80 ? "bg-emerald-600 text-white" : "bg-orange-500 text-white"} />
-              <KPI label="Stagnant"     value={stats.stagnant.length}       sub="Needs Attention"  color={stats.stagnant.length > 0 ? "bg-red-50 text-red-600 border border-red-200" : "bg-emerald-50 text-emerald-600"} />
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <KPI label="Collections" value={`UGX ${stats.financials.collected.toLocaleString()}`} sub="Total Revenue" color="bg-slate-900 text-white" />
+              <KPI label="Active Files" value={stats.totalFiles} sub="Assignments" color="bg-white text-slate-900 border" />
+              <KPI label="Realization" value={`${stats.realizationRate}%`} sub="Billed vs Paid" color={stats.realizationRate > 80 ? "bg-emerald-600 text-white" : "bg-orange-500 text-white"} />
+              <KPI label="Stagnant" value={stats.stagnant.length} sub="Needs Attention" color={stats.stagnant.length > 0 ? "bg-red-50 text-red-600 border border-red-200" : "bg-emerald-50 text-emerald-600"} />
             </div>
 
+            {/* DRAFTING & TASK WORK SECTION */}
+            <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex items-center gap-3">
+                <span className="text-xl">📋</span>
+                <h3 className="font-black text-slate-800 uppercase tracking-tight">Staff Assignments (Drafts & Tasks)</h3>
+              </div>
+              <div className="p-8">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+                  <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Total Drafts</p>
+                    <p className="text-2xl font-black text-slate-900">{stats.drafts.all.length}</p>
+                  </div>
+                  <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Total Tasks</p>
+                    <p className="text-2xl font-black text-slate-900">{stats.tasks.all.length}</p>
+                  </div>
+                  <div className="bg-emerald-50 p-5 rounded-3xl border border-emerald-100">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase mb-2">Completions</p>
+                    <p className="text-2xl font-black text-emerald-700">{stats.tasks.completed.length + stats.drafts.completed.length}</p>
+                  </div>
+                  <div className="bg-blue-50 p-5 rounded-3xl border border-blue-100">
+                    <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Efficiency</p>
+                    <p className="text-2xl font-black text-blue-700">{stats.tasks.completionRate}%</p>
+                  </div>
+                  <div className="bg-slate-900 p-5 rounded-3xl text-white shadow-xl shadow-slate-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Draft Hours</p>
+                    <p className="text-2xl font-black">{stats.drafts.totalHours}h</p>
+                  </div>
+                </div>
+
+                {/* DRAFTS TABLE (Only if they have drafts) */}
+                {stats.drafts.all.length > 0 && (
+                  <div className="mb-10">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Legal Drafting</h4>
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] font-black text-slate-300 uppercase tracking-widest border-b border-slate-100">
+                        <tr>
+                          <th className="pb-3">Draft Title</th>
+                          <th className="pb-3">Case</th>
+                          <th className="pb-3">Deadline</th>
+                          <th className="pb-3">Status</th>
+                          <th className="pb-3 text-right">Hours</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {stats.drafts.all.map((d: any) => (
+                          <tr key={d.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-4 font-bold text-slate-800">{d.title}</td>
+                            <td className="py-4 text-slate-500 text-xs font-medium">{d.caseFileName}</td>
+                            <td className="py-4 text-slate-500 text-xs font-medium">{d.deadline}</td>
+                            <td className="py-4">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${d.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                                {d.status}
+                              </span>
+                            </td>
+                            <td className="py-4 text-slate-500 text-xs font-bold text-right">{d.hoursSpent || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* CLERK TASKS TABLE (Only if they have tasks) */}
+                {stats.tasks.all.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Clerical Tasks</h4>
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] font-black text-slate-300 uppercase tracking-widest border-b border-slate-100">
+                        <tr>
+                          <th className="pb-3">Task Description</th>
+                          <th className="pb-3">Status</th>
+                          <th className="pb-3">Report/Note</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {stats.tasks.all.map((t: any) => (
+                          <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-4">
+                              <p className="font-bold text-slate-800 text-sm">{t.title}</p>
+                              <p className="text-[10px] text-slate-400 font-medium">{t.description}</p>
+                            </td>
+                            <td className="py-4">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${t.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
+                                {t.status}
+                              </span>
+                            </td>
+                            <td className="py-4">
+                              {t.clerkNote ? (
+                                <p className="text-[11px] text-emerald-600 italic font-bold leading-tight max-w-xs">"{t.clerkNote}"</p>
+                              ) : (
+                                <span className="text-slate-300 text-[10px] italic">No report filed</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {stats.drafts.all.length === 0 && stats.tasks.all.length === 0 && (
+                  <p className="text-slate-400 italic text-sm text-center py-6">No assignments found for this staff member.</p>
+                )}
+              </div>
+            </div>
+
+            {/* STAGNANT FILES */}
             {stats.stagnant.length > 0 && (
               <div className="bg-red-50 rounded-[32px] border border-red-200 overflow-hidden shadow-sm">
                 <div className="p-6 bg-red-100/50 flex items-center gap-3">
@@ -185,13 +275,14 @@ export default function LawyerPerformanceDashboard() {
               </div>
             )}
 
-            <FileTable title="Court Cases"   items={filteredData?.cases || []}        onRowClick={(item: any) => setActiveFile({ ...item, category: "Court Case",   title: item.fileName })} />
-            <FileTable title="Transactions"  items={filteredData?.transactions || []}  onRowClick={(item: any) => setActiveFile({ ...item, category: "Transaction",  title: item.fileName })} />
-            <FileTable title="Letters"       items={filteredData?.letters || []}       onRowClick={(item: any) => setActiveFile({ ...item, category: "Letter",       title: item.subject || item.title || item.fileName })} />
+            <FileTable title="Court Cases" items={filteredData?.cases || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Court Case", title: item.fileName })} />
+            <FileTable title="Transactions" items={filteredData?.transactions || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Transaction", title: item.fileName })} />
+            <FileTable title="Letters" items={filteredData?.letters || []} onRowClick={(item: any) => setActiveFile({ ...item, category: "Letter", title: item.subject || item.title || item.fileName })} />
           </div>
         )}
       </div>
 
+      {/* PROGRESS NOTE MODAL */}
       {activeFile && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-[32px] w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh]">
@@ -217,12 +308,7 @@ export default function LawyerPerformanceDashboard() {
             </div>
             <div className="p-8 border-t bg-slate-50 rounded-b-[32px]">
               <div className="flex gap-3">
-                <input
-                  placeholder="Post instruction to staff..."
-                  className="flex-1 bg-white border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500"
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                />
+                <input placeholder="Post instruction to staff..." className="flex-1 bg-white border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" value={newNote} onChange={(e) => setNewNote(e.target.value)} />
                 <button onClick={handlePostNote} className="bg-slate-900 hover:bg-black text-white px-8 py-4 rounded-2xl font-bold transition-all">Post</button>
               </div>
             </div>
@@ -276,9 +362,7 @@ const FileTable = ({ title, items, onRowClick }: any) => (
               </td>
             </tr>
           ))}
-          {items.length === 0 && (
-            <tr><td colSpan={4} className="p-10 text-center text-slate-400 italic">No active files found.</td></tr>
-          )}
+          {items.length === 0 && <tr><td colSpan={4} className="p-10 text-center text-slate-400 italic">No active files found.</td></tr>}
         </tbody>
       </table>
     </div>
