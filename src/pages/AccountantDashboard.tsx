@@ -27,15 +27,31 @@ export default function AccountantDashboard() {
     
     let allExpenses = expenses || [];
 
-    // Simple mocked filter logic based on timeFilter
-    // In a real app, we'd compare the item.date to Date.now()
-    if (timeFilter === "This Month") {
-      // Mocking a slight exact drop to show filter interactivity
-      allRevenueItems = allRevenueItems.slice(0, Math.max(1, Math.floor(allRevenueItems.length * 0.3)));
-      allExpenses = allExpenses.slice(0, Math.max(1, Math.floor(allExpenses.length * 0.4)));
-    } else if (timeFilter === "This Year") {
-      allRevenueItems = allRevenueItems.slice(0, Math.max(1, Math.floor(allRevenueItems.length * 0.8)));
-      allExpenses = allExpenses.slice(0, Math.max(1, Math.floor(allExpenses.length * 0.8)));
+    // Real date-based filter logic
+    if (timeFilter !== "All Time") {
+      const now = new Date();
+      allRevenueItems = allRevenueItems.filter(item => {
+        const itemDateStr = (('date' in item ? (item as any).date : '') || ('dateAdded' in item ? (item as any).dateAdded : '') || ('dateCreated' in item ? (item as any).dateCreated : '')) as string;
+        if (!itemDateStr) return true; // Show items with no date by default in this version
+        const itemDate = new Date(itemDateStr);
+        if (timeFilter === "This Month") {
+          return itemDate.getMonth() === now.getMonth() && itemDate.getFullYear() === now.getFullYear();
+        } else if (timeFilter === "This Year") {
+          return itemDate.getFullYear() === now.getFullYear();
+        }
+        return true;
+      });
+
+      allExpenses = allExpenses.filter(exp => {
+        if (!exp.date) return true;
+        const expDate = new Date(exp.date);
+        if (timeFilter === "This Month") {
+          return expDate.getMonth() === now.getMonth() && expDate.getFullYear() === now.getFullYear();
+        } else if (timeFilter === "This Year") {
+          return expDate.getFullYear() === now.getFullYear();
+        }
+        return true;
+      });
     }
     
     // Calculate Revenue & Billing
@@ -178,7 +194,7 @@ export default function AccountantDashboard() {
                       const paid = ('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0;
                       return billed > paid;
                     })
-                    .slice(0, 8)
+                    // .slice(0, 8) - Removed to show all pending balances as requested
                     .map((item, idx) => {
                       const billed = ('billed' in item ? item.billed : 0) || ('billedAmount' in item ? item.billedAmount : 0) || 0;
                       const paid = ('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0;
