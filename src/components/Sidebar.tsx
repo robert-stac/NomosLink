@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
@@ -44,7 +44,7 @@ export default function Sidebar() {
   return (
     <>
       {/* 1. MOBILE HAMBURGER BUTTON */}
-      <button 
+      <button
         onClick={toggleSidebar}
         className="md:hidden fixed top-4 left-4 z-[60] bg-[#0B1F3A] text-white p-3 rounded-xl shadow-lg"
       >
@@ -53,7 +53,7 @@ export default function Sidebar() {
 
       {/* 2. MOBILE OVERLAY (Backdrop) */}
       {isOpen && (
-        <div 
+        <div
           onClick={() => setIsOpen(false)}
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[40] md:hidden"
         />
@@ -64,7 +64,7 @@ export default function Sidebar() {
         ...sidebarStyles.container,
         left: isOpen ? "0" : "-260px", // Slide logic
       }} className="mobile-sidebar">
-        
+
         <style>{`
           nav::-webkit-scrollbar {
             display: none;
@@ -105,8 +105,8 @@ export default function Sidebar() {
         </nav>
 
         {/* 4. SYNC TO CLOUD BUTTON */}
-        <button 
-          onClick={handleManualSync} 
+        <button
+          onClick={handleManualSync}
           disabled={isSyncing}
           style={{
             ...sidebarStyles.syncBtn,
@@ -114,13 +114,18 @@ export default function Sidebar() {
             cursor: isSyncing ? "not-allowed" : "pointer"
           }}
         >
-          <span style={{ marginRight: 12 }}>{isSyncing ? "⏳" : "☁️"}</span> 
+          <span style={{ marginRight: 12 }}>{isSyncing ? "⏳" : "☁️"}</span>
           {isSyncing ? "Syncing..." : "Sync to Cloud"}
         </button>
 
         <button onClick={logout} style={sidebarStyles.logoutBtn}>
           <span style={{ marginRight: 12 }}>🚪</span> Logout
         </button>
+
+        {/* 5. VERSION NUMBER */}
+        <div style={{ ...sidebarStyles.versionBadge, color: "white", fontSize: "12px", fontStyle: "italic" }}>
+          v1.2.0
+        </div>
       </div>
     </>
   );
@@ -211,5 +216,14 @@ const sidebarStyles = {
     display: "flex",
     alignItems: "center",
     fontWeight: "bold",
+  },
+  versionBadge: {
+    padding: "10px 15px 20px 15px",
+    fontSize: "10px",
+    color: "#475569",
+    textAlign: "center" as const,
+    opacity: 0.7,
+    letterSpacing: "1px",
+    textTransform: "uppercase" as const,
   },
 };

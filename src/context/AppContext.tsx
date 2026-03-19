@@ -96,10 +96,19 @@ export interface Transaction {
   paidAmount?: number;
   balance?: number;
   date?: string;
+  clientId?: string;
   archived?: boolean;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
   scannedInvoiceUrl?: string;
+}
+
+export interface CourtDeadline {
+  id: string;
+  title: string;
+  dueDate: string;
+  status: 'Pending' | 'Completed';
+  category?: 'Directive' | 'Submission' | 'Filing' | 'Other';
 }
 
 export interface CourtCase {
@@ -111,7 +120,12 @@ export interface CourtCase {
   balance?: number;
   status: "Ongoing" | "Completed";
   nextCourtDate?: string;
+  completedDate?: string;
   lawyerId?: string;
+  clientId?: string;
+  categories?: string[];
+  sittingType?: string;
+  deadlines?: CourtDeadline[];
   archived?: boolean;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
@@ -124,6 +138,7 @@ export interface Letter {
   subject: string;
   type: "Incoming" | "Outgoing";
   lawyerId?: string;
+  clientId?: string;
   status: "Pending" | "Completed";
   archived?: boolean;
   date?: string;
@@ -201,6 +216,9 @@ interface AppContextType {
   deleteCourtCaseProgress: (caseId: string, noteId: string) => void;
   uploadCourtCaseDocument: (caseId: string, file: File) => Promise<void>;
   deleteCourtCaseDocument: (caseId: string, docId: string) => Promise<void>;
+  addCourtCaseDeadline: (caseId: string, deadline: Omit<CourtDeadline, 'id' | 'status'>) => void;
+  updateCourtCaseDeadline: (caseId: string, deadlineId: string, data: Partial<CourtDeadline>) => void;
+  deleteCourtCaseDeadline: (caseId: string, deadlineId: string) => void;
 
   letters: Letter[];
   addLetter: (l: Letter) => void;
@@ -360,6 +378,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const localNotifIds = useRef<Set<string>>(new Set());
   const currentUserRef = useRef<User | null>(currentUser);
   const usersRef = useRef<User[]>(users);
+
+  // Persistence Monitoring (Ensures local data is synced to Cloud if it was just added)
+  useEffect(() => {
+    if (initialDataLoaded && navigator.onLine) {
+      const timer = setTimeout(() => {
+        syncToCloud();
+      }, 5000); // Periodic sync
+      return () => clearTimeout(timer);
+    }
+  }, [courtCases, initialDataLoaded]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
 
@@ -886,7 +914,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...data };
-      instantSave('court_cases', updated);
+      
+      // Separate basic DB save from explicit field updates to ensure persistence 
+      // even if some columns were just added or are complex types (JSON/Array)
+      const { progressNotes, documents, deadlines, ...dbSafe } = updated as any;
+      instantSave('court_cases', dbSafe);
+
+      // Explicitly update new fields to ensure they hit the DB reliably
+      if (data.categories !== undefined) {
+        supabase.from('court_cases').update({ categories: data.categories }).eq('id', id).then();
+      }
+      if (data.sittingType !== undefined) {
+        supabase.from('court_cases').update({ sittingType: data.sittingType }).eq('id', id).then();
+      }
+      if (data.clientId !== undefined) {
+        supabase.from('court_cases').update({ clientId: data.clientId }).eq('id', id).then();
+      }
+      if (data.completedDate !== undefined) {
+        supabase.from('court_cases').update({ completedDate: data.completedDate }).eq('id', id).then();
+      }
+
       return updated;
     }));
   const deleteCourtCase = (id: string) => {
@@ -978,6 +1025,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updatedDocs = (c.documents || []).filter(d => d.id !== docId);
       supabase.from('court_cases').update({ documents: updatedDocs }).eq('id', caseId).then();
       return { ...c, documents: updatedDocs };
+    }));
+  };
+
+  const addCourtCaseDeadline = (caseId: string, deadline: Omit<CourtDeadline, 'id' | 'status'>) => {
+    setCourtCases(prev => prev.map(c => {
+      if (c.id !== caseId) return c;
+      const newDeadline: CourtDeadline = {
+        ...deadline,
+        id: crypto.randomUUID(),
+        status: 'Pending'
+      };
+      const updated = { ...c, deadlines: [...(c.deadlines || []), newDeadline] };
+      supabase.from('court_cases').update({ deadlines: updated.deadlines }).eq('id', caseId).then();
+      return updated;
+    }));
+  };
+
+  const updateCourtCaseDeadline = (caseId: string, deadlineId: string, data: Partial<CourtDeadline>) => {
+    setCourtCases(prev => prev.map(c => {
+      if (c.id !== caseId) return c;
+      const updatedDeadlines = (c.deadlines || []).map(d => d.id === deadlineId ? { ...d, ...data } : d);
+      supabase.from('court_cases').update({ deadlines: updatedDeadlines }).eq('id', caseId).then();
+      return { ...c, deadlines: updatedDeadlines };
+    }));
+  };
+
+  const deleteCourtCaseDeadline = (caseId: string, deadlineId: string) => {
+    setCourtCases(prev => prev.map(c => {
+      if (c.id !== caseId) return c;
+      const updatedDeadlines = (c.deadlines || []).filter(d => d.id !== deadlineId);
+      supabase.from('court_cases').update({ deadlines: updatedDeadlines }).eq('id', caseId).then();
+      return { ...c, deadlines: updatedDeadlines };
     }));
   };
 
@@ -1342,6 +1421,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         uploadTransactionDocument, deleteTransactionDocument,
         courtCases, addCourtCase, editCourtCase, updateCourtCase: editCourtCase, deleteCourtCase,
         addCourtCaseProgress, deleteCourtCaseProgress, uploadCourtCaseDocument, deleteCourtCaseDocument,
+        addCourtCaseDeadline, updateCourtCaseDeadline, deleteCourtCaseDeadline,
         letters, addLetter, editLetter, updateLetter: editLetter, deleteLetter, addLetterProgress,
         uploadLetterDocument, deleteLetterDocument,
         invoices, addInvoice, updateInvoice, deleteInvoice, uploadInvoiceScan,

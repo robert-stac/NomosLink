@@ -9,10 +9,12 @@ export default function CourtCaseDetails() {
     currentUser, users, courtCases, updateCourtCase,
     addCourtCaseProgress, deleteCourtCaseProgress,
     uploadCourtCaseDocument, deleteCourtCaseDocument,
-    draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest
+    addCourtCaseDeadline, updateCourtCaseDeadline, deleteCourtCaseDeadline,
+    draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest,
+    clients
   } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<"timeline" | "drafts">("timeline");
+  const [activeTab, setActiveTab] = useState<"timeline" | "drafts" | "deadlines">("timeline");
   const [newNote, setNewNote] = useState("");
   const [isCaseUploading, setIsCaseUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +27,10 @@ export default function CourtCaseDetails() {
   const [completingDraftId, setCompletingDraftId] = useState<string | null>(null);
   const [completeForm, setCompleteForm] = useState({ hoursSpent: "", documentFile: null as File | null });
   const [uploading, setUploading] = useState(false);
+
+  // Deadline form state
+  const [showDeadlineForm, setShowDeadlineForm] = useState(false);
+  const [deadlineForm, setDeadlineForm] = useState({ title: "", dueDate: "", category: "Directive" as any, customCategory: "" });
 
   if (!currentUser) return <div className="p-10 text-center font-black text-slate-400">SESSION EXPIRED</div>;
 
@@ -150,7 +156,7 @@ export default function CourtCaseDetails() {
       const { supabase } = await import("../../lib/supabaseClient");
       const file = completeForm.documentFile;
       const filePath = `draft-docs/${completingDraftId}/${Date.now()}_${file.name}`;
-      const { error, data } = await supabase.storage.from('documents').upload(filePath, file);
+      const { error } = await supabase.storage.from('documents').upload(filePath, file);
       if (!error) {
         documentUrl = supabase.storage.from('documents').getPublicUrl(filePath).data.publicUrl;
         documentName = file.name;
@@ -167,6 +173,19 @@ export default function CourtCaseDetails() {
     setCompleteForm({ hoursSpent: "", documentFile: null });
     setUploading(false);
   };
+
+  const handleAddDeadline = () => {
+    if (!deadlineForm.title || !deadlineForm.dueDate) return;
+    const finalDeadline = {
+      ...deadlineForm,
+      category: deadlineForm.category === "Other" ? deadlineForm.customCategory : deadlineForm.category
+    };
+    addCourtCaseDeadline(courtCase.id, finalDeadline);
+    setDeadlineForm({ title: "", dueDate: "", category: "Directive", customCategory: "" });
+    setShowDeadlineForm(false);
+  };
+
+  const associatedClient = clients.find(cl => cl.id === courtCase.clientId);
 
   const billed = courtCase.billed || 0;
   const paid = courtCase.paid || 0;
@@ -205,15 +224,35 @@ export default function CourtCaseDetails() {
         <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-sm border border-slate-100 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-12 opacity-[0.03] text-9xl pointer-events-none italic font-black">BCA</div>
           <div className="relative z-10">
-            <span className="bg-purple-50 text-purple-600 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest mb-4 inline-block">
-              {courtCase.status} Litigation
-            </span>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="bg-purple-50 text-purple-600 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                {courtCase.status} Litigation
+              </span>
+              {courtCase.categories?.map(cat => (
+                <span key={cat} className="bg-blue-50 text-blue-600 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100">
+                  {cat}
+                </span>
+              ))}
+              {courtCase.sittingType && (
+                <span className="bg-orange-50 text-orange-600 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-orange-100">
+                  Current: {courtCase.sittingType}
+                </span>
+              )}
+            </div>
             <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight leading-none">{courtCase.fileName}</h1>
             <div className="flex gap-2 items-center mb-6">
               <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isLeadCounsel ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                 {isLeadCounsel ? 'Lead Counsel' : 'Assisting Counsel'}
               </span>
               {isManagerOrAdmin && <span className="bg-purple-600 text-white px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest">Management View</span>}
+              {associatedClient && (
+                <button 
+                  onClick={() => navigate('/clients')} 
+                  className="bg-emerald-50 text-emerald-700 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 hover:bg-emerald-100 transition"
+                >
+                  Client: {associatedClient.name}
+                </button>
+              )}
             </div>
             <p className="text-slate-500 max-w-2xl font-medium leading-relaxed">{courtCase.details || "No matter details provided for this litigation case."}</p>
           </div>
@@ -226,17 +265,136 @@ export default function CourtCaseDetails() {
 
             {/* TABS */}
             <div className="flex gap-8 border-b border-slate-200">
-              {(["timeline", "drafts"] as const).map(tab => (
+              {(["timeline", "deadlines", "drafts"] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
                     }`}
                 >
-                  {tab === "timeline" ? "Case Timeline" : `Draft Requests ${caseDrafts.length > 0 ? `(${caseDrafts.length})` : ''}`}
+                  {tab === "timeline" ? "Case Timeline" : 
+                   tab === "deadlines" ? "Directives & Deadlines" : 
+                   `Draft Requests ${caseDrafts.length > 0 ? `(${caseDrafts.length})` : ''}`}
                 </button>
               ))}
             </div>
+
+            {/* DEADLINES TAB */}
+            {activeTab === "deadlines" && (
+              <div className="space-y-6">
+                <div className="flex justify-end">
+                  <button 
+                    onClick={() => setShowDeadlineForm(!showDeadlineForm)}
+                    className="bg-[#0B1F3A] text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-900 transition"
+                  >
+                    {showDeadlineForm ? "✕ Close" : "+ Add Court Deadline"}
+                  </button>
+                </div>
+
+                {showDeadlineForm && (
+                  <div className="bg-white p-8 rounded-[40px] shadow-sm border border-blue-100">
+                    <h3 className="text-sm font-black text-slate-900 mb-6 uppercase tracking-widest">New Directive / Filing</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Action Required *</label>
+                        <input 
+                          placeholder="e.g. File Written Submissions, Serve Summons..."
+                          className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          value={deadlineForm.title}
+                          onChange={e => setDeadlineForm({...deadlineForm, title: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Due Date *</label>
+                        <input 
+                          type="date"
+                          className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          value={deadlineForm.dueDate}
+                          onChange={e => setDeadlineForm({...deadlineForm, dueDate: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Category</label>
+                        <select 
+                          className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          value={deadlineForm.category}
+                          onChange={e => setDeadlineForm({...deadlineForm, category: e.target.value as any})}
+                        >
+                          <option value="Directive">Court Directive</option>
+                          <option value="Filing">Filing Deadline</option>
+                          <option value="Submission">Submission</option>
+                          <option value="Other">Other (Custom)...</option>
+                        </select>
+                        {deadlineForm.category === "Other" && (
+                          <input 
+                            placeholder="Type custom category name..."
+                            className="w-full bg-blue-50 border-blue-200 border p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 mt-2"
+                            value={deadlineForm.customCategory}
+                            onChange={e => setDeadlineForm({...deadlineForm, customCategory: e.target.value})}
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={handleAddDeadline}
+                      className="mt-6 bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition"
+                    >
+                      Save Deadline
+                    </button>
+                  </div>
+                )}
+
+                <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Active Court Deadlines</h3>
+                  <div className="space-y-4">
+                    {courtCase.deadlines?.map(deadline => (
+                      <div key={deadline.id} className={`p-6 rounded-[28px] border transition-all flex justify-between items-center ${deadline.status === 'Completed' ? 'bg-slate-50 border-transparent opacity-60' : 'bg-red-50/30 border-red-100 shadow-sm'}`}>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${deadline.status === 'Completed' ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-red-100 text-red-600 border-red-200'}`}>
+                              {deadline.category || "GENERAL"}
+                            </span>
+                            <p className={`font-black text-sm ${deadline.status === 'Completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{deadline.title}</p>
+                          </div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                            Due: {new Date(deadline.dueDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {deadline.status === 'Pending' ? (
+                            <button 
+                              onClick={() => updateCourtCaseDeadline(courtCase.id, deadline.id, { status: 'Completed' })}
+                              className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-700 transition shadow-lg shadow-emerald-900/10"
+                            >
+                              ✓ DONE
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => updateCourtCaseDeadline(courtCase.id, deadline.id, { status: 'Pending' })}
+                              className="text-slate-400 text-[10px] font-black uppercase hover:underline"
+                            >
+                              Re-open
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => { if(confirm("Remove this deadline?")) deleteCourtCaseDeadline(courtCase.id, deadline.id); }}
+                            className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {!courtCase.deadlines?.length && (
+                      <div className="text-center py-10">
+                        <p className="text-2xl mb-2 opacity-20">📅</p>
+                        <p className="text-slate-400 font-bold italic text-sm">No court deadlines recorded yet.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* TIMELINE TAB */}
             {activeTab === "timeline" && (
@@ -520,6 +678,22 @@ export default function CourtCaseDetails() {
             <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
               <h3 className="text-sm font-black text-slate-900 mb-6">Quick Info</h3>
               <div className="space-y-5">
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Associated Client</p>
+                  <p className="text-sm font-bold text-slate-700">{associatedClient?.name || "Unlinked File"}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Case Category</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {courtCase.categories?.map(cat => (
+                      <span key={cat} className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter">{cat}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Sitting Type</p>
+                  <p className="text-sm font-bold text-orange-600">{courtCase.sittingType || "General Proceedings"}</p>
+                </div>
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Next Court Date</p>
                   <p className="text-sm font-bold text-blue-600">{courtCase.nextCourtDate || "TBD"}</p>

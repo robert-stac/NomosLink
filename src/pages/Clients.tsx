@@ -25,15 +25,24 @@ const Clients: React.FC = () => {
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       (c.email || "").toLowerCase().includes(searchTerm.toLowerCase())
     ).map(client => {
-      const clientCases = courtCases.filter(c => c.fileName.toLowerCase().includes(client.name.toLowerCase()));
-      const clientTransactions = transactions.filter(t => t.fileName.toLowerCase().includes(client.name.toLowerCase()));
-      const clientLetters = letters.filter(l => (l.subject || "").toLowerCase().includes(client.name.toLowerCase()));
+      // Primary match by clientId, fallback to fuzzy name match
+      const clientCases = courtCases.filter(c => c.clientId === client.id || (!c.clientId && c.fileName.toLowerCase().includes(client.name.toLowerCase())));
+      const clientTransactions = transactions.filter(t => t.clientId === client.id || (!t.clientId && t.fileName.toLowerCase().includes(client.name.toLowerCase())));
+      const clientLetters = letters.filter(l => l.clientId === client.id || (!l.clientId && (l.subject || "").toLowerCase().includes(client.name.toLowerCase())));
+      
       const totalFilesCount = clientCases.length + clientTransactions.length + clientLetters.length;
+      
       const clientInvoices = invoices.filter(i => 
+        (clientCases.some(c => c.fileName === i.relatedFile)) ||
+        (clientTransactions.some(t => t.fileName === i.relatedFile)) ||
+        (clientLetters.some(l => l.subject === i.relatedFile)) ||
         i.relatedFile.toLowerCase().includes(client.name.toLowerCase()) || 
         i.fileName.toLowerCase().includes(client.name.toLowerCase())
       );
-      const totalOwed = clientInvoices.reduce((sum, inv) => sum + inv.balance, 0);
+      const totalOwed = 
+        clientCases.reduce((sum, c) => sum + (c.balance || 0), 0) +
+        clientTransactions.reduce((sum, t) => sum + (t.balance || 0), 0) +
+        clientLetters.reduce((sum, l) => sum + ((l.billed || 0) - (l.paid || 0)), 0);
 
       return {
         ...client,
@@ -292,15 +301,20 @@ CONFIDENTIAL LEGAL DOCUMENT
             <div className="space-y-3 mb-10">
               {selectedClient.cases.map((c: any) => (
                 <div key={c.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <div>
-                    <p className="font-bold text-[#0B1F3A]">{c.fileName}</p>
-                    <p className="text-[10px] text-blue-500 uppercase font-black">Court Case • {c.status}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-[#0B1F3A]">{c.fileName}</p>
+                      {c.categories?.map((cat: string) => (
+                        <span key={cat} className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">{cat}</span>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-blue-500 uppercase font-black">Court Case • {c.sittingType || c.status}</p>
                   </div>
                   <button 
-                    onClick={() => navigate(`/performance?file=${encodeURIComponent(c.fileName)}&openDetails=true`)}
+                    onClick={() => navigate(`/lawyer/cases/${c.id}`)}
                     className="text-xs font-black text-blue-600 hover:underline"
                   >
-                    VIEW PERFORMANCE →
+                    OPEN FILE →
                   </button>
                 </div>
               ))}

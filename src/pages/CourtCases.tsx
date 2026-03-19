@@ -12,6 +12,11 @@ export default function CourtCases() {
   const [billed, setBilled] = useState("");
   const [paid, setPaid] = useState("");
   const [nextDate, setNextDate] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryInput, setCategoryInput] = useState("");
+  const [sittingType, setSittingType] = useState("");
+  const [customSittingType, setCustomSittingType] = useState("");
+  const [clientId, setClientId] = useState("");
   
   // --- SEARCH & SORT LOGIC ---
   const [searchTerm, setSearchTerm] = useState("");
@@ -63,8 +68,16 @@ export default function CourtCases() {
     setBilled("");
     setPaid("");
     setNextDate("");
+    setCategories([]);
+    setCategoryInput("");
+    setSittingType("");
+    setCustomSittingType("");
+    setClientId("");
     setEditingId(null);
   };
+
+  const CATEGORY_OPTIONS = ["Civil Suit", "Miscellaneous Cause", "Miscellaneous Application", "Divorce Cause", "Criminal Case", "Election Petition"];
+  const SITTING_OPTIONS = ["Hearing", "Ruling", "Mention", "Case Management", "Scheduling", "Pre-Trial", "Judgment"];
 
   const handleSave = () => {
     if (!fileName || !billed || !lawyerId) {
@@ -85,8 +98,11 @@ export default function CourtCases() {
       billed: billedNum,
       paid: paidNum,
       balance,
-      status: "Ongoing", 
+      status: "Ongoing" as const, 
       nextCourtDate: nextDate,
+      categories: categories,
+      sittingType: sittingType === "Other" ? customSittingType : sittingType,
+      clientId: clientId || undefined,
       archived: false,
       progressNotes: editingId ? undefined : [], 
     };
@@ -106,6 +122,11 @@ export default function CourtCases() {
     setBilled(c.billed?.toString() || "");
     setPaid(c.paid?.toString() || "");
     setNextDate(c.nextCourtDate || "");
+    setCategories(c.categories || []);
+    const isOtherSitting = c.sittingType && !SITTING_OPTIONS.includes(c.sittingType);
+    setSittingType(isOtherSitting ? "Other" : (c.sittingType || ""));
+    setCustomSittingType(isOtherSitting ? c.sittingType : "");
+    setClientId(c.clientId || "");
   };
 
   // --- ARCHIVE LOGIC (Now correctly marks as Completed) ---
@@ -216,8 +237,66 @@ export default function CourtCases() {
             <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Next Court Date</label>
             <input type="date" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
           </div>
+          <div>
+            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Client Selection</label>
+            <select className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">Select client (Optional)</option>
+              {useAppContext().clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Categories (Multiple)</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {categories.map(cat => (
+                <span key={cat} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 uppercase">
+                  {cat}
+                  <button onClick={() => setCategories(categories.filter(c => c !== cat))} className="hover:text-red-500">✕</button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input 
+                className="flex-1 border rounded-xl px-3 py-2 bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                list="category-suggestions"
+                value={categoryInput}
+                onChange={e => setCategoryInput(e.target.value)}
+                placeholder="Type or select category..."
+              />
+              <datalist id="category-suggestions">
+                {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt} />)}
+              </datalist>
+              <button 
+                onClick={() => { if(categoryInput && !categories.includes(categoryInput)) { setCategories([...categories, categoryInput]); setCategoryInput(""); }}}
+                className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold"
+              >
+                ADD
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Sitting Type</label>
+            <div className="space-y-2">
+              <select 
+                className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                value={sittingType} 
+                onChange={(e) => setSittingType(e.target.value)}
+              >
+                <option value="">Select type...</option>
+                {SITTING_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                <option value="Other">Other (Type below)...</option>
+              </select>
+              {sittingType === "Other" && (
+                <input 
+                  className="w-full border rounded-xl px-3 py-2 bg-blue-50 border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none transition text-sm" 
+                  value={customSittingType} 
+                  onChange={(e) => setCustomSittingType(e.target.value)}
+                  placeholder="Specify sitting type..."
+                />
+              )}
+            </div>
+          </div>
           <div className="flex items-end">
-            <button onClick={handleSave} className="bg-[#0B1F3A] text-white px-6 py-2.5 rounded-xl w-full hover:bg-[#09203b] transition font-black shadow-lg shadow-blue-900/20 uppercase text-xs tracking-widest">
+            <button onClick={handleSave} className="bg-[#0B1F3A] text-white px-6 py-2.5 rounded-xl w-full hover:bg-[#09203b] transition font-black shadow-lg shadow-blue-900/20 uppercase text-xs tracking-widest h-11">
               {editingId ? "Update Case Details" : "Register New Case"}
             </button>
           </div>
@@ -235,6 +314,7 @@ export default function CourtCases() {
               <th className="p-4 text-left uppercase text-[10px] tracking-widest">Billed</th>
               <th className="p-4 text-left uppercase text-[10px] tracking-widest">Paid</th>
               <th className="p-4 text-left uppercase text-[10px] tracking-widest text-orange-300">Balance</th>
+              <th className="p-4 text-left uppercase text-[10px] tracking-widest">Category / Type</th>
               <th className="p-4 text-left uppercase text-[10px] tracking-widest">Next Date</th>
               <th className="p-4 text-center uppercase text-[10px] tracking-widest">Actions</th>
             </tr>
@@ -255,6 +335,14 @@ export default function CourtCases() {
                 <td className="p-4 font-medium">{formatCurrency(c.billed)}</td>
                 <td className="p-4 text-emerald-600 font-medium">{formatCurrency(c.paid)}</td>
                 <td className="p-4 font-black text-red-600">{formatCurrency(c.balance)}</td>
+                <td className="p-4">
+                  <div className="flex flex-wrap gap-1 mb-1">
+                    {c.categories?.map((cat: string) => (
+                      <span key={cat} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase">{cat}</span>
+                    ))}
+                  </div>
+                  <span className="text-[9px] font-black text-blue-500 uppercase">{c.sittingType || "N/A"}</span>
+                </td>
                 <td className="p-4 font-mono text-xs font-bold text-slate-500">{c.nextCourtDate || "TBA"}</td>
                 <td className="p-4 text-center">
                   <div className="flex justify-center gap-2">
