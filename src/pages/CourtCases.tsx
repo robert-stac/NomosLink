@@ -13,8 +13,9 @@ export default function CourtCases() {
   const [paid, setPaid] = useState("");
   const [nextDate, setNextDate] = useState("");
   
-  // --- SEARCH & HIGHLIGHT LOGIC ---
+  // --- SEARCH & SORT LOGIC ---
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortType, setSortType] = useState("newest");
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,14 +31,30 @@ export default function CourtCases() {
     }
   }, [location, courtCases]);
 
-  // --- FILTERING LOGIC (Hides Archived) ---
+  // --- FILTERING & SORTING LOGIC ---
   const filteredCases = useMemo(() => {
-    return courtCases
+    let cases = courtCases
       .filter(c => !c.archived) 
       .filter(c => 
         c.fileName.toLowerCase().includes(searchTerm.toLowerCase())
       );
-  }, [courtCases, searchTerm]);
+
+    return cases.sort((a: any, b: any) => {
+      switch (sortType) {
+        case "newest": return Number(b.id) - Number(a.id); // ids are timestamps
+        case "oldest": return Number(a.id) - Number(b.id);
+        case "az": return a.fileName.localeCompare(b.fileName);
+        case "za": return b.fileName.localeCompare(a.fileName);
+        case "billed-desc": return (b.billed || 0) - (a.billed || 0);
+        case "date-asc": {
+          if (!a.nextCourtDate) return 1;
+          if (!b.nextCourtDate) return -1;
+          return new Date(a.nextCourtDate).getTime() - new Date(b.nextCourtDate).getTime();
+        }
+        default: return 0;
+      }
+    });
+  }, [courtCases, searchTerm, sortType]);
 
   // --- FORM FUNCTIONS ---
   const resetForm = () => {
@@ -123,15 +140,29 @@ export default function CourtCases() {
     <div className="min-h-screen bg-gray-100 p-6 font-sans">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Court Cases</h1>
-        <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
-            <input 
-                type="text" 
-                placeholder="Filter active files..." 
-                className="border rounded-lg pl-9 pr-4 py-2 w-64 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="flex items-center gap-3">
+            <select 
+                className="border rounded-lg px-4 py-2 bg-white text-sm font-medium text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                value={sortType}
+                onChange={(e) => setSortType(e.target.value)}
+            >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="az">File Name (A-Z)</option>
+                <option value="za">File Name (Z-A)</option>
+                <option value="billed-desc">Highest Billed</option>
+                <option value="date-asc">Earliest Court Date</option>
+            </select>
+            <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                <input 
+                    type="text" 
+                    placeholder="Filter active files..." 
+                    className="border rounded-lg pl-9 pr-4 py-2 w-64 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
         </div>
       </div>
 

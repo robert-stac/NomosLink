@@ -28,6 +28,7 @@ export default function Dashboard() {
 
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [showOnlyStagnant, setShowOnlyStagnant] = useState(false);
+  const [sortTasksBy, setSortTasksBy] = useState("newest");
 
   const isStagnant = (item: any) => {
     if (!item.progressNotes || item.progressNotes.length === 0) return true;
@@ -99,10 +100,16 @@ export default function Dashboard() {
 
   const formatCurrency = (num: number) => "UGX " + num.toLocaleString();
 
-  // Sort tasks: Pending first, Completed at bottom
-  const sortedTasks = [...(tasks || [])].sort((a, b) => {
-    if (a.status === b.status) return 0;
-    return a.status === 'Pending' ? -1 : 1;
+  // Sort tasks: Pending first, Completed at bottom — exclude soft-deleted
+  const sortedTasks = [...(tasks || [])].filter(t => !t.deleted).sort((a, b) => {
+    switch (sortTasksBy) {
+      case "newest": return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
+      case "oldest": return new Date(a.dateCreated || 0).getTime() - new Date(b.dateCreated || 0).getTime();
+      case "status":
+      default:
+        if (a.status === b.status) return 0;
+        return a.status === 'Pending' ? -1 : 1;
+    }
   });
 
   return (
@@ -171,7 +178,7 @@ export default function Dashboard() {
             <p style={{ margin: 0, fontSize: 18, fontWeight: "900", color: "#E74C3C" }}>{stats.totalStagnant}</p>
           </div>
         </div>
-        <SummaryBox label="Open Clerk Tasks" count={tasks?.filter(t => t.status === "Pending").length || 0} icon="📋" />
+        <SummaryBox label="Open Clerk Tasks" count={tasks?.filter(t => t.status === "Pending" && !t.deleted).length || 0} icon="📋" />
       </div>
 
       <div style={styles.mainGrid}>
@@ -215,13 +222,24 @@ export default function Dashboard() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 25 }}>
           <section style={styles.section}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ ...styles.sectionTitle, marginBottom: 0 }}>Lawyer-Clerk Task Feed</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+                <h3 style={{ ...styles.sectionTitle, marginBottom: 0 }}>Lawyer-Clerk Task Feed</h3>
+                <select 
+                  value={sortTasksBy} 
+                  onChange={(e) => setSortTasksBy(e.target.value)}
+                  style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid #EEE', outline: 'none' }}
+                >
+                  <option value="status">Sort by Status</option>
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                </select>
+              </div>
               <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
                 <span style={{ backgroundColor: '#FFF5F5', color: '#E53E3E', padding: '3px 8px', borderRadius: 10, fontWeight: 'bold' }}>
-                  {tasks?.filter(t => t.status === 'Pending').length || 0} Pending
+                  {tasks?.filter(t => t.status === 'Pending' && !t.deleted).length || 0} Pending
                 </span>
                 <span style={{ backgroundColor: '#E6FFFA', color: '#319795', padding: '3px 8px', borderRadius: 10, fontWeight: 'bold' }}>
-                  {tasks?.filter(t => t.status === 'Completed').length || 0} Done
+                  {tasks?.filter(t => t.status === 'Completed' && !t.deleted).length || 0} Done
                 </span>
               </div>
             </div>

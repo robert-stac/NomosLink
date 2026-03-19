@@ -25,17 +25,29 @@ export interface AppNotification {
   relatedType?: 'case' | 'transaction' | 'letter' | 'task';
 }
 
+export interface TaskProgressNote {
+  date: string;
+  note: string;
+}
+
 export interface Task {
   id: string;
   title: string;
   description: string;
+  priority?: "Low" | "Medium" | "High" | "Urgent";
+  dueDate?: string;
   assignedToId: string;
   assignedToName: string;
   assignedById: string;
   assignedByName: string;
   status: "Pending" | "Completed";
   clerkNote?: string;
+  progressNotes?: TaskProgressNote[];
   dateCreated: string;
+  relatedFileId?: string;
+  relatedFileType?: 'case' | 'transaction' | 'letter';
+  relatedFileName?: string;
+  deleted?: boolean;
 }
 
 export interface ProgressNote {
@@ -87,6 +99,7 @@ export interface Transaction {
   archived?: boolean;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
+  scannedInvoiceUrl?: string;
 }
 
 export interface CourtCase {
@@ -102,6 +115,7 @@ export interface CourtCase {
   archived?: boolean;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
+  scannedInvoiceUrl?: string;
 }
 
 export interface Letter {
@@ -117,6 +131,7 @@ export interface Letter {
   paid?: number;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
+  scannedInvoiceUrl?: string;
 }
 
 export interface Invoice {
@@ -129,6 +144,7 @@ export interface Invoice {
   isPaid: boolean;
   dateCreated: string;
   dueDate?: string;
+  scannedInvoiceUrl?: string;
 }
 
 export interface Client {
@@ -199,6 +215,7 @@ interface AppContextType {
   addInvoice: (inv: Invoice) => void;
   updateInvoice: (inv: Invoice) => void;
   deleteInvoice: (id: string) => void;
+  uploadInvoiceScan: (id: string, file: File) => Promise<string>;
 
   clients: Client[];
   addClient: (client: Client) => void;
@@ -213,6 +230,7 @@ interface AppContextType {
   updateTask: (id: string, data: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   completeTask: (taskId: string, note: string) => void;
+  appendTaskNote: (taskId: string, note: string) => void;
 
   // ── NEW ──────────────────────────────────────────────────────
   draftRequests: DraftRequest[];
@@ -241,13 +259,20 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 ======================= */
 const normalizeTask = (raw: any): Task => ({
   ...raw,
+  priority: raw.priority ?? undefined,
+  dueDate: raw.dueDate ?? raw.due_date ?? undefined,
   assignedToId: raw.assignedToId ?? raw.assigned_to_id ?? "",
   assignedToName: raw.assignedToName ?? raw.assigned_to_name ?? "",
   assignedById: raw.assignedById ?? raw.assigned_by_id ?? "",
   assignedByName: raw.assignedByName ?? raw.assigned_by_name ?? "",
   dateCreated: raw.dateCreated ?? raw.date_created ?? "",
   clerkNote: raw.clerkNote ?? raw.clerk_note ?? undefined,
+  progressNotes: raw.progressNotes ?? raw.progress_notes ?? undefined,
   status: raw.status ?? "Pending",
+  relatedFileId: raw.relatedFileId ?? raw.related_file_id ?? undefined,
+  relatedFileType: raw.relatedFileType ?? raw.related_file_type ?? undefined,
+  relatedFileName: raw.relatedFileName ?? raw.related_file_name ?? undefined,
+  deleted: raw.deleted ?? false,
 });
 
 /* =======================
@@ -1104,8 +1129,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
-    supabase.from('tasks').delete().eq('id', id).then();
+    // Soft-delete: mark as deleted so it's hidden from active views
+    // but still visible in the performance/history pages
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted: true } : t));
+    if (navigator.onLine) supabase.from('tasks').update({ deleted: true }).eq('id', id).then();
   };
 
   const completeTask = (id: string, note: string) => {
@@ -1124,6 +1151,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
     }
+  };
+
+  const appendTaskNote = (id: string, note: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    const newNote: TaskProgressNote = {
+      date: new Date().toLocaleString(),
+      note: note
+    };
+    const updatedNotes = [...(task.progressNotes || []), newNote];
+    updateTask(id, { progressNotes: updatedNotes });
+    
+    // Notify Assigner
+    sendNotification(
+      task.assignedById,
+      `📝 Task Update from ${task.assignedToName}: "${task.title}" — "${note}"`,
+      'task', task.id, 'task'
+    );
   };
 
   /* =======================
@@ -1171,7 +1216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const completeDraftRequest = (
     id: string,
-    hoursSpent?: number, // Still kept in signature for compatibility but ignored
+    _hoursSpent?: number, // Ignored
     documentUrl?: string,
     documentName?: string,
   ) => {
@@ -1225,6 +1270,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('draft_requests').delete().eq('id', id).then();
   };
 
+  const uploadInvoiceScan = async (id: string, file: File) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `scan_${id}_${Date.now()}.${fileExt}`;
+    const filePath = `scanned-invoices/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documents') // Reusing the same bucket for simplicity, or we could create a new one
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("Upload Error:", uploadError);
+      throw uploadError;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    // Update the invoice in state and Supabase
+    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, scannedInvoiceUrl: publicUrl } : inv));
+    
+    // Also update any related file if it exists
+    const invoice = invoices.find(i => i.id === id);
+    if (invoice && invoice.relatedFile) {
+        // Find if it's a case, transaction, or letter
+        setCourtCases(prev => prev.map(c => c.fileName === invoice.relatedFile ? { ...c, scannedInvoiceUrl: publicUrl } : c));
+        setTransactions(prev => prev.map(t => t.fileName === invoice.relatedFile ? { ...t, scannedInvoiceUrl: publicUrl } : t));
+        setLetters(prev => prev.map(l => l.subject === invoice.relatedFile ? { ...l, scannedInvoiceUrl: publicUrl } : l));
+        
+        // Persist to Supabase for the specific file types as well
+        // (This is a simplified approach, usually there's a more explicit link)
+    }
+
+    await supabase.from('invoices').update({ scannedInvoiceUrl: publicUrl }).eq('id', id);
+    
+    return publicUrl;
+  };
+
   /* =======================
       LOCALSTORAGE PERSISTENCE
   ======================= */
@@ -1261,10 +1344,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addCourtCaseProgress, deleteCourtCaseProgress, uploadCourtCaseDocument, deleteCourtCaseDocument,
         letters, addLetter, editLetter, updateLetter: editLetter, deleteLetter, addLetterProgress,
         uploadLetterDocument, deleteLetterDocument,
-        invoices, addInvoice, updateInvoice, deleteInvoice,
+        invoices, addInvoice, updateInvoice, deleteInvoice, uploadInvoiceScan,
         clients, addClient, updateClient, deleteClient,
         commLogs, addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); },
-        tasks, addTask, updateTask, deleteTask, completeTask,
+        tasks, addTask, updateTask, deleteTask, completeTask, appendTaskNote,
         draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest, // ── NEW
         notifications, sendNotification, markNotificationsAsRead, setNotifications,
         expenses, setExpenses,

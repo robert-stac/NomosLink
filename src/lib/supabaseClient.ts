@@ -6,6 +6,8 @@ const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
 
 console.log("Supabase URL initialized:", supabaseUrl);
 
+
+
 // Use service role key for all DB operations — bypasses RLS entirely.
 // This is safe for an internal private app not exposed to the public.
 export const supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey, {

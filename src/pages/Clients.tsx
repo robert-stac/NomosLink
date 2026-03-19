@@ -10,6 +10,7 @@ const Clients: React.FC = () => {
   const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortType, setSortType] = useState("newest");
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [commNote, setCommNote] = useState("");
@@ -20,11 +21,43 @@ const Clients: React.FC = () => {
   const [type, setType] = useState<"Individual" | "Corporate">("Individual");
 
   const filteredClients = useMemo(() => {
-    return (clients || []).filter(c => 
+    let result = (clients || []).filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       (c.email || "").toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [clients, searchTerm]);
+    ).map(client => {
+      const clientCases = courtCases.filter(c => c.fileName.toLowerCase().includes(client.name.toLowerCase()));
+      const clientTransactions = transactions.filter(t => t.fileName.toLowerCase().includes(client.name.toLowerCase()));
+      const clientLetters = letters.filter(l => (l.subject || "").toLowerCase().includes(client.name.toLowerCase()));
+      const totalFilesCount = clientCases.length + clientTransactions.length + clientLetters.length;
+      const clientInvoices = invoices.filter(i => 
+        i.relatedFile.toLowerCase().includes(client.name.toLowerCase()) || 
+        i.fileName.toLowerCase().includes(client.name.toLowerCase())
+      );
+      const totalOwed = clientInvoices.reduce((sum, inv) => sum + inv.balance, 0);
+
+      return {
+        ...client,
+        cases: clientCases,
+        transactions: clientTransactions,
+        letters: clientLetters,
+        invoices: clientInvoices,
+        totalOwed,
+        totalFilesCount
+      };
+    });
+
+    return result.sort((a, b) => {
+      switch (sortType) {
+        case "newest": return new Date(b.dateAdded || 0).getTime() - new Date(a.dateAdded || 0).getTime();
+        case "oldest": return new Date(a.dateAdded || 0).getTime() - new Date(b.dateAdded || 0).getTime();
+        case "az": return a.name.localeCompare(b.name);
+        case "za": return b.name.localeCompare(a.name);
+        case "owed-desc": return b.totalOwed - a.totalOwed;
+        case "files-desc": return b.totalFilesCount - a.totalFilesCount;
+        default: return 0;
+      }
+    });
+  }, [clients, searchTerm, sortType, courtCases, transactions, letters, invoices]);
 
   const handleDownloadReport = (client: any) => {
     const reportDate = new Date().toLocaleString();
@@ -110,12 +143,24 @@ CONFIDENTIAL LEGAL DOCUMENT
         </button>
       </div>
 
-      {/* SEARCH */}
-      <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-8 flex items-center">
+      {/* SEARCH & FILTER */}
+      <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-8 flex items-center gap-3">
+        <select 
+          className="ml-2 bg-gray-50 border-none px-4 py-3 rounded-xl font-bold text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+          value={sortType}
+          onChange={(e) => setSortType(e.target.value)}
+        >
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="az">Client Name (A-Z)</option>
+          <option value="za">Client Name (Z-A)</option>
+          <option value="owed-desc">Highest Balance Owed</option>
+          <option value="files-desc">Most Active Files</option>
+        </select>
         <input 
           type="text" 
           placeholder="Search by name, company, or email..." 
-          className="w-full bg-transparent border-none p-4 text-lg focus:ring-0"
+          className="w-full bg-transparent border-none p-4 text-lg focus:ring-0 outline-none"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -124,28 +169,10 @@ CONFIDENTIAL LEGAL DOCUMENT
       {/* CLIENT GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredClients.map(client => {
-          const clientCases = courtCases.filter(c => c.fileName.toLowerCase().includes(client.name.toLowerCase()));
-          const clientTransactions = transactions.filter(t => t.fileName.toLowerCase().includes(client.name.toLowerCase()));
-          const clientLetters = letters.filter(l => (l.subject || "").toLowerCase().includes(client.name.toLowerCase()));
-          const totalFilesCount = clientCases.length + clientTransactions.length + clientLetters.length;
-          const clientInvoices = invoices.filter(i => 
-            i.relatedFile.toLowerCase().includes(client.name.toLowerCase()) || 
-            i.fileName.toLowerCase().includes(client.name.toLowerCase())
-          );
-          const totalOwed = clientInvoices.reduce((sum, inv) => sum + inv.balance, 0);
-
           return (
             <div 
               key={client.id} 
-              onClick={() => setSelectedClient({ 
-                ...client, 
-                cases: clientCases, 
-                transactions: clientTransactions,
-                letters: clientLetters,
-                invoices: clientInvoices, 
-                totalOwed,
-                totalFilesCount
-              })}
+              onClick={() => setSelectedClient(client)}
               className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm hover:shadow-2xl transition-all cursor-pointer group relative overflow-hidden"
             >
               <div className="flex justify-between items-start mb-6">
@@ -159,12 +186,12 @@ CONFIDENTIAL LEGAL DOCUMENT
               <div className="grid grid-cols-2 gap-4 border-t border-gray-50 pt-6">
                 <div>
                   <p className="text-[10px] text-gray-400 font-black uppercase mb-1">Active Files</p>
-                  <p className="text-xl font-bold text-[#0B1F3A]">{totalFilesCount}</p>
+                  <p className="text-xl font-bold text-[#0B1F3A]">{client.totalFilesCount || 0}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-400 font-black uppercase mb-1">Balance Due</p>
-                  <p className={`text-xl font-bold ${totalOwed > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(totalOwed)}
+                  <p className={`text-xl font-bold ${(client.totalOwed || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(client.totalOwed || 0)}
                   </p>
                 </div>
               </div>

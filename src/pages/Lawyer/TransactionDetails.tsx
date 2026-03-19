@@ -99,8 +99,8 @@ export default function TransactionDetails() {
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:block">
               Counsel: {assignedLawyer?.name || "Unassigned"}
             </span>
-            <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${transaction.status === 'Completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                {transaction.status || 'Active'}
+            <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${(transaction as any).status === 'Completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                {(transaction as any).status || 'Active'}
             </span>
           </div>
         </div>
@@ -142,7 +142,7 @@ export default function TransactionDetails() {
 
               <div className="space-y-6 relative before:absolute before:inset-y-0 before:left-4 before:w-0.5 before:bg-slate-100">
                 {transaction.progressNotes?.length ? (
-                  transaction.progressNotes.map((n: any) => {
+                  [...transaction.progressNotes].reverse().map((n: any) => {
                     const isNoteOwner = n.authorId === currentUser.id;
                     return (
                       <div key={n.id} className="relative pl-10 group">

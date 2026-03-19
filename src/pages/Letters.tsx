@@ -31,8 +31,8 @@ export default function Letters() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // --- SORTING ---
-  const [sortField, setSortField] = useState<SortField>(null);
-  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
   const [showForm, setShowForm] = useState(false);
 

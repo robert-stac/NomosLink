@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 
 export default function LawyerPerformanceDashboard() {
@@ -9,7 +9,8 @@ export default function LawyerPerformanceDashboard() {
   } = useAppContext();
 
   const location = useLocation();
-  const lawyers = users.filter((u) => u.role === "lawyer" || u.role === "clerk");
+  const navigate = useNavigate();
+  const lawyers = users.filter((u) => u.role === "lawyer" || u.role === "clerk" || u.role === "manager");
   const [selectedLawyerId, setSelectedLawyerId] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFile, setActiveFile] = useState<any | null>(null);
@@ -97,13 +98,92 @@ export default function LawyerPerformanceDashboard() {
     };
   }, [stats, searchTerm]);
 
+  const downloadWorkReport = () => {
+    if (!stats) return;
+    const staffName = users.find(u => String(u.id) === String(selectedLawyerId))?.name || "Staff";
+    const headers = ["Type", "Title", "Description", "Deadline/Date", "Status", "Report/Note", "Hours", "Linked File"];
+    
+    const draftRows = stats.drafts.all.map(d => [
+      "Draft Request",
+      `"${d.title.replace(/"/g, '""')}"`,
+      `"${d.description.replace(/"/g, '""')}"`,
+      `"${d.deadline || d.dateCreated}"`,
+      `"${d.status}"`,
+      `"Case: ${d.caseFileName}"`,
+      `"${d.hoursSpent || ''}"`,
+      '""'
+    ]);
+
+    const taskRows = stats.tasks.all.map(t => [
+      "Clerical Task",
+      `"${t.title.replace(/"/g, '""')}"`,
+      `"${t.description.replace(/"/g, '""')}"`,
+      `"${t.dateCreated}"`,
+      `"${t.status}"`,
+      `"${(t.clerkNote || '').replace(/"/g, '""')}"`,
+      '""',
+      `"${t.relatedFileName || ''}"`
+    ]);
+
+    const caseRows = stats.cases.map(c => [
+      "Court Case",
+      `"${c.fileName.replace(/"/g, '""')}"`,
+      `"${(c.details || '').replace(/"/g, '""')}"`,
+      '""',
+      `"${c.status}"`,
+      '""',
+      '""',
+      '""'
+    ]);
+
+    const txRows = stats.transactions.map(t => [
+      "Transaction",
+      `"${t.fileName.replace(/"/g, '""')}"`,
+      `"${t.type}"`,
+      `"${t.date || ''}"`,
+      `"${t.archived ? 'Archived' : 'Active'}"`,
+      `"Billed: ${t.billedAmount || 0} / Paid: ${t.paidAmount || 0}"`,
+      '""',
+      '""'
+    ]);
+
+    const letterRows = stats.letters.map(l => [
+      "Letter",
+      `"${((l as any).subject || (l as any).title || (l as any).fileName || '').replace(/"/g, '""')}"`,
+      '""',
+      `"${(l as any).date || ''}"`,
+      `"${(l as any).status || 'Active'}"`,
+      '""',
+      '""',
+      '""'
+    ]);
+
+    const csvContent = [headers, ...draftRows, ...taskRows, ...caseRows, ...txRows, ...letterRows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${staffName}_Work_Report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const closeModal = () => {
+    setActiveFile(null);
+    // Clear URL params so the useEffect doesn't immediately re-open the modal
+    if (new URLSearchParams(location.search).get("openDetails")) {
+      navigate("/performance", { replace: true });
+    }
+  };
+
   const handlePostNote = () => {
     if (!newNote.trim() || !activeFile) return;
     if (activeFile.category === "Court Case") addCourtCaseProgress(activeFile.id, newNote);
     else if (activeFile.category === "Transaction") addTransactionProgress(activeFile.id, newNote);
     else if (activeFile.category === "Letter") addLetterProgress(activeFile.id, newNote);
     setNewNote("");
-    setActiveFile(null);
+    closeModal();
   };
 
   return (
@@ -127,6 +207,14 @@ export default function LawyerPerformanceDashboard() {
                 {lawyers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
+            {stats && (
+              <button
+                onClick={downloadWorkReport}
+                className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition shadow-sm flex items-center gap-2"
+              >
+                <span>📥</span> Export Work Report
+              </button>
+            )}
           </div>
         </div>
 
@@ -145,8 +233,9 @@ export default function LawyerPerformanceDashboard() {
               <KPI label="Stagnant" value={stats.stagnant.length} sub="Needs Attention" color={stats.stagnant.length > 0 ? "bg-red-50 text-red-600 border border-red-200" : "bg-emerald-50 text-emerald-600"} />
             </div>
 
-            {/* DRAFTING & TASK WORK SECTION */}
-            <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+            {/* DRAFTING & TASK WORK SECTION (Conditional) */}
+            {(stats.drafts.all.length > 0 || stats.tasks.all.length > 0) && (
+              <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex items-center gap-3">
                 <span className="text-xl">📋</span>
                 <h3 className="font-black text-slate-800 uppercase tracking-tight">Staff Assignments (Drafts & Tasks)</h3>
@@ -218,6 +307,7 @@ export default function LawyerPerformanceDashboard() {
                           <th className="pb-3">Task Description</th>
                           <th className="pb-3">Status</th>
                           <th className="pb-3">Report/Note</th>
+                          <th className="pb-3 text-right">Linked File</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -239,6 +329,9 @@ export default function LawyerPerformanceDashboard() {
                                 <span className="text-slate-300 text-[10px] italic">No report filed</span>
                               )}
                             </td>
+                            <td className="py-4 text-slate-500 text-[10px] font-black uppercase text-right">
+                              {t.relatedFileName || '—'}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -251,6 +344,7 @@ export default function LawyerPerformanceDashboard() {
                 )}
               </div>
             </div>
+            )}
 
             {/* STAGNANT FILES */}
             {stats.stagnant.length > 0 && (
@@ -284,19 +378,25 @@ export default function LawyerPerformanceDashboard() {
 
       {/* PROGRESS NOTE MODAL */}
       {activeFile && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-[32px] w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh]">
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          onClick={closeModal}
+        >
+          <div
+            className="bg-white rounded-[32px] w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-8 border-b flex justify-between items-center bg-slate-50 rounded-t-[32px]">
               <div>
                 <span className="text-[10px] font-black uppercase text-blue-600 px-2 py-1 bg-blue-50 rounded mb-1 inline-block">{activeFile.category}</span>
                 <h3 className="font-black text-2xl text-slate-800">{activeFile.title}</h3>
               </div>
-              <button onClick={() => setActiveFile(null)} className="text-3xl text-slate-400 hover:text-slate-600">&times;</button>
+              <button onClick={closeModal} className="text-3xl text-slate-400 hover:text-slate-600">&times;</button>
             </div>
             <div className="p-8 overflow-y-auto flex-1 space-y-4">
               {activeFile.progressNotes?.length > 0 ? (
-                activeFile.progressNotes.map((n: any, idx: number) => (
-                  <div key={idx} className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                [...activeFile.progressNotes].reverse().map((n: any, idx: number) => (
+                  <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100 relative">
                     <div className="flex justify-between mb-2">
                       <span className="text-xs font-bold text-blue-700">{n.authorName}</span>
                       <span className="text-[10px] text-slate-400">{n.date}</span>

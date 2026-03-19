@@ -13,6 +13,7 @@ export default function Transactions() {
   } = useAppContext();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortType, setSortType] = useState("newest");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteViewId, setNoteViewId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
@@ -48,8 +49,18 @@ export default function Transactions() {
       });
     }
 
-    return [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, currentUser, searchQuery, lawyers]);
+    return [...data].sort((a, b) => {
+      switch (sortType) {
+        case "newest": return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
+        case "oldest": return new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+        case "az": return a.fileName.localeCompare(b.fileName);
+        case "za": return b.fileName.localeCompare(a.fileName);
+        case "billed-desc": return (Number(b.billedAmount) || 0) - (Number(a.billedAmount) || 0);
+        case "balance-desc": return ((Number(b.billedAmount)||0) - (Number(b.paidAmount)||0)) - ((Number(a.billedAmount)||0) - (Number(a.paidAmount)||0));
+        default: return 0;
+      }
+    });
+  }, [transactions, currentUser, searchQuery, lawyers, sortType]);
 
   const stats = useMemo(() => {
     return visibleTransactions.reduce(
@@ -130,15 +141,29 @@ export default function Transactions() {
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Transactions</h1>
           <p className="text-slate-500 font-medium text-sm">Non-court client billing & legal services</p>
         </div>
-        <div className="relative w-full md:w-96">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-          <input 
-            type="text" 
-            placeholder="Search transactions..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 shadow-sm outline-none"
-          />
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <select 
+            className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            value={sortType}
+            onChange={(e) => setSortType(e.target.value)}
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="az">Client Name (A-Z)</option>
+            <option value="za">Client Name (Z-A)</option>
+            <option value="billed-desc">Highest Billed</option>
+            <option value="balance-desc">Highest Balance Due</option>
+          </select>
+          <div className="relative w-full md:w-80">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+            <input 
+              type="text" 
+              placeholder="Search transactions..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 shadow-sm outline-none"
+            />
+          </div>
         </div>
       </div>
 
@@ -278,7 +303,7 @@ export default function Transactions() {
               <button onClick={() => setNoteViewId(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border text-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm">&times;</button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 space-y-4 bg-white">
-              {activeTransaction?.progressNotes?.map((n: any) => (
+              {[...(activeTransaction?.progressNotes || [])].reverse().map((n: any) => (
                 <div key={n.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[9px] font-black text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded">{n.authorName}</span>

@@ -9,7 +9,8 @@ const Invoices: React.FC = () => {
     invoices, 
     addInvoice, 
     updateInvoice, 
-    deleteInvoice 
+    deleteInvoice,
+    uploadInvoiceScan
   } = useAppContext();
 
   /* =======================
@@ -22,6 +23,8 @@ const Invoices: React.FC = () => {
   const [includeVAT, setIncludeVAT] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [scannedFile, setScannedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   /* =======================
       SEARCH & FILTER STATE
@@ -72,7 +75,7 @@ const Invoices: React.FC = () => {
     });
   }, [invoices, searchTerm, filterStatus, minBalance]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!fileName.trim()) return alert("Please enter an Invoice Reference number.");
@@ -97,11 +100,27 @@ const Invoices: React.FC = () => {
     };
 
     try {
+      let finalId = isEditing && editingId ? editingId : `INV-${Date.now()}`;
+      const payloadWithId = { ...payload, id: finalId };
+
       if (isEditing) {
-        updateInvoice(payload);
+        updateInvoice(payloadWithId);
       } else {
-        addInvoice(payload);
+        addInvoice(payloadWithId);
       }
+
+      // HANDLE FILE UPLOAD IF PRESENT
+      if (scannedFile) {
+        setIsUploading(true);
+        try {
+          await uploadInvoiceScan(finalId, scannedFile);
+        } catch (err) {
+          alert("Invoice saved, but scan upload failed.");
+        } finally {
+          setIsUploading(false);
+        }
+      }
+
       resetForm();
     } catch (error) {
       console.error("Save Error:", error);
@@ -116,6 +135,7 @@ const Invoices: React.FC = () => {
     setAmountPaid(0);
     setIsEditing(false); 
     setEditingId(null);
+    setScannedFile(null);
   };
 
   const formatCurrency = (n: number) => "UGX " + Math.round(n).toLocaleString();
@@ -187,8 +207,36 @@ const Invoices: React.FC = () => {
                 <input type="number" className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-green-500" value={amountPaid || ""} onChange={e => setAmountPaid(Number(e.target.value))} placeholder="Amount already paid" />
               </div>
 
-              <button type="submit" className="w-full bg-[#0B1F3A] text-white font-black py-4 rounded-xl shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-1">
-                {isEditing ? "UPDATE LEDGER" : "POST INVOICE"}
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-1">Attach Scanned Invoice</label>
+                <div className="relative group/file">
+                  <input 
+                    type="file" 
+                    id="scan-upload"
+                    className="hidden" 
+                    accept="image/*,.pdf"
+                    onChange={e => setScannedFile(e.target.files?.[0] || null)}
+                  />
+                  <label 
+                    htmlFor="scan-upload"
+                    className={`flex items-center justify-between w-full p-4 rounded-xl border-2 border-dashed transition-all cursor-pointer ${scannedFile ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50 group-hover/file:border-blue-300'}`}
+                  >
+                    <span className={`text-[11px] font-bold ${scannedFile ? 'text-blue-700' : 'text-gray-400'}`}>
+                      {scannedFile ? `📎 ${scannedFile.name}` : "Click to select scan (PDF/Image)"}
+                    </span>
+                    <span className="text-xl">📄</span>
+                  </label>
+                </div>
+                {scannedFile && <p className="text-[9px] text-blue-500 font-bold mt-1 ml-1 cursor-pointer hover:underline" onClick={() => setScannedFile(null)}>Remove attachment</p>}
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isUploading}
+                className={`w-full ${isUploading ? 'bg-gray-400 opacity-50' : 'bg-[#0B1F3A]'} text-white font-black py-4 rounded-xl shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2`}
+              >
+                {isUploading ? "UPLOADING SCAN..." : (isEditing ? "UPDATE LEDGER" : "POST INVOICE")}
+                {!isUploading && <span>🚀</span>}
               </button>
               {isEditing && <button type="button" onClick={resetForm} className="w-full text-gray-400 text-xs font-bold py-2 hover:text-red-500">Discard Changes</button>}
             </form>
@@ -265,20 +313,27 @@ const Invoices: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="p-5">
-                                            <div className="flex justify-center items-center gap-3">
+                                          <div className="flex justify-center items-center gap-3">
                                                 <span className={`text-[9px] font-black px-3 py-1 rounded-lg ${inv.isPaid ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>
                                                     {inv.isPaid ? 'PAID' : 'PENDING'}
                                                 </span>
-                                                <div className="hidden group-hover:flex gap-2">
-                                                    <button onClick={() => { 
-                                                        setIsEditing(true); 
-                                                        setEditingId(inv.id); 
-                                                        setFileName(inv.fileName); 
-                                                        setAmountBilled(inv.amountBilled); 
-                                                        setAmountPaid(inv.amountPaid); 
-                                                        setRelatedFile(inv.relatedFile); 
-                                                    }} className="text-blue-600 hover:text-blue-800 text-xs font-bold underline">Edit</button>
-                                                    <button onClick={() => deleteInvoice(inv.id)} className="text-red-300 hover:text-red-600 text-xs font-bold">×</button>
+                                                <div className="flex gap-2">
+                                                    {inv.scannedInvoiceUrl && (
+                                                      <a href={inv.scannedInvoiceUrl} target="_blank" rel="noreferrer" className="bg-blue-50 p-2 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors" title="View Scanned Invoice">
+                                                        👁️
+                                                      </a>
+                                                    )}
+                                                    <div className="hidden group-hover:flex gap-2 items-center ml-2">
+                                                        <button onClick={() => { 
+                                                            setIsEditing(true); 
+                                                            setEditingId(inv.id); 
+                                                            setFileName(inv.fileName); 
+                                                            setAmountBilled(inv.amountBilled); 
+                                                            setAmountPaid(inv.amountPaid); 
+                                                            setRelatedFile(inv.relatedFile); 
+                                                        }} className="text-blue-600 hover:text-blue-800 text-xs font-bold underline">Edit</button>
+                                                        <button onClick={() => deleteInvoice(inv.id)} className="text-red-300 hover:text-red-600 text-xs font-bold font-sans">×</button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
