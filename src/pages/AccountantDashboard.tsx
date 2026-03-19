@@ -13,6 +13,7 @@ export default function AccountantDashboard() {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceTarget, setInvoiceTarget] = useState<any>(null);
   const [viewScanUrl, setViewScanUrl] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   
   // Helper to format currency
   const formatUGX = (val: number) => "UGX " + val.toLocaleString();
@@ -181,9 +182,24 @@ export default function AccountantDashboard() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">File Name</th>
-                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Total Billed</th>
-                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 text-right">Unpaid Balance</th>
+                    <th 
+                      onClick={() => setSortConfig(p => p?.key === 'name' ? { key: 'name', direction: p.direction === 'asc' ? 'desc' : 'asc' } : { key: 'name', direction: 'asc' })}
+                      className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 cursor-pointer hover:text-blue-600 transition-colors"
+                    >
+                      File Name {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => setSortConfig(p => p?.key === 'billed' ? { key: 'billed', direction: p.direction === 'asc' ? 'desc' : 'asc' } : { key: 'billed', direction: 'desc' })}
+                      className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 cursor-pointer hover:text-blue-600 transition-colors"
+                    >
+                      Total Billed {sortConfig?.key === 'billed' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => setSortConfig(p => p?.key === 'unpaid' ? { key: 'unpaid', direction: p.direction === 'asc' ? 'desc' : 'asc' } : { key: 'unpaid', direction: 'desc' })}
+                      className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 text-right cursor-pointer hover:text-blue-600 transition-colors"
+                    >
+                      Unpaid Balance {sortConfig?.key === 'unpaid' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
                     <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 text-center">Action</th>
                   </tr>
                 </thead>
@@ -194,7 +210,27 @@ export default function AccountantDashboard() {
                       const paid = ('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0;
                       return billed > paid;
                     })
-                    // .slice(0, 8) - Removed to show all pending balances as requested
+                    .sort((a, b) => {
+                      if (!sortConfig) return 0;
+                      
+                      const getVal = (item: any, key: string) => {
+                        if (key === 'name') return String(('fileName' in item ? item.fileName : '') || ('subject' in item ? item.subject : '') || ('clientName' in item ? item.clientName : '')).toLowerCase();
+                        if (key === 'billed') return Number(('billed' in item ? item.billed : 0) || ('billedAmount' in item ? item.billedAmount : 0) || 0);
+                        if (key === 'unpaid') {
+                          const b = Number(('billed' in item ? item.billed : 0) || ('billedAmount' in item ? item.billedAmount : 0) || 0);
+                          const p = Number(('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0);
+                          return b - p;
+                        }
+                        return 0;
+                      };
+
+                      const vA = getVal(a, sortConfig.key);
+                      const vB = getVal(b, sortConfig.key);
+
+                      if (vA < vB) return sortConfig.direction === 'asc' ? -1 : 1;
+                      if (vA > vB) return sortConfig.direction === 'asc' ? 1 : -1;
+                      return 0;
+                    })
                     .map((item, idx) => {
                       const billed = ('billed' in item ? item.billed : 0) || ('billedAmount' in item ? item.billedAmount : 0) || 0;
                       const paid = ('paid' in item ? item.paid : 0) || ('paidAmount' in item ? item.paidAmount : 0) || 0;
