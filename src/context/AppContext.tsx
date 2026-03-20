@@ -927,14 +927,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       relatedFileId, relatedFileType, relatedFileName, deleted,
     }));
 
+    // For court_cases, transactions, and letters we must NEVER upsert progressNotes
+    // or documents from local state - those are always managed by their own dedicated
+    // functions and local state may be stale (missing notes added by other users).
+    // We use update() per-row with only scalar fields instead.
+    const courtCaseScalarFields = [
+      'id', 'fileName', 'details', 'billed', 'paid', 'balance', 'status',
+      'nextCourtDate', 'completedDate', 'lawyerId', 'clientId',
+      'categories', 'sittingType', 'archived',
+    ];
+    const transactionScalarFields = [
+      'id', 'fileName', 'type', 'lawyerId', 'billedAmount', 'paidAmount',
+      'balance', 'date', 'clientId', 'archived',
+    ];
+    const letterScalarFields = [
+      'id', 'subject', 'type', 'recipient', 'lawyerId', 'clientId',
+      'status', 'archived', 'date', 'billed', 'paid',
+    ];
+
+    const pickFields = (obj: any, fields: string[]) => {
+      const result: Record<string, any> = {};
+      fields.forEach(f => { if (obj[f] !== undefined) result[f] = obj[f]; });
+      return result;
+    };
+
+    const courtCasesForDb = courtCases.map(c => pickFields(c, courtCaseScalarFields));
+    const transactionsForDb = transactions.map(t => pickFields(t, transactionScalarFields));
+    const lettersForDb = letters.map(l => pickFields(l, letterScalarFields));
+
     try {
       await Promise.all([
         supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
         supabase.from('clients').upsert(clientsForDb, { onConflict: 'id' }),
-        supabase.from('letters').upsert(letters, { onConflict: 'id' }),
+        supabase.from('letters').upsert(lettersForDb, { onConflict: 'id' }),
         supabase.from('invoices').upsert(invoices, { onConflict: 'id' }),
-        supabase.from('transactions').upsert(transactions, { onConflict: 'id' }),
-        supabase.from('court_cases').upsert(courtCases, { onConflict: 'id' }),
+        supabase.from('transactions').upsert(transactionsForDb, { onConflict: 'id' }),
+        supabase.from('court_cases').upsert(courtCasesForDb, { onConflict: 'id' }),
         supabase.from('users').upsert(users, { onConflict: 'id' }),
         supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }),
         supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }),
@@ -1112,7 +1140,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ======================= */
   const addCourtCase = (c: CourtCase) => {
     setCourtCases(prev => [...prev, c]);
-    instantSave('court_cases', c);
+    // Strip JSON-column fields before insert - they are managed separately
+    const { progressNotes, documents, deadlines, ...dbSafe } = c as any;
+    instantSave('court_cases', dbSafe);
   };
 
   const editCourtCase = (id: string, data: Partial<CourtCase>) => {
