@@ -4,7 +4,7 @@ import { useAppContext } from "../context/AppContext";
 
 // ─── Typography system ────────────────────────────────────────────────────────
 // Display / headings : "Playfair Display" — authoritative, legal, refined
-// Body / UI          : "DM Sans"          — clean, modern, highly legible
+// Body / UI          : "DM Sans"           — clean, modern, highly legible
 //
 // Add to your index.html <head>:
 // <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
@@ -97,11 +97,34 @@ const Clients: React.FC = () => {
     a.click();
   };
 
+  // FIX: This function was previously referencing "FormData" incorrectly
+  const handleSubmit = () => {
+    const newClient = {
+      id: crypto.randomUUID(),
+      name: name,
+      email: email,
+      phone: phone,
+      type: type,
+      dateAdded: new Date().toISOString(),
+      // Adding empty defaults to prevent Supabase errors if columns are expected
+      address: "",
+      tinNumber: ""
+    };
+
+    addClient(newClient);
+
+    // Clear the form and close modal
+    setShowAddModal(false);
+    setName("");
+    setEmail("");
+    setPhone("");
+    setType("Individual");
+  };
+
+  // FIX: Added the specific handler your form's onSubmit was looking for
   const handleAddClient = (e: React.FormEvent) => {
     e.preventDefault();
-    addClient({ id: `CLI-${Date.now()}`, name, email, phone, type, address: "", dateAdded: new Date().toISOString().split("T")[0] });
-    setShowAddModal(false);
-    setName(""); setEmail(""); setPhone(""); setType("Individual");
+    handleSubmit();
   };
 
   const handleSaveLog = () => {

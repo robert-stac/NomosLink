@@ -66,7 +66,6 @@ export interface AppDocument {
   date: string;
 }
 
-// ── NEW ──────────────────────────────────────────────────────
 export interface DraftRequest {
   id: string;
   caseId: string;
@@ -85,7 +84,6 @@ export interface DraftRequest {
   dateCreated: string;
   dateCompleted?: string;
 }
-// ─────────────────────────────────────────────────────────────
 
 export interface Transaction {
   id: string;
@@ -168,8 +166,6 @@ export interface Client {
   type: "Individual" | "Corporate";
   email: string;
   phone: string;
-  address: string;
-  tinNumber?: string;
   dateAdded: string;
 }
 
@@ -292,12 +288,10 @@ interface AppContextType {
   completeTask: (taskId: string, note: string) => void;
   appendTaskNote: (taskId: string, note: string) => void;
 
-  // ── NEW ──────────────────────────────────────────────────────
   draftRequests: DraftRequest[];
   addDraftRequest: (draft: Omit<DraftRequest, "id" | "status" | "dateCreated">) => Promise<void>;
   completeDraftRequest: (id: string, hoursSpent?: number, documentUrl?: string, documentName?: string) => void;
   deleteDraftRequest: (id: string) => void;
-  // ─────────────────────────────────────────────────────────────
 
   notifications: AppNotification[];
   sendNotification: (recipientId: string, message: string, type: 'alert' | 'task' | 'file', relatedId?: string, relatedType?: 'case' | 'transaction' | 'letter' | 'task') => void;
@@ -348,7 +342,7 @@ const normalizeTask = (raw: any): Task => ({
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 function urlBase64ToUint8Array(base64String: string) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
@@ -369,14 +363,138 @@ async function registerPushSubscription(userId: string) {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
-    await supabase.from('push_subscriptions').upsert({
-      userId,
-      subscription: JSON.stringify(subscription),
-      updatedAt: new Date().toISOString(),
-    }, { onConflict: 'userId' });
+    await supabase.from('push_subscriptions').upsert(
+      { userId, subscription: JSON.stringify(subscription), updatedAt: new Date().toISOString() },
+      { onConflict: 'userId' }
+    );
   } catch (err) {
     console.warn("Push subscription failed:", err);
   }
+}
+
+/* =======================
+    EMAIL TEMPLATE HELPERS
+    NOTE: Built with string concatenation to avoid any risk of
+    encoding issues with template literals in HTML content.
+======================= */
+function buildProgressEmail(
+  recipientName: string,
+  authorName: string,
+  authorRole: string,
+  fileTitle: string,
+  fileType: string,
+  message: string,
+): string {
+  return (
+    '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">' +
+    '<div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">' +
+    '<h2 style="color:white;margin:0;font-size:20px;font-weight:900;letter-spacing:-0.5px;">NomosLink</h2>' +
+    '<p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">File Update Notification</p>' +
+    '</div>' +
+    '<div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">' +
+    '<p style="color:#64748b;font-size:14px;">Hi <strong>' + recipientName + '</strong>,</p>' +
+    '<p style="color:#64748b;font-size:14px;">A new update has been posted to one of your files by <strong>' + authorName + '</strong> (' + authorRole + ').</p>' +
+    '<div style="background:#f1f5f9;border-left:4px solid #0B1F3A;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">' +
+    '<p style="margin:0 0 6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">' + fileType + '</p>' +
+    '<p style="margin:0 0 12px;font-size:16px;font-weight:900;color:#0B1F3A;">' + fileTitle + '</p>' +
+    '<p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">"' + message + '"</p>' +
+    '</div>' +
+    '<p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">' +
+    'This is an automated notification from NomosLink Legal Management System for <strong>Buwembo &amp; Co. Advocates</strong>.<br/>' +
+    'Please do not reply to this email.' +
+    '</p>' +
+    '</div>' +
+    '</div>'
+  );
+}
+
+function buildTaskEmail(
+  userName: string,
+  assignerName: string,
+  title: string,
+  description: string,
+  status: 'assigned' | 'completed',
+  note?: string,
+): string {
+  const isCompleted = status === 'completed';
+  const actionLine = isCompleted
+    ? 'Your assigned task "<strong>' + title + '</strong>" has been marked as <strong>Completed</strong>.'
+    : 'You have been assigned a new task: "<strong>' + title + '</strong>" by <strong>' + assignerName + '</strong>.';
+  const noteBlock = note
+    ? (
+      '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">' +
+      '<p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Completion Report</p>' +
+      '<p style="margin:0;font-size:14px;color:#059669;font-style:italic;">"' + note + '"</p>' +
+      '</div>'
+    )
+    : '';
+  return (
+    '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">' +
+    '<div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">' +
+    '<h2 style="color:white;margin:0;font-size:20px;font-weight:900;">NomosLink</h2>' +
+    '<p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Task Notification</p>' +
+    '</div>' +
+    '<div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">' +
+    '<p style="color:#64748b;font-size:14px;">Hi <strong>' + userName + '</strong>,</p>' +
+    '<p style="color:#64748b;font-size:14px;">' + actionLine + '</p>' +
+    '<div style="background:#f1f5f9;border-left:4px solid #10b981;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">' +
+    '<p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Task Description</p>' +
+    '<p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">' + description + '</p>' +
+    noteBlock +
+    '</div>' +
+    '<p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">' +
+    'This is an automated notification from NomosLink for <strong>Buwembo &amp; Co. Advocates</strong>.<br/>' +
+    'Please do not reply to this email.' +
+    '</p>' +
+    '</div>' +
+    '</div>'
+  );
+}
+
+function buildDraftEmail(
+  recipientName: string,
+  senderName: string,
+  title: string,
+  description: string,
+  deadline: string,
+  caseFileName: string,
+  type: 'assigned' | 'completed',
+  hoursSpent?: number,
+): string {
+  const headerLabel = type === 'assigned' ? 'Draft Request' : 'Draft Completed';
+  const bodyLine = type === 'assigned'
+    ? '<strong>' + senderName + '</strong> has assigned you a new drafting request.'
+    : '<strong>' + senderName + '</strong> has completed a drafting request.';
+  const deadlineBlock = type === 'assigned'
+    ? '<p style="margin:8px 0 0;font-size:12px;color:#64748b;">Deadline: <strong>' + deadline + '</strong></p>'
+    : '';
+  const hoursBlock = (type === 'completed' && hoursSpent !== undefined)
+    ? '<p style="margin:8px 0 0;font-size:12px;color:#64748b;">Hours spent: <strong>' + String(hoursSpent) + '</strong></p>'
+    : '';
+  return (
+    '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">' +
+    '<div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">' +
+    '<h2 style="color:white;margin:0;font-size:20px;font-weight:900;">NomosLink</h2>' +
+    '<p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">' + headerLabel + '</p>' +
+    '</div>' +
+    '<div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">' +
+    '<p style="color:#64748b;font-size:14px;">Hi <strong>' + recipientName + '</strong>,</p>' +
+    '<p style="color:#64748b;font-size:14px;">' + bodyLine + '</p>' +
+    '<div style="background:#f1f5f9;border-left:4px solid #2563EB;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">' +
+    '<p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Court Case</p>' +
+    '<p style="margin:0 0 12px;font-size:15px;font-weight:900;color:#0B1F3A;">' + caseFileName + '</p>' +
+    '<p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#1e293b;">' + title + '</p>' +
+    '<p style="margin:0 0 6px;font-size:13px;color:#475569;">' + description + '</p>' +
+    deadlineBlock +
+    hoursBlock +
+    '</div>' +
+    '<p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">' +
+    'This is an automated notification from NomosLink for <strong>Buwembo &amp; Co. Advocates</strong>.<br/>' +
+    'Please do not reply to this email.' +
+    '</p>' +
+    '</div>' +
+    '</div>'
+  );
 }
 
 /* =======================
@@ -385,14 +503,14 @@ async function registerPushSubscription(userId: string) {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem("currentUser");
-    if (!savedUser) return null;
+    const saved = localStorage.getItem("currentUser");
+    if (!saved) return null;
     try {
-      const parsed = JSON.parse(savedUser);
+      const parsed = JSON.parse(saved);
       if (parsed && parsed.id && parsed.role) return parsed;
       localStorage.removeItem("currentUser");
       return null;
-    } catch (e) {
+    } catch {
       localStorage.removeItem("currentUser");
       return null;
     }
@@ -405,7 +523,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       name: "System Admin",
       email: "admin@buwembo.com",
       role: "admin",
-      password: "password123"
+      password: "password123",
     }];
   });
 
@@ -416,9 +534,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [invoices, setInvoices] = useState<Invoice[]>(() => JSON.parse(localStorage.getItem("invoices") || "[]"));
   const [clients, setClients] = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
   const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem("tasks") || "[]").map(normalizeTask));
-  // ── NEW ──────────────────────────────────────────────────────
   const [draftRequests, setDraftRequests] = useState<DraftRequest[]>(() => JSON.parse(localStorage.getItem("draftRequests") || "[]"));
-  // ─────────────────────────────────────────────────────────────
   const [landTitles, setLandTitles] = useState<LandTitle[]>(() => JSON.parse(localStorage.getItem("landTitles") || "[]"));
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
@@ -429,17 +545,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const currentUserRef = useRef<User | null>(currentUser);
   const usersRef = useRef<User[]>(users);
 
-  // Persistence Monitoring (Ensures local data is synced to Cloud if it was just added)
-  useEffect(() => {
-    if (initialDataLoaded && navigator.onLine) {
-      const timer = setTimeout(() => {
-        syncToCloud();
-      }, 5000); // Periodic sync
-      return () => clearTimeout(timer);
-    }
-  }, [courtCases, initialDataLoaded]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
+
+  // Periodic sync 5 seconds after courtCases change
+  useEffect(() => {
+    if (!initialDataLoaded || !navigator.onLine) return;
+    const timer = setTimeout(() => { syncToCloud(); }, 5000);
+    return () => clearTimeout(timer);
+  }, [courtCases, initialDataLoaded]);
 
   const getAdminIds = () => usersRef.current.filter(u => u.role === 'admin').map(u => u.id);
   const getManagerIds = () => usersRef.current.filter(u => u.role === 'manager').map(u => u.id);
@@ -449,131 +563,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ======================= */
   const sendEmail = (to: string, subject: string, html: string) => {
     if (!navigator.onLine || !to) return;
-    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
+    fetch(import.meta.env.VITE_SUPABASE_URL + '/functions/v1/send-email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`,
+        'Authorization': 'Bearer ' + import.meta.env.VITE_SUPABASE_SERVICE_KEY,
       },
       body: JSON.stringify({ to, subject, html }),
     }).catch(() => { });
   };
 
   /* =======================
-      EMAIL TEMPLATES
+      INSTANT SAVE HELPER
   ======================= */
-  const buildProgressEmail = (
-    recipientName: string,
-    authorName: string,
-    authorRole: string,
-    fileTitle: string,
-    fileType: string,
-    message: string,
-  ) => `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">
-      <div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">
-        <h2 style="color:white;margin:0;font-size:20px;font-weight:900;letter-spacing:-0.5px;">NomosLink</h2>
-        <p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">File Update Notification</p>
-      </div>
-      <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
-        <p style="color:#64748b;font-size:14px;">Hi <strong>${recipientName}</strong>,</p>
-        <p style="color:#64748b;font-size:14px;">A new update has been posted to one of your files by <strong>${authorName}</strong> (${authorRole}).</p>
-        <div style="background:#f1f5f9;border-left:4px solid #0B1F3A;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
-          <p style="margin:0 0 6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">${fileType}</p>
-          <p style="margin:0 0 12px;font-size:16px;font-weight:900;color:#0B1F3A;">${fileTitle}</p>
-          <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">"${message}"</p>
-        </div>
-        <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
-          This is an automated notification from NomosLink Legal Management System for <strong>Buwembo & Co. Advocates</strong>.<br/>
-          Please do not reply to this email.
-        </p>
-      </div>
-    </div>
-  `;
-
-  const buildTaskEmail = (userName: string, assignerName: string, title: string, description: string, status: 'assigned' | 'completed', note?: string) => {
-    const isCompleted = status === 'completed';
-    return `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">
-        <div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">
-          <h2 style="color:white;margin:0;font-size:20px;font-weight:900;">NomosLink</h2>
-          <p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Task Notification</p>
-        </div>
-        <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
-          <p style="color:#64748b;font-size:14px;">Hi <strong>${userName}</strong>,</p>
-          <p style="color:#64748b;font-size:14px;">
-            ${isCompleted
-        ? `Your assigned task "<strong>${title}</strong>" has been marked as <strong>Completed</strong>.`
-        : `You have been assigned a new task: "<strong>${title}</strong>" by <strong>${assignerName}</strong>.`}
-          </p>
-          <div style="background:#f1f5f9;border-left:4px solid #10b981;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
-            <p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Task Description</p>
-            <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">${description}</p>
-            ${note ? `
-              <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
-                <p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Completion Report</p>
-                <p style="margin:0;font-size:14px;color:#059669;font-style:italic;">"${note}"</p>
-              </div>
-            ` : ''}
-          </div>
-          <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
-            This is an automated notification from NomosLink for <strong>Buwembo & Co. Advocates</strong>.<br/>
-            Please do not reply to this email.
-          </p>
-        </div>
-      </div>
-    `;
-  };
-
-  const buildDraftEmail = (
-    recipientName: string,
-    senderName: string,
-    title: string,
-    description: string,
-    deadline: string,
-    caseFileName: string,
-    type: 'assigned' | 'completed',
-    hoursSpent?: number,
-  ) => `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">
-      <div style="background:#0B1F3A;padding:24px 32px;border-radius:16px 16px 0 0;">
-        <h2 style="color:white;margin:0;font-size:20px;font-weight:900;">NomosLink</h2>
-        <p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">
-          ${type === 'assigned' ? 'Draft Request' : 'Draft Completed'}
-        </p>
-      </div>
-      <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
-        <p style="color:#64748b;font-size:14px;">Hi <strong>${recipientName}</strong>,</p>
-        <p style="color:#64748b;font-size:14px;">
-          ${type === 'assigned'
-      ? `<strong>${senderName}</strong> has assigned you a new drafting request.`
-      : `<strong>${senderName}</strong> has completed a drafting request.`
-    }
-        </p>
-        <div style="background:#f1f5f9;border-left:4px solid #2563EB;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
-          <p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Court Case</p>
-          <p style="margin:0 0 12px;font-size:15px;font-weight:900;color:#0B1F3A;">${caseFileName}</p>
-          <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#1e293b;">${title}</p>
-          <p style="margin:0 0 6px;font-size:13px;color:#475569;">${description}</p>
-          ${type === 'assigned' ? `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">⏰ Deadline: <strong>${deadline}</strong></p>` : ''}
-          ${type === 'completed' && hoursSpent ? `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">⏱ Hours spent: <strong>${hoursSpent}</strong></p>` : ''}
-        </div>
-        <p style="color:#94a3b8;font-size:12px;margin-top:32px;border-top:1px solid #f1f5f9;padding-top:16px;">
-          This is an automated notification from NomosLink for <strong>Buwembo & Co. Advocates</strong>.<br/>
-          Please do not reply to this email.
-        </p>
-      </div>
-    </div>
-  `;
-  // ─────────────────────────────────────────────────────────────
-
   const instantSave = async (table: string, payload: any) => {
     if (!navigator.onLine) return;
     try {
       const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
       if (error) throw error;
     } catch (e) {
-      console.error(`Save to ${table} failed:`, e);
+      console.error('Save to ' + table + ' failed:', e);
     }
   };
 
@@ -582,19 +591,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ======================= */
   useEffect(() => {
     if (!currentUser) return;
-    const timer = setTimeout(() => {
-      registerPushSubscription(currentUser.id);
-    }, 2000);
+    const timer = setTimeout(() => { registerPushSubscription(currentUser.id); }, 2000);
     return () => clearTimeout(timer);
   }, [currentUser?.id]);
 
   /* =======================
-      HELPER: Build set of manager IDs to notify for a file
+      MANAGERS TO NOTIFY HELPER
   ======================= */
   const getManagersToNotify = (
     lawyerId: string | undefined,
     progressNotes: ProgressNote[],
-    currentUserId: string
+    currentUserId: string,
   ): Set<string> => {
     const managers = new Set<string>();
     progressNotes
@@ -633,21 +640,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!currentUser?.id) return;
     const channel = supabase
-      .channel(`notifs-${currentUser.id}`)
+      .channel('notifs-' + currentUser.id)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: `recipientId=eq.${currentUser.id}`,
+        filter: 'recipientId=eq.' + currentUser.id,
       }, (payload) => {
         setNotifications(prev => {
           if (prev.find(n => n.id === payload.new.id)) return prev;
           if (localNotifIds.current.has(payload.new.id)) return prev;
           const newNotif = payload.new as AppNotification;
-          if (document.hidden) {
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('NomoSLink', { body: newNotif.message, icon: '/icon.png' });
-            }
+          if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('NomoSLink', { body: newNotif.message, icon: '/icon.png' });
           }
           return [newNotif, ...prev];
         });
@@ -660,20 +665,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       INITIAL DATA FETCH
   ======================= */
   useEffect(() => {
-    (async () => {
+    const fetchAllData = async () => {
       try {
-        const [
-          { data: courtData },
-          { data: txData },
-          { data: clientData },
-          { data: letterData },
-          { data: userData },
-          { data: taskData },
-          { data: invoiceData },
-          { data: expenseData },
-          { data: draftData },
-          { data: landData },
-        ] = await Promise.all([
+        const results = await Promise.all([
           supabase.from('court_cases').select('*'),
           supabase.from('transactions').select('*'),
           supabase.from('clients').select('*').order('dateAdded', { ascending: false }),
@@ -684,16 +678,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabase.from('expenses').select('*').order('date', { ascending: false }),
           supabase.from('draft_requests').select('*'),
           supabase.from('land_titles').select('*, notes_history:land_title_notes(*)'),
-        ]) as any;
+        ]);
+
+        results.forEach((res, i) => {
+          if (res.error) console.error('Table ' + i + ' failed:', res.error.message);
+        });
 
         const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
-          if (!cloud) return prev;
-          const cloudIds = new Set(cloud.map((i: any) => i.id));
-          const merged = [...cloud, ...prev.filter((i: any) => !cloudIds.has(i.id))];
-          const prevIds = prev.map((i: any) => i.id).join(",");
-          const nextIds = merged.map((i: any) => i.id).join(",");
+          if (!cloud || !Array.isArray(cloud)) return prev || [];
+          const cloudIds = new Set(cloud.map((item: any) => item.id));
+          const merged = [...cloud, ...prev.filter((item: any) => !cloudIds.has(item.id))];
+          const prevIds = prev.map((item: any) => item.id).join(',');
+          const nextIds = merged.map((item: any) => item.id).join(',');
           return prevIds === nextIds ? prev : merged;
         };
+
+        const [courtData, txData, clientData, letterData, userData, taskData, invoiceData, expenseData, draftData, landData] = results.map(r => r.data);
 
         if (courtData) setCourtCases(prev => mergeIfChanged(prev, courtData));
         if (txData) setTransactions(prev => mergeIfChanged(prev, txData));
@@ -705,56 +705,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData));
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
         if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));
+
         setInitialDataLoaded(true);
       } catch (err) {
-        console.error("Initial load failed.", err);
-        setInitialDataLoaded(true); // Still set to true so app doesn't hang
+        console.error("CRITICAL BOOT ERROR:", err);
+        setInitialDataLoaded(true);
       }
-    })();
+    };
+    fetchAllData();
   }, []);
 
   /* =======================
       LAND TITLES
   ======================= */
-  const addLandTitle = async (title: Omit<LandTitle, 'id' | 'created_at' | 'updated_at'>): Promise<LandTitle | null> => {
+  const addLandTitle = async (
+    title: Omit<LandTitle, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<LandTitle | null> => {
     const { data, error } = await supabase.from('land_titles').insert([title]).select().single();
     if (error) {
       console.error("Error adding land title:", error);
-      alert(`Failed to save land title: ${error.message} (${error.details || 'No details'}). Please ensure the database schema is updated with 'block' and 'county' columns.`);
+      alert('Failed to save land title: ' + error.message);
       return null;
     }
     if (data) {
       setLandTitles(prev => [...prev, data]);
-
-      // Notify handling lawyer immediately if assigned
       if (data.handling_lawyer_id) {
         sendNotification(
           data.handling_lawyer_id,
-          `📜 New Land Title Assigned: "${data.title_number}" for ${data.owner_name}`,
+          'New Land Title Assigned: "' + data.title_number + '" for ' + data.owner_name,
           'file', data.id, 'case'
         );
       }
-
       return data;
     }
     return null;
   };
 
   const updateLandTitle = async (id: string, data: Partial<LandTitle>) => {
-    setLandTitles(prev => prev.map(t => t.id === id ? { ...t, ...data, updated_at: new Date().toISOString() } : t));
-    const { error } = await supabase.from('land_titles').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) {
-      console.error("Error updating land title:", error);
-      throw error;
-    }
-
-    // Notify if handling lawyer changed
+    setLandTitles(prev => prev.map(t =>
+      t.id === id ? { ...t, ...data, updated_at: new Date().toISOString() } : t
+    ));
+    const { error } = await supabase
+      .from('land_titles')
+      .update({ ...data, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { console.error("Error updating land title:", error); throw error; }
     if (data.handling_lawyer_id) {
-      sendNotification(
-        data.handling_lawyer_id,
-        `📜 Land Title Re-assigned to you: "${id}"`,
-        'file', id, 'case'
-      );
+      sendNotification(data.handling_lawyer_id, 'Land Title Re-assigned to you: "' + id + '"', 'file', id, 'case');
     }
   };
 
@@ -763,37 +760,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await supabase.from('land_titles').delete().eq('id', id);
   };
 
-  // OVERDUE CHECK ON LOAD
+  // Overdue title notifications
   useEffect(() => {
-    if (initialDataLoaded && landTitles.length > 0 && currentUser) {
-      const today = new Date();
-      landTitles.forEach(t => {
-        if (t.status === 'In Custody' || t.status === 'Under Transaction') {
-          const receivedDate = new Date(t.date_received);
-          const diffDays = Math.ceil(Math.abs(today.getTime() - receivedDate.getTime()) / (1000 * 60 * 60 * 24));
-
-          if (diffDays === 91) { // Notify exactly on the 91st day to avoid spamming
-            // Notify Lawyer
-            if (t.handling_lawyer_id) {
-              sendNotification(
-                t.handling_lawyer_id,
-                `🚨 OVERDUE TITLE: "${t.title_number}" has been in custody for 90+ days.`,
-                'alert', t.id, 'case'
-              );
-            }
-            // Notify Managers
-            usersRef.current.filter(u => u.role === 'manager' || u.role === 'admin').forEach(m => {
-              sendNotification(
-                m.id,
-                `🚨 OVERDUE TITLE (90+ Days): "${t.title_number}" (${t.owner_name})`,
-                'alert', t.id, 'case'
-              );
-            });
-          }
+    if (!initialDataLoaded || landTitles.length === 0 || !currentUser) return;
+    const today = new Date();
+    landTitles.forEach(t => {
+      if (t.status !== 'In Custody' && t.status !== 'Under Transaction') return;
+      const diffDays = Math.ceil(
+        Math.abs(today.getTime() - new Date(t.date_received).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (diffDays === 91) {
+        if (t.handling_lawyer_id) {
+          sendNotification(
+            t.handling_lawyer_id,
+            'OVERDUE TITLE: "' + t.title_number + '" has been in custody for 90+ days.',
+            'alert', t.id, 'case'
+          );
         }
-      });
-    }
-  }, [initialDataLoaded, currentUser]); // Only run when initial data is ready
+        usersRef.current
+          .filter(u => u.role === 'manager' || u.role === 'admin')
+          .forEach(m => {
+            sendNotification(
+              m.id,
+              'OVERDUE TITLE (90+ Days): "' + t.title_number + '" (' + t.owner_name + ')',
+              'alert', t.id, 'case'
+            );
+          });
+      }
+    });
+  }, [initialDataLoaded, currentUser]);
 
   const addLandTitleNote = async (titleId: string, message: string) => {
     if (!currentUser) return;
@@ -808,10 +803,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (data) {
       setLandTitles(prev => prev.map(t => {
         if (t.id !== titleId) return t;
-        return {
-          ...t,
-          notes_history: [...(t.notes_history || []), data]
-        };
+        return { ...t, notes_history: [...(t.notes_history || []), data] };
       }));
     }
   };
@@ -838,14 +830,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     message: string,
     type: 'alert' | 'task' | 'file' = 'alert',
     relatedId?: string,
-    relatedType?: 'case' | 'transaction' | 'letter' | 'task'
+    relatedType?: 'case' | 'transaction' | 'letter' | 'task',
   ) => {
     const adminIds = getAdminIds();
     const allRecipients = Array.from(new Set([recipientId, ...adminIds]));
     const now = Date.now();
 
     const newNotifs: AppNotification[] = allRecipients.map(rid => ({
-      id: `NOTIF-${now}-${rid}`,
+      id: 'NOTIF-' + now + '-' + rid,
       recipientId: rid,
       message,
       type,
@@ -881,11 +873,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (navigator.onLine) {
       allRecipients.forEach(rid => {
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+        fetch(import.meta.env.VITE_SUPABASE_URL + '/functions/v1/send-push-notification', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_SERVICE_KEY}`,
+            'Authorization': 'Bearer ' + import.meta.env.VITE_SUPABASE_SERVICE_KEY,
           },
           body: JSON.stringify({ userId: rid, title: 'NomoSLink', body: message, url: '/' }),
         }).catch(() => { });
@@ -900,20 +892,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  /* =======================
+      SYNC TO CLOUD
+  ======================= */
   const syncToCloud = async () => {
     if (!navigator.onLine || !currentUser) return;
+
+    // Strip to only columns that exist in the DB  -  prevents 400 errors from extra UI fields
+    const clientsForDb = clients.map(({ id, name, type, email, phone, dateAdded }) => ({
+      id, name, type, email, phone, dateAdded,
+    }));
+
+    const tasksForDb = tasks.map(({
+      id, title, description, priority, dueDate,
+      assignedToId, assignedToName, assignedById, assignedByName,
+      status, clerkNote, progressNotes, dateCreated,
+      relatedFileId, relatedFileType, relatedFileName, deleted,
+    }) => ({
+      id, title, description, priority, dueDate,
+      assignedToId, assignedToName, assignedById, assignedByName,
+      status, clerkNote, progressNotes, dateCreated,
+      relatedFileId, relatedFileType, relatedFileName, deleted,
+    }));
+
     try {
       await Promise.all([
         supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
-        supabase.from('clients').upsert(clients, { onConflict: 'id' }),
+        supabase.from('clients').upsert(clientsForDb, { onConflict: 'id' }),
         supabase.from('letters').upsert(letters, { onConflict: 'id' }),
         supabase.from('invoices').upsert(invoices, { onConflict: 'id' }),
         supabase.from('transactions').upsert(transactions, { onConflict: 'id' }),
         supabase.from('court_cases').upsert(courtCases, { onConflict: 'id' }),
         supabase.from('users').upsert(users, { onConflict: 'id' }),
-        supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
-        supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }), // ── NEW
-        supabase.from('land_titles').upsert(landTitles.map(({ notes_history, ...rest }) => rest), { onConflict: 'id' }),
+        supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }),
+        supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }),
+        supabase.from('land_titles').upsert(
+          landTitles.map(({ notes_history, ...rest }) => rest),
+          { onConflict: 'id' }
+        ),
       ]);
       console.log("Full sync successful.");
     } catch (e) {
@@ -921,7 +937,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const login = async (email: string, password: string) => {
+  /* =======================
+      AUTH
+  ======================= */
+  const login = async (email: string, password: string): Promise<boolean> => {
     let user = users.find(u => u.email === email && u.password === password);
     if (!user) {
       const { data } = await supabase
@@ -946,6 +965,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers(prev => prev.filter(u => u.id !== id));
     if (navigator.onLine) await supabase.from('users').delete().eq('id', id);
   };
+
   const lawyers = users.filter(u => u.role !== "admin");
 
   /* =======================
@@ -983,42 +1003,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = {
         ...t,
         progressNotes: [...(t.progressNotes || []), {
-          id: crypto.randomUUID(), message,
-          authorId: currentUser.id, authorName: currentUser.name,
-          authorRole: currentUser.role, date: new Date().toLocaleString(),
+          id: crypto.randomUUID(),
+          message,
+          authorId: currentUser.id,
+          authorName: currentUser.name,
+          authorRole: currentUser.role,
+          date: new Date().toLocaleString(),
         }],
       };
       supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
-
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
       if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
-        sendNotification(t.lawyerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
+        sendNotification(t.lawyerId, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
         const assignedUser = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
         if (assignedUser?.email) {
-          const isAssignedLawyer = assignedUser.role === 'lawyer';
-          const isAssignedManager = assignedUser.role === 'manager';
-          if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
-            sendEmail(
-              assignedUser.email,
-              `File Update: ${t.fileName}`,
-              buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message)
-            );
+          if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
+            sendEmail(assignedUser.email, 'File Update: ' + t.fileName, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message));
           }
         }
       }
-
       const managersToNotify = getManagersToNotify(t.lawyerId, t.progressNotes || [], currentUser.id);
       if (t.lawyerId) managersToNotify.delete(String(t.lawyerId));
-      managersToNotify.forEach(managerId => {
-        sendNotification(managerId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
+      managersToNotify.forEach(mid => sendNotification(mid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction'));
+      getAdminIds().forEach(aid => {
+        if (String(aid) !== String(currentUser.id))
+          sendNotification(aid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
       });
-
-      getAdminIds().forEach(adminId => {
-        if (String(adminId) !== String(currentUser.id))
-          sendNotification(adminId, `📁 Transaction Update: ${t.fileName} — "${message}"`, 'file', t.id, 'transaction');
-      });
-
       return updated;
     }));
   };
@@ -1043,7 +1053,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const uploadTransactionDocument = async (txId: string, file: File) => {
     try {
-      const filePath = `tx-docs/${txId}/${Date.now()}_${file.name}`;
+      const filePath = 'tx-docs/' + txId + '/' + Date.now() + '_' + file.name;
       const { error: uploadError } = await supabase.storage.from('transactions').upload(filePath, file);
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('transactions').getPublicUrl(filePath);
@@ -1054,7 +1064,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('transactions').update({ documents: updatedDocs }).eq('id', txId).then();
         return { ...t, documents: updatedDocs };
       }));
-    } catch (err) { console.error("Tx Upload failed", err); }
+    } catch (err) { console.error("Tx upload failed:", err); }
   };
 
   const deleteTransactionDocument = async (txId: string, docId: string) => {
@@ -1069,33 +1079,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       COURT CASES
   ======================= */
-  const addCourtCase = (c: CourtCase) => { setCourtCases(prev => [...prev, c]); instantSave('court_cases', c); };
-  const editCourtCase = (id: string, data: Partial<CourtCase>) =>
+  const addCourtCase = (c: CourtCase) => {
+    setCourtCases(prev => [...prev, c]);
+    instantSave('court_cases', c);
+  };
+
+  const editCourtCase = (id: string, data: Partial<CourtCase>) => {
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...data };
-
-      // Separate basic DB save from explicit field updates to ensure persistence 
-      // even if some columns were just added or are complex types (JSON/Array)
       const { progressNotes, documents, deadlines, ...dbSafe } = updated as any;
       instantSave('court_cases', dbSafe);
-
-      // Explicitly update new fields to ensure they hit the DB reliably
-      if (data.categories !== undefined) {
-        supabase.from('court_cases').update({ categories: data.categories }).eq('id', id).then();
-      }
-      if (data.sittingType !== undefined) {
-        supabase.from('court_cases').update({ sittingType: data.sittingType }).eq('id', id).then();
-      }
-      if (data.clientId !== undefined) {
-        supabase.from('court_cases').update({ clientId: data.clientId }).eq('id', id).then();
-      }
-      if (data.completedDate !== undefined) {
-        supabase.from('court_cases').update({ completedDate: data.completedDate }).eq('id', id).then();
-      }
-
+      if (data.categories !== undefined) supabase.from('court_cases').update({ categories: data.categories }).eq('id', id).then();
+      if (data.sittingType !== undefined) supabase.from('court_cases').update({ sittingType: data.sittingType }).eq('id', id).then();
+      if (data.clientId !== undefined) supabase.from('court_cases').update({ clientId: data.clientId }).eq('id', id).then();
+      if (data.completedDate !== undefined) supabase.from('court_cases').update({ completedDate: data.completedDate }).eq('id', id).then();
       return updated;
     }));
+  };
+
   const deleteCourtCase = (id: string) => {
     setCourtCases(prev => prev.filter(c => c.id !== id));
     if (navigator.onLine) supabase.from('court_cases').delete().eq('id', id).then();
@@ -1106,50 +1108,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const newNote: ProgressNote = {
-        id: crypto.randomUUID(), message,
-        authorId: currentUser.id, authorName: currentUser.name,
-        authorRole: currentUser.role, date: new Date().toLocaleString(),
+        id: crypto.randomUUID(),
+        message,
+        authorId: currentUser.id,
+        authorName: currentUser.name,
+        authorRole: currentUser.role,
+        date: new Date().toLocaleString(),
       };
       const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
       supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
-
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
       if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
-        sendNotification(c.lawyerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+        sendNotification(c.lawyerId, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
         const assignedUser = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
         if (assignedUser?.email) {
-          const isAssignedLawyer = assignedUser.role === 'lawyer';
-          const isAssignedManager = assignedUser.role === 'manager';
-          if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
-            sendEmail(
-              assignedUser.email,
-              `File Update: ${c.fileName}`,
-              buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message)
-            );
+          if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
+            sendEmail(assignedUser.email, 'File Update: ' + c.fileName, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message));
           }
         }
       }
-
       const managersToNotify = getManagersToNotify(c.lawyerId, c.progressNotes || [], currentUser.id);
       if (c.lawyerId) managersToNotify.delete(String(c.lawyerId));
-      managersToNotify.forEach(managerId => {
-        sendNotification(managerId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
+      managersToNotify.forEach(mid => sendNotification(mid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case'));
+      getAdminIds().forEach(aid => {
+        if (String(aid) !== String(currentUser.id))
+          sendNotification(aid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
       });
-
-      getAdminIds().forEach(adminId => {
-        if (String(adminId) !== String(currentUser.id))
-          sendNotification(adminId, `⚖️ Court Case Update: ${c.fileName} — "${message}"`, 'file', c.id, 'case');
-      });
-
-      // Notify Assisting Lawyers (Assistants on Draft Requests)
       const assistantIds = new Set(draftRequests.filter(d => d.caseId === c.id).map(d => d.assignedToId));
       assistantIds.forEach(aid => {
-        if (String(aid) !== String(currentUser.id) && String(aid) !== String(c.lawyerId)) {
-          sendNotification(aid, `⚖️ Case Update (Assisting): ${c.fileName} — "${message}"`, 'file', c.id, 'case');
-        }
+        if (String(aid) !== String(currentUser.id) && String(aid) !== String(c.lawyerId))
+          sendNotification(aid, 'Case Update (Assisting): ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
       });
-
       return updated;
     }));
   };
@@ -1165,7 +1154,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const uploadCourtCaseDocument = async (caseId: string, file: File) => {
     try {
-      const filePath = `court-docs/${caseId}/${Date.now()}_${file.name}`;
+      const filePath = 'court-docs/' + caseId + '/' + Date.now() + '_' + file.name;
       const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
@@ -1176,7 +1165,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('court_cases').update({ documents: updatedDocs }).eq('id', caseId).then();
         return { ...c, documents: updatedDocs };
       }));
-    } catch (err) { console.error("Upload failed", err); }
+    } catch (err) { console.error("Court case upload failed:", err); }
   };
 
   const deleteCourtCaseDocument = async (caseId: string, docId: string) => {
@@ -1191,11 +1180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addCourtCaseDeadline = (caseId: string, deadline: Omit<CourtDeadline, 'id' | 'status'>) => {
     setCourtCases(prev => prev.map(c => {
       if (c.id !== caseId) return c;
-      const newDeadline: CourtDeadline = {
-        ...deadline,
-        id: crypto.randomUUID(),
-        status: 'Pending'
-      };
+      const newDeadline: CourtDeadline = { ...deadline, id: crypto.randomUUID(), status: 'Pending' };
       const updated = { ...c, deadlines: [...(c.deadlines || []), newDeadline] };
       supabase.from('court_cases').update({ deadlines: updated.deadlines }).eq('id', caseId).then();
       return updated;
@@ -1224,7 +1209,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       LETTERS
   ======================= */
   const addLetter = (l: Letter) => { setLetters(prev => [...prev, l]); instantSave('letters', l); };
-  const editLetter = (id: string, data: Partial<Letter>) =>
+
+  const editLetter = (id: string, data: Partial<Letter>) => {
     setLetters(prev => prev.map(l => {
       if (l.id !== id) return l;
       const updated = { ...l, ...data };
@@ -1232,6 +1218,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       instantSave('letters', dbSafe);
       return updated;
     }));
+  };
+
   const deleteLetter = (id: string) => {
     setLetters(prev => prev.filter(l => l.id !== id));
     if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
@@ -1242,49 +1230,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLetters(prev => prev.map(l => {
       if (l.id !== id) return l;
       const newNote: ProgressNote = {
-        id: crypto.randomUUID(), message,
-        authorId: currentUser.id, authorName: currentUser.name,
-        authorRole: currentUser.role, date: new Date().toLocaleString(),
+        id: crypto.randomUUID(),
+        message,
+        authorId: currentUser.id,
+        authorName: currentUser.name,
+        authorRole: currentUser.role,
+        date: new Date().toLocaleString(),
       };
       const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
       supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
-
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-
       if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
-        sendNotification(l.lawyerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
+        sendNotification(l.lawyerId, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
         const assignedUser = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
         if (assignedUser?.email) {
-          const isAssignedLawyer = assignedUser.role === 'lawyer';
-          const isAssignedManager = assignedUser.role === 'manager';
-          if ((isAssignedLawyer && isAuthorManagerOrAdmin) || isAssignedManager) {
-            sendEmail(
-              assignedUser.email,
-              `File Update: ${l.subject}`,
-              buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, l.subject, 'Letter', message)
-            );
+          if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
+            sendEmail(assignedUser.email, 'File Update: ' + l.subject, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, l.subject, 'Letter', message));
           }
         }
       }
-
       const managersToNotify = getManagersToNotify(l.lawyerId, l.progressNotes || [], currentUser.id);
       if (l.lawyerId) managersToNotify.delete(String(l.lawyerId));
-      managersToNotify.forEach(managerId => {
-        sendNotification(managerId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
+      managersToNotify.forEach(mid => sendNotification(mid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter'));
+      getAdminIds().forEach(aid => {
+        if (String(aid) !== String(currentUser.id))
+          sendNotification(aid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
       });
-
-      getAdminIds().forEach(adminId => {
-        if (String(adminId) !== String(currentUser.id))
-          sendNotification(adminId, `✉️ Letter Update: ${l.subject} — "${message}"`, 'file', l.id, 'letter');
-      });
-
       return updated;
     }));
   };
 
   const uploadLetterDocument = async (letterId: string, file: File) => {
     try {
-      const filePath = `letter-docs/${letterId}/${Date.now()}_${file.name}`;
+      const filePath = 'letter-docs/' + letterId + '/' + Date.now() + '_' + file.name;
       const { error: uploadError } = await supabase.storage.from('letters').upload(filePath, file);
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('letters').getPublicUrl(filePath);
@@ -1295,7 +1273,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('letters').update({ documents: updatedDocs }).eq('id', letterId).then();
         return { ...l, documents: updatedDocs };
       }));
-    } catch (err) { console.error("Letter Upload failed", err); }
+    } catch (err) { console.error("Letter upload failed:", err); }
   };
 
   const deleteLetterDocument = async (letterId: string, docId: string) => {
@@ -1320,11 +1298,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       CLIENTS
   ======================= */
-  const addClient = (client: Client) => { setClients(prev => [...prev, client]); instantSave('clients', client); };
-  const updateClient = (client: Client) => { setClients(prev => prev.map(c => c.id === client.id ? client : c)); instantSave('clients', client); };
-  const deleteClient = (id: string) => {
+  // Helper: strip client to only DB columns before saving
+  const clientToDb = (client: Client) => ({
+    id: client.id,
+    name: client.name,
+    type: client.type,
+    email: client.email,
+    phone: client.phone,
+    dateAdded: client.dateAdded,
+  });
+
+  const addClient = async (client: Client) => {
+    setClients(prev => [client, ...prev]);
+    if (!navigator.onLine) return;
+    const { error } = await supabase.from('clients').upsert(clientToDb(client), { onConflict: 'id' });
+    if (error) {
+      console.error("Failed to save client:", error.message);
+      setClients(prev => prev.filter(c => c.id !== client.id));
+      alert('Failed to save client: ' + error.message);
+    }
+  };
+
+  const updateClient = async (client: Client) => {
+    setClients(prev => prev.map(c => c.id === client.id ? client : c));
+    if (!navigator.onLine) return;
+    const { error } = await supabase.from('clients').upsert(clientToDb(client), { onConflict: 'id' });
+    if (error) console.error("Failed to update client:", error.message);
+  };
+
+  const deleteClient = async (id: string) => {
     setClients(prev => prev.filter(c => c.id !== id));
-    if (navigator.onLine) supabase.from('clients').delete().eq('id', id).then();
+    if (!navigator.onLine) return;
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (error) console.error("Failed to delete client:", error.message);
   };
 
   /* =======================
@@ -1339,23 +1345,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTasks(prev => [...prev, normalizeTask(newTask)]);
     const { error } = await supabase.from('tasks').insert([newTask]);
-    if (error) console.error("Cross-device sync failed:", error);
-
-    // Email notification to assigned user
+    if (error) console.error("Task sync failed:", error);
     const assignedUser = usersRef.current.find(u => String(u.id) === String(taskData.assignedToId));
     if (assignedUser?.email) {
-      sendEmail(
-        assignedUser.email,
-        `📋 New Task: ${taskData.title}`,
-        buildTaskEmail(assignedUser.name, taskData.assignedByName, taskData.title, taskData.description, 'assigned')
-      );
+      sendEmail(assignedUser.email, 'New Task: ' + taskData.title, buildTaskEmail(assignedUser.name, taskData.assignedByName, taskData.title, taskData.description, 'assigned'));
     }
-
-    sendNotification(
-      taskData.assignedToId,
-      `📋 New Task from ${taskData.assignedByName}: "${taskData.title}"`,
-      'task', newTask.id, 'task'
-    );
+    sendNotification(taskData.assignedToId, 'New Task from ' + taskData.assignedByName + ': "' + taskData.title + '"', 'task', newTask.id, 'task');
   };
 
   const updateTask = (id: string, data: Partial<Task>) => {
@@ -1368,8 +1363,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTask = (id: string) => {
-    // Soft-delete: mark as deleted so it's hidden from active views
-    // but still visible in the performance/history pages
     setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted: true } : t));
     if (navigator.onLine) supabase.from('tasks').update({ deleted: true }).eq('id', id).then();
   };
@@ -1378,16 +1371,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const task = tasks.find(t => t.id === id);
     updateTask(id, { status: "Completed", clerkNote: note });
     if (task) {
-      sendNotification(
-        task.assignedById,
-        `✅ Task Completed by ${task.assignedToName}: "${task.title}" — "${note}"`,
-        'task', task.id, 'task'
-      );
-      // Notify managers about clerk task completion
+      sendNotification(task.assignedById, 'Task Completed by ' + task.assignedToName + ': "' + task.title + '"  -  "' + note + '"', 'task', task.id, 'task');
       getManagerIds().forEach(mid => {
-        if (String(mid) !== String(task.assignedById) && String(mid) !== String(currentUserRef.current?.id)) {
-          sendNotification(mid, `✅ Clerk Task Completed: "${task.title}" by ${task.assignedToName}`, 'task', task.id);
-        }
+        if (String(mid) !== String(task.assignedById) && String(mid) !== String(currentUserRef.current?.id))
+          sendNotification(mid, 'Clerk Task Completed: "' + task.title + '" by ' + task.assignedToName, 'task', task.id);
       });
     }
   };
@@ -1395,23 +1382,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const appendTaskNote = (id: string, note: string) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
-    const newNote: TaskProgressNote = {
-      date: new Date().toLocaleString(),
-      note: note
-    };
-    const updatedNotes = [...(task.progressNotes || []), newNote];
-    updateTask(id, { progressNotes: updatedNotes });
-
-    // Notify Assigner
-    sendNotification(
-      task.assignedById,
-      `📝 Task Update from ${task.assignedToName}: "${task.title}" — "${note}"`,
-      'task', task.id, 'task'
-    );
+    const newNote: TaskProgressNote = { date: new Date().toLocaleString(), note };
+    updateTask(id, { progressNotes: [...(task.progressNotes || []), newNote] });
+    sendNotification(task.assignedById, 'Task Update from ' + task.assignedToName + ': "' + task.title + '"  -  "' + note + '"', 'task', task.id, 'task');
   };
 
   /* =======================
-      DRAFT REQUESTS  ── NEW
+      DRAFT REQUESTS
   ======================= */
   const addDraftRequest = async (draftData: Omit<DraftRequest, "id" | "status" | "dateCreated">) => {
     const newDraft: DraftRequest = {
@@ -1422,85 +1399,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setDraftRequests(prev => [...prev, newDraft]);
     await supabase.from('draft_requests').insert([newDraft]);
-
-    // Email + notification to assigned assistant
     const assignedUser = usersRef.current.find(u => String(u.id) === String(draftData.assignedToId));
     if (assignedUser?.email) {
-      sendEmail(
-        assignedUser.email,
-        `New Draft Request: ${draftData.title}`,
-        buildDraftEmail(
-          assignedUser.name, draftData.requestedByName, draftData.title,
-          draftData.description, draftData.deadline, draftData.caseFileName, 'assigned'
-        )
-      );
+      sendEmail(assignedUser.email, 'New Draft Request: ' + draftData.title, buildDraftEmail(assignedUser.name, draftData.requestedByName, draftData.title, draftData.description, draftData.deadline, draftData.caseFileName, 'assigned'));
     }
-    sendNotification(
-      draftData.assignedToId,
-      `📝 New Draft Request: "${draftData.title}" on ${draftData.caseFileName} — Due ${draftData.deadline}`,
-      'task', newDraft.id
-    );
-
-    // In-app notification to managers (excluding the requester if they're a manager)
+    sendNotification(draftData.assignedToId, 'New Draft Request: "' + draftData.title + '" on ' + draftData.caseFileName + '  -  Due ' + draftData.deadline, 'task', newDraft.id);
     getManagerIds().forEach(mid => {
-      if (String(mid) !== String(currentUserRef.current?.id)) {
-        sendNotification(
-          mid,
-          `📝 Draft Request by ${draftData.requestedByName}: "${draftData.title}" → ${draftData.assignedToName}`,
-          'task', newDraft.id
-        );
-      }
+      if (String(mid) !== String(currentUserRef.current?.id))
+        sendNotification(mid, 'Draft Request by ' + draftData.requestedByName + ': "' + draftData.title + '" to ' + draftData.assignedToName, 'task', newDraft.id);
     });
   };
 
-  const completeDraftRequest = (
-    id: string,
-    _hoursSpent?: number, // Ignored
-    documentUrl?: string,
-    documentName?: string,
-  ) => {
+  const completeDraftRequest = (id: string, _hoursSpent?: number, documentUrl?: string, documentName?: string) => {
     const draft = draftRequests.find(d => d.id === id);
     if (!draft) return;
-
-    const start = new Date(draft.dateCreated);
-    const end = new Date();
-    const diffMs = end.getTime() - start.getTime();
-    const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10; // Round to 1 decimal
-
-    const updated: DraftRequest = {
-      ...draft,
-      status: "Completed",
-      hoursSpent: calculatedHours,
-      documentUrl,
-      documentName,
-      dateCompleted: new Date().toISOString(),
-    };
+    const diffMs = new Date().getTime() - new Date(draft.dateCreated).getTime();
+    const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
+    const updated: DraftRequest = { ...draft, status: "Completed", hoursSpent: calculatedHours, documentUrl, documentName, dateCompleted: new Date().toISOString() };
     setDraftRequests(prev => prev.map(d => d.id === id ? updated : d));
     instantSave('draft_requests', updated);
-
-    // Email + notification to the requester
     const requester = usersRef.current.find(u => String(u.id) === String(draft.requestedById));
     if (requester?.email) {
-      sendEmail(
-        requester.email,
-        `Draft Completed: ${draft.title}`,
-        buildDraftEmail(
-          requester.name, draft.assignedToName, draft.title,
-          draft.description, draft.deadline, draft.caseFileName, 'completed', calculatedHours
-        )
-      );
+      sendEmail(requester.email, 'Draft Completed: ' + draft.title, buildDraftEmail(requester.name, draft.assignedToName, draft.title, draft.description, draft.deadline, draft.caseFileName, 'completed', calculatedHours));
     }
-    sendNotification(
-      draft.requestedById,
-      `✅ Draft Completed by ${draft.assignedToName}: "${draft.title}" on ${draft.caseFileName} — ${calculatedHours}hrs`,
-      'task', id
-    );
-
-    // In-app notification to managers
+    sendNotification(draft.requestedById, 'Draft Completed by ' + draft.assignedToName + ': "' + draft.title + '" on ' + draft.caseFileName + '  -  ' + calculatedHours + 'hrs', 'task', id);
     getManagerIds().forEach(mid => {
-      if (String(mid) !== String(draft.requestedById)) {
-        sendNotification(mid, `✅ Draft Completed: "${draft.title}" by ${draft.assignedToName}`, 'task', id);
-      }
+      if (String(mid) !== String(draft.requestedById))
+        sendNotification(mid, 'Draft Completed: "' + draft.title + '" by ' + draft.assignedToName, 'task', id);
     });
   };
 
@@ -1509,66 +1434,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('draft_requests').delete().eq('id', id).then();
   };
 
-  const uploadInvoiceScan = async (id: string, file: File) => {
+  /* =======================
+      INVOICE SCAN UPLOAD
+  ======================= */
+  const uploadInvoiceScan = async (id: string, file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `scan_${id}_${Date.now()}.${fileExt}`;
-    const filePath = `scanned-invoices/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('documents') // Reusing the same bucket for simplicity, or we could create a new one
-      .upload(filePath, file);
-
-    if (uploadError) {
-      console.error("Upload Error:", uploadError);
-      throw uploadError;
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
-
-    // Update the invoice in state and Supabase
+    const filePath = 'scanned-invoices/scan_' + id + '_' + Date.now() + '.' + fileExt;
+    const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+    if (uploadError) { console.error("Upload Error:", uploadError); throw uploadError; }
+    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, scannedInvoiceUrl: publicUrl } : inv));
-
-    // Also update any related file if it exists
     const invoice = invoices.find(i => i.id === id);
-    if (invoice && invoice.relatedFile) {
-      // Find if it's a case, transaction, or letter
+    if (invoice?.relatedFile) {
       setCourtCases(prev => prev.map(c => c.fileName === invoice.relatedFile ? { ...c, scannedInvoiceUrl: publicUrl } : c));
       setTransactions(prev => prev.map(t => t.fileName === invoice.relatedFile ? { ...t, scannedInvoiceUrl: publicUrl } : t));
       setLetters(prev => prev.map(l => l.subject === invoice.relatedFile ? { ...l, scannedInvoiceUrl: publicUrl } : l));
-
-      // Persist to Supabase for the specific file types as well
-      // (This is a simplified approach, usually there's a more explicit link)
     }
-
     await supabase.from('invoices').update({ scannedInvoiceUrl: publicUrl }).eq('id', id);
-
     return publicUrl;
   };
 
-  const uploadLandTitleScan = async (id: string, file: File) => {
+  /* =======================
+      LAND TITLE SCAN UPLOAD
+  ======================= */
+  const uploadLandTitleScan = async (id: string, file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `title_scan_${id}_${Date.now()}.${fileExt}`;
-    const filePath = `land-title-scans/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file);
-
-    if (uploadError) {
-      console.error("Upload Error:", uploadError);
-      throw uploadError;
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
-
-    // Update the land title in state and Supabase
+    const filePath = 'land-title-scans/title_scan_' + id + '_' + Date.now() + '.' + fileExt;
+    const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+    if (uploadError) { console.error("Upload Error:", uploadError); throw uploadError; }
+    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
     setLandTitles(prev => prev.map(t => t.id === id ? { ...t, scanned_copy_url: publicUrl, scanned_copy_name: file.name } : t));
     await supabase.from('land_titles').update({ scanned_copy_url: publicUrl, scanned_copy_name: file.name }).eq('id', id);
-
     return publicUrl;
   };
 
@@ -1583,7 +1479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("invoices", JSON.stringify(invoices));
     localStorage.setItem("clients", JSON.stringify(clients));
     localStorage.setItem("tasks", JSON.stringify(tasks));
-    localStorage.setItem("draftRequests", JSON.stringify(draftRequests)); // ── NEW
+    localStorage.setItem("draftRequests", JSON.stringify(draftRequests));
     localStorage.setItem("landTitles", JSON.stringify(landTitles));
     localStorage.setItem("commLogs", JSON.stringify(commLogs));
     localStorage.setItem("expenses", JSON.stringify(expenses));
@@ -1597,30 +1493,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearTimeout(timer);
   }, [notifications]);
 
+  /* =======================
+      PROVIDER VALUE
+  ======================= */
   return (
     <AppContext.Provider
       value={{
-        currentUser, setCurrentUser, users, setUsers, lawyers, addUser, deleteUser,
+        currentUser, setCurrentUser,
+        users, setUsers, lawyers, addUser, deleteUser,
         login, logout,
-        transactions, addTransaction, editTransaction, updateTransaction: editTransaction, deleteTransaction,
-        addTransactionProgress, editTransactionProgress, deleteTransactionProgress,
+        initialDataLoaded,
+
+        transactions, addTransaction,
+        editTransaction, updateTransaction: editTransaction,
+        deleteTransaction, addTransactionProgress,
+        editTransactionProgress, deleteTransactionProgress,
         uploadTransactionDocument, deleteTransactionDocument,
-        courtCases, addCourtCase, editCourtCase, updateCourtCase: editCourtCase, deleteCourtCase,
-        addCourtCaseProgress, deleteCourtCaseProgress, uploadCourtCaseDocument, deleteCourtCaseDocument,
+
+        courtCases, addCourtCase,
+        editCourtCase, updateCourtCase: editCourtCase,
+        deleteCourtCase, addCourtCaseProgress, deleteCourtCaseProgress,
+        uploadCourtCaseDocument, deleteCourtCaseDocument,
         addCourtCaseDeadline, updateCourtCaseDeadline, deleteCourtCaseDeadline,
-        letters, addLetter, editLetter, updateLetter: editLetter, deleteLetter, addLetterProgress,
+
+        letters, addLetter,
+        editLetter, updateLetter: editLetter,
+        deleteLetter, addLetterProgress,
         uploadLetterDocument, deleteLetterDocument,
+
         invoices, addInvoice, updateInvoice, deleteInvoice, uploadInvoiceScan,
+
         clients, addClient, updateClient, deleteClient,
-        commLogs, addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); },
+
+        commLogs,
+        addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); },
+
         tasks, addTask, updateTask, deleteTask, completeTask, appendTaskNote,
-        draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest, // ── NEW
+
+        draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest,
+
         landTitles, addLandTitle, updateLandTitle, deleteLandTitle, addLandTitleNote, uploadLandTitleScan,
+
         notifications, sendNotification, markNotificationsAsRead, setNotifications,
+
         expenses, setExpenses,
         firmName, setFirmName,
         syncToCloud,
-        initialDataLoaded,
       }}
     >
       {children}
