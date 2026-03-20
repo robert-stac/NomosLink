@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect } from "react"; 
-import { useLocation } from "react-router-dom"; 
+import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
 export default function CourtCases() {
   const { courtCases, addCourtCase, editCourtCase, deleteCourtCase, lawyers } = useAppContext();
-  const location = useLocation(); 
+  const location = useLocation();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
@@ -17,7 +17,7 @@ export default function CourtCases() {
   const [sittingType, setSittingType] = useState("");
   const [customSittingType, setCustomSittingType] = useState("");
   const [clientId, setClientId] = useState("");
-  
+
   // --- SEARCH & SORT LOGIC ---
   const [searchTerm, setSearchTerm] = useState("");
   const [sortType, setSortType] = useState("newest");
@@ -39,14 +39,14 @@ export default function CourtCases() {
   // --- FILTERING & SORTING LOGIC ---
   const filteredCases = useMemo(() => {
     let cases = courtCases
-      .filter(c => !c.archived) 
-      .filter(c => 
+      .filter(c => !c.archived)
+      .filter(c =>
         c.fileName.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
     return cases.sort((a: any, b: any) => {
       switch (sortType) {
-        case "newest": return Number(b.id) - Number(a.id); // ids are timestamps
+        case "newest": return Number(b.id) - Number(a.id);
         case "oldest": return Number(a.id) - Number(b.id);
         case "az": return a.fileName.localeCompare(b.fileName);
         case "za": return b.fileName.localeCompare(a.fileName);
@@ -81,36 +81,48 @@ export default function CourtCases() {
 
   const handleSave = () => {
     if (!fileName || !billed || !lawyerId) {
-        alert("Please fill in the File Name, Lawyer, and Billed Amount.");
-        return;
+      alert("Please fill in the File Name, Lawyer, and Billed Amount.");
+      return;
     }
-    
+
     const billedNum = Number(billed);
     const paidNum = Number(paid) || 0;
     const balance = billedNum - paidNum;
-
-    // Logic Fix: Status is strictly "Ongoing" unless it is archived.
-    // It no longer cares if the balance is 0.
-    const caseData = {
-      id: editingId || Date.now().toString(),
-      fileName,
-      lawyerId,
-      billed: billedNum,
-      paid: paidNum,
-      balance,
-      status: "Ongoing" as const, 
-      nextCourtDate: nextDate,
-      categories: categories,
-      sittingType: sittingType === "Other" ? customSittingType : sittingType,
-      clientId: clientId || undefined,
-      archived: false,
-      progressNotes: editingId ? undefined : [], 
-    };
+    const finalSittingType = sittingType === "Other" ? customSittingType : sittingType;
 
     if (editingId) {
-      editCourtCase(editingId, caseData);
+      // Only pass the scalar fields the form controls.
+      // NEVER pass progressNotes, documents or deadlines here -
+      // those are managed by their own functions and must not be touched.
+      editCourtCase(editingId, {
+        fileName,
+        lawyerId,
+        billed: billedNum,
+        paid: paidNum,
+        balance,
+        status: "Ongoing" as const,
+        nextCourtDate: nextDate,
+        categories,
+        sittingType: finalSittingType,
+        clientId: clientId || undefined,
+        archived: false,
+      });
     } else {
-      addCourtCase(caseData);
+      addCourtCase({
+        id: Date.now().toString(),
+        fileName,
+        lawyerId,
+        billed: billedNum,
+        paid: paidNum,
+        balance,
+        status: "Ongoing" as const,
+        nextCourtDate: nextDate,
+        categories,
+        sittingType: finalSittingType,
+        clientId: clientId || undefined,
+        archived: false,
+        progressNotes: [],
+      });
     }
     resetForm();
   };
@@ -118,7 +130,7 @@ export default function CourtCases() {
   const handleEdit = (c: any) => {
     setEditingId(c.id);
     setFileName(c.fileName);
-    setLawyerId(c.lawyerId || ""); 
+    setLawyerId(c.lawyerId || "");
     setBilled(c.billed?.toString() || "");
     setPaid(c.paid?.toString() || "");
     setNextDate(c.nextCourtDate || "");
@@ -129,19 +141,19 @@ export default function CourtCases() {
     setClientId(c.clientId || "");
   };
 
-  // --- ARCHIVE LOGIC (Now correctly marks as Completed) ---
+  // --- ARCHIVE LOGIC ---
   const handleArchive = (id: string) => {
     if (confirm("Move this case to the Firm Archives? This will mark it as Completed.")) {
       const now = new Date().toLocaleDateString();
       editCourtCase(id, {
         archived: true,
-        status: "Completed", 
+        status: "Completed",
         completedDate: now,
       });
     }
   };
 
-  // --- DELETE LOGIC (Permanent Delete) ---
+  // --- DELETE LOGIC ---
   const handleDelete = (id: string) => {
     if (confirm("Are you sure you want to PERMANENTLY delete this case? This cannot be undone.")) {
       deleteCourtCase(id);
@@ -150,7 +162,6 @@ export default function CourtCases() {
 
   const formatCurrency = (n: number) => "UGX " + (n || 0).toLocaleString();
 
-  // Summary logic updated to count based on archived status
   const activeCases = courtCases.filter(c => !c.archived);
   const totalCasesInSystem = courtCases.length;
   const ongoingCasesCount = activeCases.length;
@@ -158,51 +169,51 @@ export default function CourtCases() {
   const totalBilledValue = useMemo(() => activeCases.reduce((sum, c) => sum + (c.billed || 0), 0), [activeCases]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6 font-sans">
+    <div className="min-h-screen bg-gray-100 p-6" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Court Cases</h1>
+        <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: "'Playfair Display', serif" }}>Court Cases</h1>
         <div className="flex items-center gap-3">
-            <select 
-                className="border rounded-lg px-4 py-2 bg-white text-sm font-medium text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                value={sortType}
-                onChange={(e) => setSortType(e.target.value)}
-            >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="az">File Name (A-Z)</option>
-                <option value="za">File Name (Z-A)</option>
-                <option value="billed-desc">Highest Billed</option>
-                <option value="date-asc">Earliest Court Date</option>
-            </select>
-            <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
-                <input 
-                    type="text" 
-                    placeholder="Filter active files..." 
-                    className="border rounded-lg pl-9 pr-4 py-2 w-64 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
+          <select
+            className="border rounded-lg px-4 py-2 bg-white text-sm font-medium text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            value={sortType}
+            onChange={(e) => setSortType(e.target.value)}
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="az">File Name (A-Z)</option>
+            <option value="za">File Name (Z-A)</option>
+            <option value="billed-desc">Highest Billed</option>
+            <option value="date-asc">Earliest Court Date</option>
+          </select>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            <input
+              type="text"
+              placeholder="Filter active files..."
+              className="border rounded-lg pl-9 pr-4 py-2 w-64 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
       {/* SUMMARY CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white shadow-md rounded-lg p-4 text-center border-b-4 border-blue-500">
-          <h2 className="text-gray-500 font-medium mb-2 uppercase text-[10px] tracking-wider">Total in System</h2>
+          <h2 className="text-gray-500 font-semibold mb-2 uppercase text-xs tracking-wider">Total in System</h2>
           <p className="text-2xl font-bold text-slate-800">{totalCasesInSystem}</p>
         </div>
         <div className="bg-white shadow-md rounded-lg p-4 text-center border-b-4 border-yellow-500">
-          <h2 className="text-gray-500 font-medium mb-2 uppercase text-[10px] tracking-wider">Active/Ongoing</h2>
+          <h2 className="text-gray-500 font-semibold mb-2 uppercase text-xs tracking-wider">Active/Ongoing</h2>
           <p className="text-2xl font-bold text-slate-800">{ongoingCasesCount}</p>
         </div>
         <div className="bg-white shadow-md rounded-lg p-4 text-center border-b-4 border-green-500">
-          <h2 className="text-gray-500 font-medium mb-2 uppercase text-[10px] tracking-wider">Archived/Done</h2>
+          <h2 className="text-gray-500 font-semibold mb-2 uppercase text-xs tracking-wider">Archived/Done</h2>
           <p className="text-2xl font-bold text-slate-800">{completedCasesCount}</p>
         </div>
         <div className="bg-white shadow-md rounded-lg p-4 text-center border-b-4 border-purple-500">
-          <h2 className="text-gray-500 font-medium mb-2 uppercase text-[10px] tracking-wider">Active Billing</h2>
+          <h2 className="text-gray-500 font-semibold mb-2 uppercase text-xs tracking-wider">Active Billing</h2>
           <p className="text-2xl font-bold text-purple-700">{formatCurrency(totalBilledValue)}</p>
         </div>
       </div>
@@ -211,52 +222,52 @@ export default function CourtCases() {
       <div className="bg-white shadow-md rounded-lg mb-8 overflow-hidden">
         <div className="bg-[#0B1F3A] text-white px-6 py-4 flex justify-between items-center">
           <h3 className="font-semibold tracking-tight">{editingId ? "Edit Court Case" : "Add Court Case"}</h3>
-          {editingId && <button onClick={resetForm} className="text-[10px] bg-white/20 hover:bg-white/30 px-3 py-1 rounded-md uppercase font-bold transition">Cancel Edit</button>}
+          {editingId && <button onClick={resetForm} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-md font-semibold transition">Cancel Edit</button>}
         </div>
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">File Name *</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">File Name *</label>
             <input className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="e.g. Civil Suit No. 12" />
           </div>
           <div>
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Assigned Lawyer *</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Assigned Lawyer *</label>
             <select className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={lawyerId} onChange={(e) => setLawyerId(e.target.value)}>
               <option value="">Select lawyer</option>
               {lawyers.map((l: any) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Amount Billed (UGX) *</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Amount Billed (UGX) *</label>
             <input type="number" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={billed} onChange={(e) => setBilled(e.target.value)} placeholder="0.00" />
           </div>
           <div>
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Amount Paid (UGX)</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Amount Paid (UGX)</label>
             <input type="number" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder="0.00" />
           </div>
           <div>
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Next Court Date</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Next Court Date</label>
             <input type="date" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
           </div>
           <div>
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Client Selection</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Client Selection</label>
             <select className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={clientId} onChange={(e) => setClientId(e.target.value)}>
               <option value="">Select client (Optional)</option>
               {useAppContext().clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="md:col-span-2">
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Categories (Multiple)</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Categories (Multiple)</label>
             <div className="flex flex-wrap gap-2 mb-2">
               {categories.map(cat => (
-                <span key={cat} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 uppercase">
+                <span key={cat} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 uppercase">
                   {cat}
                   <button onClick={() => setCategories(categories.filter(c => c !== cat))} className="hover:text-red-500">✕</button>
                 </span>
               ))}
             </div>
             <div className="flex gap-2">
-              <input 
-                className="flex-1 border rounded-xl px-3 py-2 bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+              <input
+                className="flex-1 border rounded-xl px-3 py-2 bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 list="category-suggestions"
                 value={categoryInput}
                 onChange={e => setCategoryInput(e.target.value)}
@@ -265,20 +276,20 @@ export default function CourtCases() {
               <datalist id="category-suggestions">
                 {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt} />)}
               </datalist>
-              <button 
-                onClick={() => { if(categoryInput && !categories.includes(categoryInput)) { setCategories([...categories, categoryInput]); setCategoryInput(""); }}}
-                className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold"
+              <button
+                onClick={() => { if (categoryInput && !categories.includes(categoryInput)) { setCategories([...categories, categoryInput]); setCategoryInput(""); } }}
+                className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-semibold"
               >
                 ADD
               </button>
             </div>
           </div>
           <div>
-            <label className="block font-bold text-slate-500 mb-2 text-xs uppercase">Sitting Type</label>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Sitting Type</label>
             <div className="space-y-2">
-              <select 
-                className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                value={sittingType} 
+              <select
+                className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                value={sittingType}
                 onChange={(e) => setSittingType(e.target.value)}
               >
                 <option value="">Select type...</option>
@@ -286,9 +297,9 @@ export default function CourtCases() {
                 <option value="Other">Other (Type below)...</option>
               </select>
               {sittingType === "Other" && (
-                <input 
-                  className="w-full border rounded-xl px-3 py-2 bg-blue-50 border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none transition text-sm" 
-                  value={customSittingType} 
+                <input
+                  className="w-full border rounded-xl px-3 py-2 bg-blue-50 border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none transition text-sm"
+                  value={customSittingType}
                   onChange={(e) => setCustomSittingType(e.target.value)}
                   placeholder="Specify sitting type..."
                 />
@@ -296,7 +307,7 @@ export default function CourtCases() {
             </div>
           </div>
           <div className="flex items-end">
-            <button onClick={handleSave} className="bg-[#0B1F3A] text-white px-6 py-2.5 rounded-xl w-full hover:bg-[#09203b] transition font-black shadow-lg shadow-blue-900/20 uppercase text-xs tracking-widest h-11">
+            <button onClick={handleSave} className="bg-[#0B1F3A] text-white px-6 py-2.5 rounded-xl w-full hover:bg-[#09203b] transition font-semibold shadow-lg uppercase text-xs tracking-widest h-11">
               {editingId ? "Update Case Details" : "Register New Case"}
             </button>
           </div>
@@ -308,42 +319,42 @@ export default function CourtCases() {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-[#0B1F3A] text-white">
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest">File Name</th>
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest">Lawyer</th>
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest">Status</th>
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest">Billed</th>
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest">Paid</th>
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest text-orange-300">Balance</th>
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest">Category / Type</th>
-              <th className="p-4 text-left uppercase text-[10px] tracking-widest">Next Date</th>
-              <th className="p-4 text-center uppercase text-[10px] tracking-widest">Actions</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold">File Name</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold">Lawyer</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold">Status</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold">Billed</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold">Paid</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold text-orange-300">Balance</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold">Category / Type</th>
+              <th className="p-4 text-left uppercase text-xs tracking-widest font-semibold">Next Date</th>
+              <th className="p-4 text-center uppercase text-xs tracking-widest font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filteredCases.map((c: any) => (
-              <tr 
-                key={c.id} 
+              <tr
+                key={c.id}
                 className={`transition-colors duration-500 ${highlightId === c.id ? 'bg-yellow-100' : 'hover:bg-gray-50/80'}`}
               >
-                <td className="p-4 font-black text-blue-900">{c.fileName}</td>
+                <td className="p-4 font-semibold text-blue-900">{c.fileName}</td>
                 <td className="p-4 font-medium text-slate-600">{lawyers.find((l: any) => l.id === c.lawyerId)?.name || "Unassigned"}</td>
                 <td className="p-4">
-                    <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-blue-100 text-blue-700">
-                        {c.status}
-                    </span>
+                  <span className="px-3 py-1 rounded-lg text-xs font-semibold uppercase bg-blue-100 text-blue-700">
+                    {c.status}
+                  </span>
                 </td>
                 <td className="p-4 font-medium">{formatCurrency(c.billed)}</td>
                 <td className="p-4 text-emerald-600 font-medium">{formatCurrency(c.paid)}</td>
-                <td className="p-4 font-black text-red-600">{formatCurrency(c.balance)}</td>
+                <td className="p-4 font-semibold text-red-600">{formatCurrency(c.balance)}</td>
                 <td className="p-4">
                   <div className="flex flex-wrap gap-1 mb-1">
                     {c.categories?.map((cat: string) => (
-                      <span key={cat} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase">{cat}</span>
+                      <span key={cat} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-xs font-medium uppercase">{cat}</span>
                     ))}
                   </div>
-                  <span className="text-[9px] font-black text-blue-500 uppercase">{c.sittingType || "N/A"}</span>
+                  <span className="text-xs font-semibold text-blue-500 uppercase">{c.sittingType || "N/A"}</span>
                 </td>
-                <td className="p-4 font-mono text-xs font-bold text-slate-500">{c.nextCourtDate || "TBA"}</td>
+                <td className="p-4 font-mono text-xs font-semibold text-slate-500">{c.nextCourtDate || "TBA"}</td>
                 <td className="p-4 text-center">
                   <div className="flex justify-center gap-2">
                     <button onClick={() => handleEdit(c)} className="p-1.5 bg-yellow-50 text-yellow-600 rounded-md hover:bg-yellow-100 transition" title="Edit">✏️</button>
