@@ -21,7 +21,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, Title, CategoryScale, LinearScale,
 ======================= */
 export default function Dashboard() {
   const {
-    transactions, courtCases, letters, tasks, currentUser, expenses,
+    transactions, courtCases, letters, tasks, currentUser, expenses, landTitles,
     deleteTask, notifications, markNotificationsAsRead
   } = useAppContext();
   const navigate = useNavigate();
@@ -73,9 +73,27 @@ export default function Dashboard() {
       }
       return acc;
     }, { totalBilled: 0, totalPaid: 0, pendingCount: 0, completedCount: 0 });
+
     const totalActualExpenses = (expenses || []).reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-    return { ...summary, totalExpenses: totalActualExpenses, stTransactions, stCases, stLetters, totalStagnant: stTransactions + stCases + stLetters };
-  }, [transactions, courtCases, letters, expenses]);
+    
+    // Land Title Stats
+    const inCustodyTitles = (landTitles || []).filter(t => t.status === 'In Custody' || t.status === 'Under Transaction' || t.status === 'Taken');
+    const today = new Date();
+    const overdueTitles = inCustodyTitles.filter(t => {
+       const receivedDate = new Date(t.date_received);
+       const diffDays = Math.ceil(Math.abs(today.getTime() - receivedDate.getTime()) / (1000 * 60 * 60 * 24));
+       return diffDays > 90;
+    });
+
+    return { 
+      ...summary, 
+      totalExpenses: totalActualExpenses, 
+      stTransactions, stCases, stLetters, 
+      totalStagnant: stTransactions + stCases + stLetters,
+      inCustodyCount: inCustodyTitles.length,
+      overdueCount: overdueTitles.length
+    };
+  }, [transactions, courtCases, letters, expenses, landTitles]);
 
   const upcomingCourts = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -168,6 +186,14 @@ export default function Dashboard() {
         <SummaryBox label="Transactions" count={showOnlyStagnant ? stats.stTransactions : (transactions?.length || 0)} icon="💳" />
         <SummaryBox label="Court Cases" count={showOnlyStagnant ? stats.stCases : (courtCases?.length || 0)} icon="⚖️" />
         <SummaryBox label="Letters" count={showOnlyStagnant ? stats.stLetters : (letters?.length || 0)} icon="✉️" />
+        <SummaryBox label="Titles in Custody" count={stats.inCustodyCount} icon="📜" />
+        <SummaryBox 
+          label="Overdue Titles" 
+          count={stats.overdueCount} 
+          icon="🚨" 
+          color={stats.overdueCount > 0 ? '#ef4444' : '#666'}
+          bgColor={stats.overdueCount > 0 ? '#FFF5F5' : 'white'}
+        />
         <div
           onClick={() => setShowOnlyStagnant(!showOnlyStagnant)}
           style={{ ...styles.summaryBox, cursor: 'pointer', border: showOnlyStagnant ? '2px solid #E74C3C' : '1px solid #EEE', backgroundColor: showOnlyStagnant ? '#FFF5F5' : 'white', transition: 'all 0.2s ease' }}
@@ -387,12 +413,12 @@ const StatCard = ({ label, value, color }: any) => (
   </div>
 );
 
-const SummaryBox = ({ label, count, icon }: any) => (
-  <div style={styles.summaryBox}>
+const SummaryBox = ({ label, count, icon, color = "#666", bgColor = "white" }: any) => (
+  <div style={{ ...styles.summaryBox, backgroundColor: bgColor, borderColor: color === '#666' ? '#EEE' : color }}>
     <span style={{ fontSize: 24 }}>{icon}</span>
     <div>
-      <p style={{ margin: 0, fontSize: 14, color: "#666" }}>{label}</p>
-      <p style={{ margin: 0, fontSize: 18, fontWeight: "bold" }}>{count}</p>
+      <p style={{ margin: 0, fontSize: 14, color: color }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 18, fontWeight: "bold", color: color }}>{count}</p>
     </div>
   </div>
 );

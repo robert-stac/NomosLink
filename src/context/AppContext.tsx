@@ -181,6 +181,48 @@ export interface CommunicationLog {
   date: string;
 }
 
+export interface LandTitleNote {
+  id: string;
+  title_id: string;
+  author_id: string;
+  author_name: string;
+  message: string;
+  created_at: string;
+}
+
+export interface LandTitle {
+  id: string;
+  title_number: string;
+  title_type: string;
+  plot_block?: string;
+  block?: string;
+  district?: string;
+  county?: string;
+  location?: string;
+  owner_name: string;
+  size?: string;
+  date_received: string;
+  origin: 'Direct Custody' | 'Transaction';
+  transaction_id?: string;
+  client_id?: string;
+  status: 'In Custody' | 'Released' | 'Under Transaction' | 'Archived' | 'Taken';
+  handling_lawyer_id?: string;
+  storage_location?: string;
+  notes?: string;
+  date_released?: string;
+  monthly_rate: number;
+  total_billed: number;
+  total_paid: number;
+  taken_by?: string;
+  taken_at?: string;
+  taken_reason?: string;
+  scanned_copy_url?: string;
+  scanned_copy_name?: string;
+  created_at?: string;
+  updated_at?: string;
+  notes_history?: LandTitleNote[];
+}
+
 /* =======================
     CONTEXT TYPE
 ======================= */
@@ -261,6 +303,13 @@ interface AppContextType {
   sendNotification: (recipientId: string, message: string, type: 'alert' | 'task' | 'file', relatedId?: string, relatedType?: 'case' | 'transaction' | 'letter' | 'task') => void;
   markNotificationsAsRead: (userId: string) => void;
   setNotifications: (notifications: AppNotification[]) => void;
+
+  landTitles: LandTitle[];
+  addLandTitle: (title: Omit<LandTitle, 'id' | 'created_at' | 'updated_at'>) => Promise<LandTitle | null>;
+  updateLandTitle: (id: string, data: Partial<LandTitle>) => Promise<void>;
+  deleteLandTitle: (id: string) => Promise<void>;
+  addLandTitleNote: (titleId: string, message: string) => Promise<void>;
+  uploadLandTitleScan: (id: string, file: File) => Promise<string>;
 
   expenses: any[];
   setExpenses: React.Dispatch<React.SetStateAction<any[]>>;
@@ -370,6 +419,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ── NEW ──────────────────────────────────────────────────────
   const [draftRequests, setDraftRequests] = useState<DraftRequest[]>(() => JSON.parse(localStorage.getItem("draftRequests") || "[]"));
   // ─────────────────────────────────────────────────────────────
+  const [landTitles, setLandTitles] = useState<LandTitle[]>(() => JSON.parse(localStorage.getItem("landTitles") || "[]"));
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
@@ -452,9 +502,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         <div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">
           <p style="color:#64748b;font-size:14px;">Hi <strong>${userName}</strong>,</p>
           <p style="color:#64748b;font-size:14px;">
-            ${isCompleted 
-              ? `Your assigned task "<strong>${title}</strong>" has been marked as <strong>Completed</strong>.` 
-              : `You have been assigned a new task: "<strong>${title}</strong>" by <strong>${assignerName}</strong>.`}
+            ${isCompleted
+        ? `Your assigned task "<strong>${title}</strong>" has been marked as <strong>Completed</strong>.`
+        : `You have been assigned a new task: "<strong>${title}</strong>" by <strong>${assignerName}</strong>.`}
           </p>
           <div style="background:#f1f5f9;border-left:4px solid #10b981;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">
             <p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Task Description</p>
@@ -621,7 +671,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { data: taskData },
           { data: invoiceData },
           { data: expenseData },
-          { data: draftData }, // ── NEW
+          { data: draftData },
+          { data: landData },
         ] = await Promise.all([
           supabase.from('court_cases').select('*'),
           supabase.from('transactions').select('*'),
@@ -631,24 +682,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabase.from('tasks').select('*'),
           supabase.from('invoices').select('*'),
           supabase.from('expenses').select('*').order('date', { ascending: false }),
-          supabase.from('draft_requests').select('*'), // ── NEW
-        ]);
+          supabase.from('draft_requests').select('*'),
+          supabase.from('land_titles').select('*, notes_history:land_title_notes(*)'),
+        ]) as any;
 
-        const merge = (local: any[], cloud: any[] | null) => {
-          if (!cloud) return local;
+        const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
+          if (!cloud) return prev;
           const cloudIds = new Set(cloud.map((i: any) => i.id));
-          return [...cloud, ...local.filter((i: any) => !cloudIds.has(i.id))];
+          const merged = [...cloud, ...prev.filter((i: any) => !cloudIds.has(i.id))];
+          const prevIds = prev.map((i: any) => i.id).join(",");
+          const nextIds = merged.map((i: any) => i.id).join(",");
+          return prevIds === nextIds ? prev : merged;
         };
 
-        if (courtData) setCourtCases(prev => merge(prev, courtData));
-        if (txData) setTransactions(prev => merge(prev, txData));
-        if (clientData) setClients(prev => merge(prev, clientData));
-        if (letterData) setLetters(prev => merge(prev, letterData));
-        if (userData) setUsers(prev => merge(prev, userData));
-        if (taskData) setTasks(prev => merge(prev, taskData).map(normalizeTask));
-        if (invoiceData) setInvoices(prev => merge(prev, invoiceData));
-        if (expenseData) setExpenses(prev => merge(prev, expenseData));
-        if (draftData) setDraftRequests(prev => merge(prev, draftData)); // ── NEW
+        if (courtData) setCourtCases(prev => mergeIfChanged(prev, courtData));
+        if (txData) setTransactions(prev => mergeIfChanged(prev, txData));
+        if (clientData) setClients(prev => mergeIfChanged(prev, clientData));
+        if (letterData) setLetters(prev => mergeIfChanged(prev, letterData));
+        if (userData) setUsers(prev => mergeIfChanged(prev, userData));
+        if (taskData) setTasks(prev => mergeIfChanged(prev, taskData).map(normalizeTask));
+        if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData));
+        if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData));
+        if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
+        if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));
         setInitialDataLoaded(true);
       } catch (err) {
         console.error("Initial load failed.", err);
@@ -656,6 +712,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     })();
   }, []);
+
+  /* =======================
+      LAND TITLES
+  ======================= */
+  const addLandTitle = async (title: Omit<LandTitle, 'id' | 'created_at' | 'updated_at'>): Promise<LandTitle | null> => {
+    const { data, error } = await supabase.from('land_titles').insert([title]).select().single();
+    if (error) {
+      console.error("Error adding land title:", error);
+      alert(`Failed to save land title: ${error.message} (${error.details || 'No details'}). Please ensure the database schema is updated with 'block' and 'county' columns.`);
+      return null;
+    }
+    if (data) {
+      setLandTitles(prev => [...prev, data]);
+
+      // Notify handling lawyer immediately if assigned
+      if (data.handling_lawyer_id) {
+        sendNotification(
+          data.handling_lawyer_id,
+          `📜 New Land Title Assigned: "${data.title_number}" for ${data.owner_name}`,
+          'file', data.id, 'case'
+        );
+      }
+
+      return data;
+    }
+    return null;
+  };
+
+  const updateLandTitle = async (id: string, data: Partial<LandTitle>) => {
+    setLandTitles(prev => prev.map(t => t.id === id ? { ...t, ...data, updated_at: new Date().toISOString() } : t));
+    const { error } = await supabase.from('land_titles').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) {
+      console.error("Error updating land title:", error);
+      throw error;
+    }
+
+    // Notify if handling lawyer changed
+    if (data.handling_lawyer_id) {
+      sendNotification(
+        data.handling_lawyer_id,
+        `📜 Land Title Re-assigned to you: "${id}"`,
+        'file', id, 'case'
+      );
+    }
+  };
+
+  const deleteLandTitle = async (id: string) => {
+    setLandTitles(prev => prev.filter(t => t.id !== id));
+    await supabase.from('land_titles').delete().eq('id', id);
+  };
+
+  // OVERDUE CHECK ON LOAD
+  useEffect(() => {
+    if (initialDataLoaded && landTitles.length > 0 && currentUser) {
+      const today = new Date();
+      landTitles.forEach(t => {
+        if (t.status === 'In Custody' || t.status === 'Under Transaction') {
+          const receivedDate = new Date(t.date_received);
+          const diffDays = Math.ceil(Math.abs(today.getTime() - receivedDate.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDays === 91) { // Notify exactly on the 91st day to avoid spamming
+            // Notify Lawyer
+            if (t.handling_lawyer_id) {
+              sendNotification(
+                t.handling_lawyer_id,
+                `🚨 OVERDUE TITLE: "${t.title_number}" has been in custody for 90+ days.`,
+                'alert', t.id, 'case'
+              );
+            }
+            // Notify Managers
+            usersRef.current.filter(u => u.role === 'manager' || u.role === 'admin').forEach(m => {
+              sendNotification(
+                m.id,
+                `🚨 OVERDUE TITLE (90+ Days): "${t.title_number}" (${t.owner_name})`,
+                'alert', t.id, 'case'
+              );
+            });
+          }
+        }
+      });
+    }
+  }, [initialDataLoaded, currentUser]); // Only run when initial data is ready
+
+  const addLandTitleNote = async (titleId: string, message: string) => {
+    if (!currentUser) return;
+    const newNote = {
+      title_id: titleId,
+      author_id: currentUser.id,
+      author_name: currentUser.name,
+      message,
+    };
+    const { data, error } = await supabase.from('land_title_notes').insert([newNote]).select().single();
+    if (error) { console.error("Error adding title note:", error); return; }
+    if (data) {
+      setLandTitles(prev => prev.map(t => {
+        if (t.id !== titleId) return t;
+        return {
+          ...t,
+          notes_history: [...(t.notes_history || []), data]
+        };
+      }));
+    }
+  };
 
   /* =======================
       NOTIFICATIONS FETCH
@@ -754,6 +913,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('users').upsert(users, { onConflict: 'id' }),
         supabase.from('tasks').upsert(tasks, { onConflict: 'id' }),
         supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }), // ── NEW
+        supabase.from('land_titles').upsert(landTitles.map(({ notes_history, ...rest }) => rest), { onConflict: 'id' }),
       ]);
       console.log("Full sync successful.");
     } catch (e) {
@@ -914,7 +1074,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...data };
-      
+
       // Separate basic DB save from explicit field updates to ensure persistence 
       // even if some columns were just added or are complex types (JSON/Array)
       const { progressNotes, documents, deadlines, ...dbSafe } = updated as any;
@@ -1241,7 +1401,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const updatedNotes = [...(task.progressNotes || []), newNote];
     updateTask(id, { progressNotes: updatedNotes });
-    
+
     // Notify Assigner
     sendNotification(
       task.assignedById,
@@ -1369,21 +1529,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Update the invoice in state and Supabase
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, scannedInvoiceUrl: publicUrl } : inv));
-    
+
     // Also update any related file if it exists
     const invoice = invoices.find(i => i.id === id);
     if (invoice && invoice.relatedFile) {
-        // Find if it's a case, transaction, or letter
-        setCourtCases(prev => prev.map(c => c.fileName === invoice.relatedFile ? { ...c, scannedInvoiceUrl: publicUrl } : c));
-        setTransactions(prev => prev.map(t => t.fileName === invoice.relatedFile ? { ...t, scannedInvoiceUrl: publicUrl } : t));
-        setLetters(prev => prev.map(l => l.subject === invoice.relatedFile ? { ...l, scannedInvoiceUrl: publicUrl } : l));
-        
-        // Persist to Supabase for the specific file types as well
-        // (This is a simplified approach, usually there's a more explicit link)
+      // Find if it's a case, transaction, or letter
+      setCourtCases(prev => prev.map(c => c.fileName === invoice.relatedFile ? { ...c, scannedInvoiceUrl: publicUrl } : c));
+      setTransactions(prev => prev.map(t => t.fileName === invoice.relatedFile ? { ...t, scannedInvoiceUrl: publicUrl } : t));
+      setLetters(prev => prev.map(l => l.subject === invoice.relatedFile ? { ...l, scannedInvoiceUrl: publicUrl } : l));
+
+      // Persist to Supabase for the specific file types as well
+      // (This is a simplified approach, usually there's a more explicit link)
     }
 
     await supabase.from('invoices').update({ scannedInvoiceUrl: publicUrl }).eq('id', id);
-    
+
+    return publicUrl;
+  };
+
+  const uploadLandTitleScan = async (id: string, file: File) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `title_scan_${id}_${Date.now()}.${fileExt}`;
+    const filePath = `land-title-scans/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("Upload Error:", uploadError);
+      throw uploadError;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    // Update the land title in state and Supabase
+    setLandTitles(prev => prev.map(t => t.id === id ? { ...t, scanned_copy_url: publicUrl, scanned_copy_name: file.name } : t));
+    await supabase.from('land_titles').update({ scanned_copy_url: publicUrl, scanned_copy_name: file.name }).eq('id', id);
+
     return publicUrl;
   };
 
@@ -1399,10 +1584,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("clients", JSON.stringify(clients));
     localStorage.setItem("tasks", JSON.stringify(tasks));
     localStorage.setItem("draftRequests", JSON.stringify(draftRequests)); // ── NEW
+    localStorage.setItem("landTitles", JSON.stringify(landTitles));
     localStorage.setItem("commLogs", JSON.stringify(commLogs));
     localStorage.setItem("expenses", JSON.stringify(expenses));
     if (currentUser) localStorage.setItem("currentUser", JSON.stringify(currentUser));
-  }, [users, transactions, courtCases, letters, invoices, clients, tasks, draftRequests, commLogs, expenses, currentUser]);
+  }, [users, transactions, courtCases, letters, invoices, clients, tasks, draftRequests, landTitles, commLogs, expenses, currentUser]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1429,6 +1615,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         commLogs, addCommLog: (log) => { setCommLogs(p => [...p, log]); instantSave('commLogs', log); },
         tasks, addTask, updateTask, deleteTask, completeTask, appendTaskNote,
         draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest, // ── NEW
+        landTitles, addLandTitle, updateLandTitle, deleteLandTitle, addLandTitleNote, uploadLandTitleScan,
         notifications, sendNotification, markNotificationsAsRead, setNotifications,
         expenses, setExpenses,
         firmName, setFirmName,

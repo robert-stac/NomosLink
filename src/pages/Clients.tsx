@@ -2,10 +2,18 @@ import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
+// ─── Typography system ────────────────────────────────────────────────────────
+// Display / headings : "Playfair Display" — authoritative, legal, refined
+// Body / UI          : "DM Sans"          — clean, modern, highly legible
+//
+// Add to your index.html <head>:
+// <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+// ─────────────────────────────────────────────────────────────────────────────
+
 const Clients: React.FC = () => {
-  const { 
-    clients, courtCases, transactions, letters, invoices, 
-    addClient, deleteClient, addCommLog, commLogs, currentUser 
+  const {
+    clients, courtCases, transactions, letters, invoices, landTitles,
+    addClient, deleteClient, addCommLog, commLogs, currentUser
   } = useAppContext();
   const navigate = useNavigate();
 
@@ -21,39 +29,24 @@ const Clients: React.FC = () => {
   const [type, setType] = useState<"Individual" | "Corporate">("Individual");
 
   const filteredClients = useMemo(() => {
-    let result = (clients || []).filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (c.email || "").toLowerCase().includes(searchTerm.toLowerCase())
-    ).map(client => {
-      // Primary match by clientId, fallback to fuzzy name match
-      const clientCases = courtCases.filter(c => c.clientId === client.id || (!c.clientId && c.fileName.toLowerCase().includes(client.name.toLowerCase())));
-      const clientTransactions = transactions.filter(t => t.clientId === client.id || (!t.clientId && t.fileName.toLowerCase().includes(client.name.toLowerCase())));
-      const clientLetters = letters.filter(l => l.clientId === client.id || (!l.clientId && (l.subject || "").toLowerCase().includes(client.name.toLowerCase())));
-      
-      const totalFilesCount = clientCases.length + clientTransactions.length + clientLetters.length;
-      
-      const clientInvoices = invoices.filter(i => 
-        (clientCases.some(c => c.fileName === i.relatedFile)) ||
-        (clientTransactions.some(t => t.fileName === i.relatedFile)) ||
-        (clientLetters.some(l => l.subject === i.relatedFile)) ||
-        i.relatedFile.toLowerCase().includes(client.name.toLowerCase()) || 
-        i.fileName.toLowerCase().includes(client.name.toLowerCase())
-      );
-      const totalOwed = 
-        clientCases.reduce((sum, c) => sum + (c.balance || 0), 0) +
-        clientTransactions.reduce((sum, t) => sum + (t.balance || 0), 0) +
-        clientLetters.reduce((sum, l) => sum + ((l.billed || 0) - (l.paid || 0)), 0);
-
-      return {
-        ...client,
-        cases: clientCases,
-        transactions: clientTransactions,
-        letters: clientLetters,
-        invoices: clientInvoices,
-        totalOwed,
-        totalFilesCount
-      };
-    });
+    const result = (clients || [])
+      .filter(c =>
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.email || "").toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .map(client => {
+        const clientCases = courtCases.filter(c => c.clientId === client.id || (!c.clientId && c.fileName.toLowerCase().includes(client.name.toLowerCase())));
+        const clientTransactions = transactions.filter(t => t.clientId === client.id || (!t.clientId && t.fileName.toLowerCase().includes(client.name.toLowerCase())));
+        const clientLetters = letters.filter(l => l.clientId === client.id || (!l.clientId && (l.subject || "").toLowerCase().includes(client.name.toLowerCase())));
+        const clientTitles = (landTitles || []).filter((t: any) => t.client_id === client.id || (!t.client_id && t.owner_name?.toLowerCase().includes(client.name.toLowerCase())));
+        const totalFilesCount = clientCases.length + clientTransactions.length + clientLetters.length + clientTitles.length;
+        const totalOwed =
+          clientCases.reduce((sum, c) => sum + (c.balance || 0), 0) +
+          clientTransactions.reduce((sum, t) => sum + (t.balance || 0), 0) +
+          clientLetters.reduce((sum, l) => sum + ((l.billed || 0) - (l.paid || 0)), 0) +
+          clientTitles.reduce((sum: number, t: any) => sum + ((t.total_billed || 0) - (t.total_paid || 0)), 0);
+        return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, totalOwed, totalFilesCount };
+      });
 
     return result.sort((a, b) => {
       switch (sortType) {
@@ -66,331 +59,354 @@ const Clients: React.FC = () => {
         default: return 0;
       }
     });
-  }, [clients, searchTerm, sortType, courtCases, transactions, letters, invoices]);
+  }, [clients, searchTerm, sortType, courtCases, transactions, letters, invoices, landTitles]);
 
   const handleDownloadReport = (client: any) => {
-    const reportDate = new Date().toLocaleString();
     const logEntries = commLogs
       .filter((l: any) => l.clientId === client.id)
-      .map(l => `[${l.date}] ${l.authorName || 'Staff'}: ${l.note}`)
-      .join('\n');
+      .map(l => `[${l.date}] ${l.authorName || "Staff"}: ${l.note}`)
+      .join("\n");
 
-    const reportContent = `
-BUWEMBO & COMPANY ADVOCATES
-CLIENT SERVICE REPORT - ${reportDate}
---------------------------------------------------
-CLIENT NAME: ${client.name}
-TYPE: ${client.type}
-EMAIL: ${client.email}
-PHONE: ${client.phone || 'N/A'}
-TOTAL OUTSTANDING: UGX ${client.totalOwed.toLocaleString()}
+    const content = [
+      "BUWEMBO & COMPANY ADVOCATES",
+      `CLIENT SERVICE REPORT — ${new Date().toLocaleString()}`,
+      "─".repeat(50),
+      `CLIENT NAME : ${client.name}`,
+      `TYPE        : ${client.type}`,
+      `EMAIL       : ${client.email || "N/A"}`,
+      `PHONE       : ${client.phone || "N/A"}`,
+      `OUTSTANDING : UGX ${client.totalOwed.toLocaleString()}`,
+      "",
+      "LINKED MATTERS",
+      `  Court Cases  : ${client.cases.length}`,
+      `  Transactions : ${client.transactions.length}`,
+      `  Letters      : ${client.letters.length}`,
+      `  Land Titles  : ${client.titles?.length || 0}`,
+      "",
+      "COMMUNICATION LOG",
+      logEntries || "No logs recorded.",
+      "─".repeat(50),
+      "CONFIDENTIAL LEGAL DOCUMENT",
+    ].join("\n");
 
-LINKED MATTERS:
-- Court Cases: ${client.cases.length}
-- Transactions: ${client.transactions.length}
-- Letters: ${client.letters.length}
-
-INTERNAL COMMUNICATION LOGS:
-${logEntries || 'No logs recorded.'}
---------------------------------------------------
-CONFIDENTIAL LEGAL DOCUMENT
-    `;
-
-    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${client.name}_Report.txt`;
-    link.click();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${client.name.replace(/\s+/g, "_")}_Report.txt`;
+    a.click();
   };
 
   const handleAddClient = (e: React.FormEvent) => {
     e.preventDefault();
-    const newClient = {
-      id: `CLI-${Date.now()}`,
-      name, email, phone, type,
-      address: "",
-      dateAdded: new Date().toISOString().split("T")[0]
-    };
-    addClient(newClient);
+    addClient({ id: `CLI-${Date.now()}`, name, email, phone, type, address: "", dateAdded: new Date().toISOString().split("T")[0] });
     setShowAddModal(false);
-    resetForm();
+    setName(""); setEmail(""); setPhone(""); setType("Individual");
   };
 
   const handleSaveLog = () => {
     if (!commNote.trim() || !selectedClient) return;
-    const logEntry = {
-      id: Date.now().toString(),
-      clientId: selectedClient.id,
-      note: commNote,
-      date: new Date().toLocaleString(),
-      authorName: currentUser?.name || "Admin"
-    };
-    addCommLog(logEntry);
+    addCommLog({ id: Date.now().toString(), clientId: selectedClient.id, note: commNote, date: new Date().toLocaleString(), authorName: currentUser?.name || "Admin" });
     setCommNote("");
   };
 
-  const resetForm = () => {
-    setName(""); setEmail(""); setPhone(""); setType("Individual");
-  };
-
-  const formatCurrency = (n: number) => "UGX " + Math.round(n).toLocaleString();
+  const fmt = (n: number) => "UGX " + Math.round(n).toLocaleString();
+  const lbl = "block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5";
+  const inp = "w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-400 transition";
+  const body = { fontFamily: "'DM Sans', sans-serif" } as React.CSSProperties;
+  const serif = { fontFamily: "'Playfair Display', serif" } as React.CSSProperties;
 
   return (
-    <div className="min-h-screen bg-[#F4F7F9] p-8 font-sans relative">
-      {/* HEADER */}
-      <div className="flex justify-between items-center mb-10">
+    <div style={body} className="min-h-screen bg-[#F4F7F9] p-8">
+
+      {/* ── HEADER ────────────────────────────────────────────── */}
+      <div className="flex justify-between items-end mb-10">
         <div>
-          <h1 className="text-4xl font-black text-[#0B1F3A] tracking-tight">Client Portfolio</h1>
-          <p className="text-gray-500 font-medium">Buwembo & Company Advocates • Centralized CRM</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+            Buwembo & Company Advocates
+          </p>
+          <h1 style={serif} className="text-4xl font-bold text-[#0B1F3A] leading-tight">
+            Client Portfolio
+          </h1>
         </div>
-        <button 
+        <button
           onClick={() => setShowAddModal(true)}
-          className="bg-[#0B1F3A] text-white px-8 py-4 rounded-2xl font-black shadow-xl hover:scale-105 transition-all"
+          className="bg-[#0B1F3A] text-white px-7 py-3.5 rounded-2xl text-sm font-semibold shadow-lg hover:bg-blue-900 active:scale-95 transition-all"
         >
-          + REGISTER CLIENT
+          + Register Client
         </button>
       </div>
 
-      {/* SEARCH & FILTER */}
-      <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-8 flex items-center gap-3">
-        <select 
-          className="ml-2 bg-gray-50 border-none px-4 py-3 rounded-xl font-bold text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+      {/* ── SEARCH & SORT ─────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 mb-8 flex items-center gap-3 px-5">
+        <span className="text-slate-300 text-base select-none">🔍</span>
+        <input
+          type="text"
+          placeholder="Search by name, company, or email…"
+          className="flex-1 bg-transparent py-4 text-sm text-slate-700 placeholder-slate-300 outline-none"
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+        />
+        {searchTerm && (
+          <button onClick={() => setSearchTerm("")} className="text-slate-300 hover:text-slate-500 text-lg font-bold leading-none transition">×</button>
+        )}
+        <div className="w-px h-6 bg-slate-100" />
+        <select
+          className="bg-transparent text-slate-500 text-sm font-medium py-4 outline-none cursor-pointer"
           value={sortType}
-          onChange={(e) => setSortType(e.target.value)}
+          onChange={e => setSortType(e.target.value)}
         >
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
-          <option value="az">Client Name (A-Z)</option>
-          <option value="za">Client Name (Z-A)</option>
-          <option value="owed-desc">Highest Balance Owed</option>
+          <option value="az">Name A–Z</option>
+          <option value="za">Name Z–A</option>
+          <option value="owed-desc">Highest Balance</option>
           <option value="files-desc">Most Active Files</option>
         </select>
-        <input 
-          type="text" 
-          placeholder="Search by name, company, or email..." 
-          className="w-full bg-transparent border-none p-4 text-lg focus:ring-0 outline-none"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
       </div>
 
-      {/* CLIENT GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredClients.map(client => {
-          return (
-            <div 
-              key={client.id} 
-              onClick={() => setSelectedClient(client)}
-              className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm hover:shadow-2xl transition-all cursor-pointer group relative overflow-hidden"
-            >
-              <div className="flex justify-between items-start mb-6">
-                <span className={`px-3 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase ${client.type === 'Corporate' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}`}>
-                  {client.type}
-                </span>
-                <span className="text-[10px] font-bold text-gray-300">#{client.id.split('-')[1]}</span>
+      {/* ── CLIENT GRID ───────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {filteredClients.map(client => (
+          <div
+            key={client.id}
+            onClick={() => setSelectedClient(client)}
+            className="bg-white rounded-3xl p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group"
+          >
+            <div className="flex justify-between items-start mb-5">
+              <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${client.type === "Corporate" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-600"
+                }`}>
+                {client.type}
+              </span>
+              <span className="text-xs text-slate-300">#{client.id.split("-")[1]}</span>
+            </div>
+
+            <h3 style={serif} className="text-xl font-semibold text-[#0B1F3A] mb-1 group-hover:text-blue-700 transition-colors leading-snug">
+              {client.name}
+            </h3>
+            <p className="text-sm text-slate-400 mb-6 truncate">{client.email || "No email on record"}</p>
+
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-50 pt-5">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Active Files</p>
+                <p className="text-2xl font-bold text-[#0B1F3A]">{client.totalFilesCount || 0}</p>
               </div>
-              <h3 className="text-2xl font-black text-[#0B1F3A] mb-1 group-hover:text-blue-600 transition-colors">{client.name}</h3>
-              <p className="text-sm text-gray-400 font-medium mb-6">{client.email}</p>
-              <div className="grid grid-cols-2 gap-4 border-t border-gray-50 pt-6">
-                <div>
-                  <p className="text-[10px] text-gray-400 font-black uppercase mb-1">Active Files</p>
-                  <p className="text-xl font-bold text-[#0B1F3A]">{client.totalFilesCount || 0}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-400 font-black uppercase mb-1">Balance Due</p>
-                  <p className={`text-xl font-bold ${(client.totalOwed || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(client.totalOwed || 0)}
-                  </p>
-                </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Balance Due</p>
+                <p className={`text-lg font-bold ${client.totalOwed > 0 ? "text-red-500" : "text-emerald-600"}`}>
+                  {fmt(client.totalOwed || 0)}
+                </p>
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
+
+        {filteredClients.length === 0 && (
+          <div className="col-span-3 py-24 text-center">
+            <p className="text-4xl mb-3">👤</p>
+            <p className="text-sm text-slate-300 font-medium">No clients match your search.</p>
+          </div>
+        )}
       </div>
 
-      {/* CLIENT DETAIL DRAWER */}
+      {/* ── CLIENT DETAIL DRAWER ──────────────────────────────── */}
       {selectedClient && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          {/* Backdrop — clicking closes drawer */}
-          <div
-            className="absolute inset-0 bg-[#0B1F3A] bg-opacity-40 backdrop-blur-sm"
-            onClick={() => setSelectedClient(null)}
-          />
+          <div className="absolute inset-0 bg-[#0B1F3A]/40 backdrop-blur-sm" onClick={() => setSelectedClient(null)} />
 
-          {/* Drawer panel — stopPropagation prevents backdrop from stealing clicks */}
           <div
-            className="relative w-full max-w-2xl bg-white h-screen shadow-2xl overflow-y-auto p-10"
+            style={body}
+            className="relative w-full max-w-2xl bg-white h-screen shadow-2xl overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            {/* X CLOSE BUTTON */}
+            {/* Close button */}
             <button
               onClick={() => setSelectedClient(null)}
-              className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-600 text-gray-500 text-xl font-black transition-colors z-10"
+              className="absolute top-7 right-7 w-9 h-9 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white text-base font-bold z-10 transition"
             >
               ✕
             </button>
 
-            <div className="mb-10">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-blue-600 font-black text-xs uppercase tracking-widest">{selectedClient.type} CLIENT</span>
-                  <h2 className="text-4xl font-black text-[#0B1F3A] mt-2">{selectedClient.name}</h2>
+            {/* Header band */}
+            <div className="bg-[#0B1F3A] px-10 pt-12 pb-10 text-white">
+              <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest mb-2">
+                {selectedClient.type} Client
+              </p>
+              <h2 style={serif} className="text-3xl font-bold leading-tight mb-3">
+                {selectedClient.name}
+              </h2>
+              <div className="flex flex-wrap gap-5 text-sm text-blue-200 font-medium">
+                <span>📞 {selectedClient.phone || "No phone"}</span>
+                <span>✉️ {selectedClient.email || "No email"}</span>
+              </div>
+            </div>
+
+            <div className="px-10 py-8">
+
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Files</p>
+                  <p className="text-xl font-bold text-[#0B1F3A]">{selectedClient.totalFilesCount}</p>
                 </div>
-                <button 
-                  onClick={() => handleDownloadReport(selectedClient)}
-                  className="mt-4 p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-                >
-                  📥 <span className="text-[10px] font-black uppercase ml-1">Export Report</span>
-                </button>
+                <div className="bg-red-50 rounded-2xl p-4 text-center">
+                  <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1">Outstanding</p>
+                  <p className={`text-lg font-bold ${selectedClient.totalOwed > 0 ? "text-red-500" : "text-emerald-600"}`}>
+                    {fmt(selectedClient.totalOwed)}
+                  </p>
+                </div>
+                <div className="bg-emerald-50 rounded-2xl p-4 text-center">
+                  <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Status</p>
+                  <p className="text-lg font-bold text-emerald-600">Active</p>
+                </div>
               </div>
-              <div className="flex gap-4 mt-4 text-sm font-medium text-gray-500">
-                <span>📞 {selectedClient.phone || 'No phone'}</span>
-                <span>✉️ {selectedClient.email}</span>
-              </div>
-            </div>
 
-            {/* QUICK STATS */}
-            <div className="grid grid-cols-3 gap-4 mb-10">
-              <div className="bg-gray-50 p-4 rounded-2xl text-center">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Total Files</p>
-                <p className="text-xl font-bold text-[#0B1F3A]">{selectedClient.totalFilesCount}</p>
-              </div>
-              <div className="bg-red-50 p-4 rounded-2xl text-center">
-                <p className="text-[9px] font-black text-red-400 uppercase">Outstanding</p>
-                <p className="text-xl font-bold text-red-600">{formatCurrency(selectedClient.totalOwed)}</p>
-              </div>
-              <div className="bg-green-50 p-4 rounded-2xl text-center">
-                <p className="text-[9px] font-black text-green-400 uppercase">Status</p>
-                <p className="text-xl font-bold text-green-700">Active</p>
-              </div>
-            </div>
-
-            {/* COMMUNICATION LOG */}
-            <div className="mb-10 p-6 bg-blue-50 rounded-3xl border border-blue-100">
-              <h4 className="font-black text-[#0B1F3A] uppercase text-xs tracking-widest mb-4">Add Internal Note / Comm Log</h4>
-              <textarea 
-                className="w-full bg-white border-none rounded-xl p-4 text-sm mb-3 focus:ring-2 focus:ring-blue-500" 
-                placeholder="E.g. Called client regarding overdue payment..."
-                rows={3}
-                value={commNote}
-                onChange={(e) => setCommNote(e.target.value)}
-              />
-              <button 
-                onClick={handleSaveLog}
-                className="bg-[#0B1F3A] text-white text-[10px] font-black px-4 py-2 rounded-lg hover:bg-blue-800"
+              {/* Export */}
+              <button
+                onClick={() => handleDownloadReport(selectedClient)}
+                className="w-full mb-8 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
               >
-                SAVE LOG ENTRY
+                📥 Export Client Report
               </button>
 
-              <div className="mt-6 space-y-3 max-h-48 overflow-y-auto">
-                {commLogs?.filter((l: any) => l.clientId === selectedClient.id).map((log: any) => (
-                  <div key={log.id} className="bg-white/60 p-3 rounded-lg border border-blue-100 text-xs">
-                    <div className="flex justify-between font-black text-gray-400 mb-1 uppercase text-[8px]">
-                      <span>{log.authorName || log.author}</span>
-                      <span>{log.date}</span>
-                    </div>
-                    <p className="text-gray-700">{log.note}</p>
-                  </div>
-                ))}
+              {/* Comm log */}
+              <div className="mb-8 bg-blue-50 rounded-2xl border border-blue-100 p-6">
+                <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
+                  Internal Notes & Communication Log
+                </h4>
+                <textarea
+                  className="w-full bg-white border border-blue-100 rounded-xl p-4 text-sm text-slate-700 placeholder-slate-300 outline-none focus:ring-2 focus:ring-blue-400 resize-none mb-3"
+                  placeholder="e.g. Called client regarding overdue payment…"
+                  rows={3}
+                  value={commNote}
+                  onChange={e => setCommNote(e.target.value)}
+                />
+                <button
+                  onClick={handleSaveLog}
+                  className="bg-[#0B1F3A] text-white text-xs font-semibold px-5 py-2.5 rounded-xl hover:bg-blue-900 transition-colors"
+                >
+                  Save Log Entry
+                </button>
+
+                <div className="mt-5 space-y-3 max-h-48 overflow-y-auto pr-1">
+                  {commLogs
+                    ?.filter((l: any) => l.clientId === selectedClient.id)
+                    .map((log: any) => (
+                      <div key={log.id} className="bg-white p-4 rounded-xl border border-blue-100">
+                        <div className="flex justify-between text-xs font-semibold text-slate-400 mb-1.5">
+                          <span>{log.authorName || log.author}</span>
+                          <span>{log.date}</span>
+                        </div>
+                        <p className="text-sm text-slate-700 leading-relaxed">{log.note}</p>
+                      </div>
+                    ))}
+                </div>
               </div>
-            </div>
 
-            {/* LINKED MATTERS */}
-            <h4 className="font-black text-[#0B1F3A] uppercase text-xs tracking-widest mb-4">Linked Matter History</h4>
-            <div className="space-y-3 mb-10">
-              {selectedClient.cases.map((c: any) => (
-                <div key={c.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-bold text-[#0B1F3A]">{c.fileName}</p>
-                      {c.categories?.map((cat: string) => (
-                        <span key={cat} className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">{cat}</span>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-blue-500 uppercase font-black">Court Case • {c.sittingType || c.status}</p>
-                  </div>
-                  <button 
-                    onClick={() => navigate(`/lawyer/cases/${c.id}`)}
-                    className="text-xs font-black text-blue-600 hover:underline"
-                  >
-                    OPEN FILE →
-                  </button>
-                </div>
-              ))}
-              {selectedClient.transactions.map((t: any) => (
-                <div key={t.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <div>
-                    <p className="font-bold text-[#0B1F3A]">{t.fileName}</p>
-                    <p className="text-[10px] text-purple-500 uppercase font-black">Transaction • {t.status}</p>
-                  </div>
-                  <button 
-                    onClick={() => navigate(`/performance?file=${encodeURIComponent(t.fileName)}&openDetails=true`)}
-                    className="text-xs font-black text-blue-600 hover:underline"
-                  >
-                    VIEW PERFORMANCE →
-                  </button>
-                </div>
-              ))}
-              {selectedClient.letters.map((l: any) => (
-                <div key={l.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <div>
-                    <p className="font-bold text-[#0B1F3A]">{l.subject}</p>
-                    <p className="text-[10px] text-orange-500 uppercase font-black">Letter • {l.status}</p>
-                  </div>
-                  <button 
-                    onClick={() => navigate(`/performance?file=${encodeURIComponent(l.subject)}&openDetails=true`)}
-                    className="text-xs font-black text-blue-600 hover:underline"
-                  >
-                    VIEW PERFORMANCE →
-                  </button>
-                </div>
-              ))}
-              {selectedClient.totalFilesCount === 0 && (
-                <p className="text-gray-400 text-sm italic py-4">No matters linked to this client name.</p>
-              )}
-            </div>
+              {/* Linked matters */}
+              <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
+                Linked Matter History
+              </h4>
+              <div className="space-y-2.5 mb-10">
+                {selectedClient.cases.map((c: any) => (
+                  <MatterRow key={c.id} title={c.fileName} badge="Court Case"
+                    badgeColor="text-blue-600 bg-blue-50" sub={c.status}
+                    onOpen={() => navigate(`/lawyer/cases/${c.id}`)} />
+                ))}
+                {selectedClient.transactions.map((t: any) => (
+                  <MatterRow key={t.id} title={t.fileName} badge="Transaction"
+                    badgeColor="text-purple-600 bg-purple-50" sub={t.status}
+                    onOpen={() => navigate(`/performance?file=${encodeURIComponent(t.fileName)}&openDetails=true`)} />
+                ))}
+                {selectedClient.letters.map((l: any) => (
+                  <MatterRow key={l.id} title={l.subject} badge="Letter"
+                    badgeColor="text-orange-600 bg-orange-50" sub={l.status}
+                    onOpen={() => navigate(`/performance?file=${encodeURIComponent(l.subject)}&openDetails=true`)} />
+                ))}
+                {selectedClient.titles?.map((t: any) => (
+                  <MatterRow key={t.id}
+                    title={`Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ""}`}
+                    badge="Land Title" badgeColor="text-emerald-600 bg-emerald-50"
+                    sub={t.status} onOpen={() => navigate(`/land-titles/${t.id}`)} />
+                ))}
+                {selectedClient.totalFilesCount === 0 && (
+                  <p className="text-slate-300 text-sm italic py-6 text-center">No matters linked to this client.</p>
+                )}
+              </div>
 
-            <button 
-              onClick={() => { if(window.confirm("Delete this client?")) { deleteClient(selectedClient.id); setSelectedClient(null); }}}
-              className="mt-10 text-red-300 hover:text-red-600 text-xs font-bold uppercase tracking-widest"
-            >
-              Permanently Delete Client Record
-            </button>
+              {/* Delete */}
+              <button
+                onClick={() => {
+                  if (window.confirm("Permanently delete this client record?")) {
+                    deleteClient(selectedClient.id);
+                    setSelectedClient(null);
+                  }
+                }}
+                className="text-red-300 hover:text-red-500 text-xs font-semibold uppercase tracking-widest transition-colors"
+              >
+                Permanently Delete Client Record
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ADD CLIENT MODAL */}
+      {/* ── ADD CLIENT MODAL ──────────────────────────────────── */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#0B1F3A] bg-opacity-90 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
-          <form onSubmit={handleAddClient} className="relative bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
-            <button type="button" onClick={() => setShowAddModal(false)} className="absolute top-6 right-6 w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-600 text-gray-500 text-lg font-black transition-colors">✕</button>
-            <h2 className="text-2xl font-black text-[#0B1F3A]">New Client Onboarding</h2>
+          <div className="absolute inset-0 bg-[#0B1F3A]/80 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
+
+          <form
+            onSubmit={handleAddClient}
+            style={body}
+            className="relative bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl space-y-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowAddModal(false)}
+              className="absolute top-6 right-6 w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 font-bold transition-colors"
+            >
+              ✕
+            </button>
+
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Entity Name</label>
-              <input required className="w-full bg-gray-50 border-none p-4 rounded-xl" value={name} onChange={e => setName(e.target.value)} placeholder="Full Name or Company Ltd" />
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Client Intake</p>
+              <h2 style={serif} className="text-2xl font-bold text-[#0B1F3A]">New Client Registration</h2>
             </div>
+
+            <div>
+              <label className={lbl}>Full Name / Company</label>
+              <input required className={inp} placeholder="e.g. Nakato Sarah or Kampala Holdings Ltd"
+                value={name} onChange={e => setName(e.target.value)} />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Client Type</label>
-                <select className="w-full bg-gray-50 border-none p-4 rounded-xl font-bold" value={type} onChange={e => setType(e.target.value as any)}>
+                <label className={lbl}>Client Type</label>
+                <select className={inp} value={type} onChange={e => setType(e.target.value as any)}>
                   <option value="Individual">Individual</option>
                   <option value="Corporate">Corporate</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Phone #</label>
-                <input className="w-full bg-gray-50 border-none p-4 rounded-xl" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+256..." />
+                <label className={lbl}>Phone Number</label>
+                <input className={inp} placeholder="+256 700 000000"
+                  value={phone} onChange={e => setPhone(e.target.value)} />
               </div>
             </div>
+
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Email Address</label>
-              <input type="email" className="w-full bg-gray-50 border-none p-4 rounded-xl" value={email} onChange={e => setEmail(e.target.value)} placeholder="client@example.com (optional)" />
+              <label className={lbl}>Email Address <span className="normal-case font-normal text-slate-300">(optional)</span></label>
+              <input type="email" className={inp} placeholder="client@example.com"
+                value={email} onChange={e => setEmail(e.target.value)} />
             </div>
-            <button type="submit" className="w-full bg-[#0B1F3A] text-white font-black py-5 rounded-2xl shadow-lg hover:bg-blue-900 transition-all">
-              FINISH REGISTRATION
+
+            <button
+              type="submit"
+              className="w-full bg-[#0B1F3A] text-white text-sm font-semibold py-4 rounded-2xl shadow-lg hover:bg-blue-900 active:scale-95 transition-all mt-2"
+            >
+              Complete Registration
             </button>
           </form>
         </div>
@@ -398,5 +414,26 @@ CONFIDENTIAL LEGAL DOCUMENT
     </div>
   );
 };
+
+/* ── Reusable matter row ─────────────────────────────────────────────────── */
+const MatterRow = ({ title, badge, badgeColor, sub, onOpen }: {
+  title: string; badge: string; badgeColor: string; sub: string; onOpen: () => void;
+}) => (
+  <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 transition-colors">
+    <div className="flex-1 min-w-0 mr-4">
+      <p className="text-sm font-semibold text-[#0B1F3A] truncate">{title}</p>
+      <div className="flex items-center gap-2 mt-1">
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${badgeColor}`}>{badge}</span>
+        <span className="text-xs text-slate-400">{sub}</span>
+      </div>
+    </div>
+    <button
+      onClick={e => { e.stopPropagation(); onOpen(); }}
+      className="text-xs font-semibold text-blue-500 hover:text-blue-700 whitespace-nowrap transition-colors"
+    >
+      Open →
+    </button>
+  </div>
+);
 
 export default Clients;

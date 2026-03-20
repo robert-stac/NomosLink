@@ -119,7 +119,7 @@ export default function ManagerDashboard() {
     const clerk = clerks.find(c => String(c.id) === String(taskForm.assignedToId));
     if (!taskForm.title || !clerk) return alert("Please fill title and select a clerk");
     if (!currentUser) return;
-    
+
     if (editingTaskId) {
       updateTask(editingTaskId, {
         title: taskForm.title,
@@ -202,7 +202,7 @@ export default function ManagerDashboard() {
                   Clear All Filters
                 </button>
               )}
-              
+
               <button
                 onClick={() => setIsTaskModalOpen(true)}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-colors shadow-sm ml-2"
@@ -297,13 +297,12 @@ export default function ManagerDashboard() {
         ))}
       </div>
 
-      <div className={`grid gap-6 ${
-        selectedLawyerId 
+      <div className={`grid gap-6 ${selectedLawyerId
           ? users.find(u => u.id === selectedLawyerId)?.role === 'clerk'
-            ? 'grid-cols-1 max-w-2xl mx-auto' 
+            ? 'grid-cols-1 max-w-2xl mx-auto'
             : 'grid-cols-1 lg:grid-cols-3'
           : 'grid-cols-1 lg:grid-cols-4'
-      }`}>
+        }`}>
         {/* TASKS (Clerk specific) */}
         {(!selectedLawyerId || users.find(u => u.id === selectedLawyerId)?.role === 'clerk') && (
           <div className="bg-white p-4 rounded-lg shadow border">
@@ -325,7 +324,7 @@ export default function ManagerDashboard() {
                   <p className="text-[11px] text-gray-500 line-clamp-2">{task.description}</p>
                   {task.clerkNote && <p className="text-[10px] text-emerald-600 mt-2 italic font-bold">Report: {task.clerkNote}</p>}
                   <p className="text-[9px] text-slate-400 mt-2 font-black uppercase tracking-tighter">Assigned To: {task.assignedToName} | By: {task.assignedByName || "System"}</p>
-                  
+
                   {String(task.assignedById) === String(currentUser?.id) && (
                     <div className="absolute top-2 right-12 hidden group-hover:flex space-x-2 bg-white/80 p-1 rounded">
                       <button onClick={(e) => { e.stopPropagation(); openEditModal(task); }} className="text-[9px] font-black text-blue-600 uppercase">Edit</button>
@@ -403,7 +402,7 @@ export default function ManagerDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" style={{ perspective: '1000px' }}>
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={closeModal}></div>
           <div className="relative bg-white w-full max-w-4xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col md:flex-row transform transition-all animate-in fade-in zoom-in-95 duration-300">
-            
+
             {/* LEFT BANNER: CONTEXT */}
             <div className="bg-gradient-to-br from-[#0B1F3A] to-blue-900 md:w-2/5 p-10 text-white flex flex-col justify-between hidden md:flex">
               <div>
@@ -415,12 +414,12 @@ export default function ManagerDashboard() {
                   <span className="text-blue-400">{editingTaskId ? "Instruction" : "New Work"}</span>
                 </h3>
                 <p className="text-blue-200/80 text-sm font-medium leading-relaxed max-w-[250px]">
-                  {editingTaskId 
-                    ? "Carefully modify the details of this assignment to keep your clerk perfectly aligned." 
+                  {editingTaskId
+                    ? "Carefully modify the details of this assignment to keep your clerk perfectly aligned."
                     : "Assign work efficiently. Clear instructions and priorities ensure your clerks can deliver timely results."}
                 </p>
               </div>
-              
+
               <div className="mt-12 space-y-4">
                 <div className="bg-white/5 rounded-2xl p-5 border border-white/10 backdrop-blur-sm">
                   <div className="flex items-center gap-2 mb-2">
@@ -434,34 +433,34 @@ export default function ManagerDashboard() {
 
             {/* RIGHT AREA: FORM */}
             <div className="bg-white md:w-3/5 p-8 md:p-10 flex flex-col justify-between max-h-[90vh] overflow-y-auto w-full">
-              
+
               <div className="flex justify-between items-center mb-8 md:hidden">
-                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">{editingTaskId ? "Edit Task" : "Assign Clerk"}</h3>
-                 <button onClick={closeModal} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 transition">✕</button>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">{editingTaskId ? "Edit Task" : "Assign Clerk"}</h3>
+                <button onClick={closeModal} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 transition">✕</button>
               </div>
 
               <div className="flex-1 space-y-6">
-                
+
                 {/* Title */}
                 <div className="group relative">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Task Title</label>
-                  <input 
-                    placeholder="E.g., File documents at the High Court" 
-                    className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm" 
-                    value={taskForm.title} 
-                    onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} 
+                  <input
+                    placeholder="E.g., File documents at the High Court"
+                    className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm"
+                    value={taskForm.title}
+                    onChange={e => setTaskForm({ ...taskForm, title: e.target.value })}
                   />
                 </div>
 
                 {/* Description */}
                 <div className="group relative">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Detailed Instructions</label>
-                  <textarea 
-                    placeholder="Provide specific deliverables and context..." 
-                    className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm resize-none" 
-                    rows={4} 
-                    value={taskForm.description} 
-                    onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} 
+                  <textarea
+                    placeholder="Provide specific deliverables and context..."
+                    className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm resize-none"
+                    rows={4}
+                    value={taskForm.description}
+                    onChange={e => setTaskForm({ ...taskForm, description: e.target.value })}
                   />
                 </div>
 
@@ -470,9 +469,9 @@ export default function ManagerDashboard() {
                   <div className="group relative">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Priority Level</label>
                     <div className="relative">
-                      <select 
-                        className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer" 
-                        value={taskForm.priority} 
+                      <select
+                        className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                        value={taskForm.priority}
                         onChange={e => setTaskForm({ ...taskForm, priority: e.target.value as any })}
                       >
                         <option value="Low">🟢 Low Priority</option>
@@ -487,11 +486,11 @@ export default function ManagerDashboard() {
                   {/* Due Date */}
                   <div className="group relative">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Due Date</label>
-                    <input 
-                      type="date" 
-                      className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm cursor-pointer" 
-                      value={taskForm.dueDate} 
-                      onChange={e => setTaskForm({ ...taskForm, dueDate: e.target.value })} 
+                    <input
+                      type="date"
+                      className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm cursor-pointer"
+                      value={taskForm.dueDate}
+                      onChange={e => setTaskForm({ ...taskForm, dueDate: e.target.value })}
                     />
                   </div>
                 </div>
@@ -501,9 +500,9 @@ export default function ManagerDashboard() {
                   <div className="group relative">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Assign To Clerk</label>
                     <div className="relative">
-                      <select 
-                        className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer" 
-                        value={taskForm.assignedToId} 
+                      <select
+                        className="w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                        value={taskForm.assignedToId}
                         onChange={e => setTaskForm({ ...taskForm, assignedToId: e.target.value })}
                       >
                         <option value="" disabled>Select Assignee...</option>
@@ -517,23 +516,23 @@ export default function ManagerDashboard() {
                   <div className="group relative">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link File (Optional)</label>
                     <div className="relative">
-                      <div 
+                      <div
                         onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
                         className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-4 ring-blue-500/10" : "border-slate-200"} p-4 pl-10 rounded-2xl font-bold text-sm text-slate-800 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
                       >
-                         <span className="truncate">{taskForm.relatedFileName || "No File Linked"}</span>
-                         <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
-                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
+                        <span className="truncate">{taskForm.relatedFileName || "No File Linked"}</span>
+                        <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
                       </div>
 
                       {isFileDropdownOpen && (
                         <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden max-h-72">
                           <div className="p-3 border-b border-slate-100 bg-slate-50/50">
                             <div className="relative">
-                              <input 
+                              <input
                                 autoFocus
-                                type="text" 
-                                placeholder="Search by file name..." 
+                                type="text"
+                                placeholder="Search by file name..."
                                 className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
                                 value={fileSearch}
                                 onChange={e => setFileSearch(e.target.value)}
@@ -542,9 +541,9 @@ export default function ManagerDashboard() {
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
                             </div>
                           </div>
-                          
+
                           <div className="overflow-y-auto p-2 space-y-1 relative" onClick={e => e.stopPropagation()}>
-                            <button 
+                            <button
                               className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${!taskForm.relatedFileId ? "bg-blue-50 text-blue-700" : "text-slate-500"}`}
                               onClick={() => {
                                 setTaskForm({ ...taskForm, relatedFileId: "", relatedFileType: "" as any, relatedFileName: "" });
@@ -554,14 +553,14 @@ export default function ManagerDashboard() {
                             >
                               ❌ No File Linked
                             </button>
-                            
+
                             {/* Court Cases */}
                             {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
                               <div className="pt-2">
                                 <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
                                 {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
-                                  <button 
-                                    key={`case-${c.id}`} 
+                                  <button
+                                    key={`case-${c.id}`}
                                     className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${taskForm.relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                     onClick={() => {
                                       setTaskForm({ ...taskForm, relatedFileId: c.id, relatedFileType: "case", relatedFileName: c.fileName });
@@ -580,8 +579,8 @@ export default function ManagerDashboard() {
                               <div className="pt-2">
                                 <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
                                 {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
-                                  <button 
-                                    key={`tx-${t.id}`} 
+                                  <button
+                                    key={`tx-${t.id}`}
                                     className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${taskForm.relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                     onClick={() => {
                                       setTaskForm({ ...taskForm, relatedFileId: t.id, relatedFileType: "transaction", relatedFileName: t.fileName });
@@ -602,8 +601,8 @@ export default function ManagerDashboard() {
                                 {activeLetters.filter(l => ((l as any).subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).map((l: any) => {
                                   let lName = l.subject || l.title || l.fileName || "Letter";
                                   return (
-                                    <button 
-                                      key={`ltr-${l.id}`} 
+                                    <button
+                                      key={`ltr-${l.id}`}
                                       className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${taskForm.relatedFileId === l.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                       onClick={() => {
                                         setTaskForm({ ...taskForm, relatedFileId: l.id, relatedFileType: "letter", relatedFileName: lName });
@@ -617,15 +616,15 @@ export default function ManagerDashboard() {
                                 })}
                               </div>
                             )}
-                            
+
                             {/* Empty State */}
                             {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length === 0 &&
-                             activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length === 0 &&
-                             activeLetters.filter(l => ((l as any).subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).length === 0 && (
-                               <div className="py-8 text-center px-4">
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching files found.</p>
-                               </div>
-                             )}
+                              activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length === 0 &&
+                              activeLetters.filter(l => ((l as any).subject || (l as any).title || (l as any).fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).length === 0 && (
+                                <div className="py-8 text-center px-4">
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching files found.</p>
+                                </div>
+                              )}
                           </div>
                         </div>
                       )}
@@ -642,14 +641,14 @@ export default function ManagerDashboard() {
 
               {/* ACTION AREA */}
               <div className="flex gap-4 mt-10 pt-6 border-t border-slate-100">
-                <button 
-                  onClick={closeModal} 
+                <button
+                  onClick={closeModal}
                   className="flex-1 bg-white border border-slate-200 text-slate-500 py-4 lg:py-5 rounded-2xl font-black uppercase text-[10px] hover:bg-slate-50 hover:text-slate-800 transition-all tracking-widest hover:shadow-sm"
                 >
                   Cancel
                 </button>
-                <button 
-                  onClick={handleSaveTask} 
+                <button
+                  onClick={handleSaveTask}
                   className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white py-4 lg:py-5 rounded-2xl font-black uppercase text-[10px] shadow-[0_8px_30px_rgb(37,99,235,0.2)] active:scale-95 transition-all tracking-widest flex items-center justify-center gap-2"
                 >
                   <span>{editingTaskId ? "Update Instruction" : "Dispatch Instruction"}</span>

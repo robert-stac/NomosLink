@@ -20,6 +20,8 @@ import Letters from "./pages/Letters";
 import Lawyers from "./pages/Lawyers";
 import Archive from "./pages/Archive";
 import AddUser from "./pages/AddUser";
+import LandTitles from "./pages/LandTitles";
+import LandTitleDetails from "./pages/LandTitleDetails";
 
 // Auth
 import Login from "./pages/Login";
@@ -210,6 +212,39 @@ export default function App() {
             <ProtectedRoute allowedRoles={["admin", "manager"]}>
               <AdminLayout isOnline={isOnline}>
                 <Letters />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/land-titles"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+              <AdminLayout isOnline={isOnline}>
+                <LandTitles />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/land-titles/archives"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+              <AdminLayout isOnline={isOnline}>
+                <Archive />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/land-titles/:id"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "manager", "lawyer"]}>
+              <AdminLayout isOnline={isOnline}>
+                <LandTitleDetails />
               </AdminLayout>
             </ProtectedRoute>
           }

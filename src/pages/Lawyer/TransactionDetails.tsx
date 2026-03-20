@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState } from "react";
 import { useAppContext } from "../../context/AppContext";
 
@@ -13,14 +13,15 @@ export default function TransactionDetails() {
     editTransactionProgress,
     deleteTransactionProgress,
     uploadTransactionDocument,
-    deleteTransactionDocument, // Added for document management
+    deleteTransactionDocument,
+    landTitles,
     users 
   } = useAppContext();
 
   const [note, setNote] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editMessage, setEditMessage] = useState("");
-  const [isUploading, setIsUploading] = useState(false); // New state for UX
+  const [isUploading, setIsUploading] = useState(false);
 
   // 🔒 Safety checks
   if (!currentUser) return <div className="p-10 text-center font-bold">Not logged in.</div>;
@@ -39,6 +40,7 @@ export default function TransactionDetails() {
   }
 
   const assignedLawyer = users.find(u => u.id === transaction.lawyerId);
+  const linkedTitles = landTitles.filter(lt => lt.transaction_id === transaction.id);
 
   const handleAddNote = () => {
     if (!note.trim()) return;
@@ -203,8 +205,9 @@ export default function TransactionDetails() {
             )}
           </div>
 
-          {/* RIGHT: DOCUMENTS PANEL */}
+          {/* RIGHT COL: DOCUMENTS & LAND TITLES */}
           <div className="lg:col-span-4 space-y-6">
+            {/* DOCUMENTS PANEL */}
             <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
               <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                 <span>📎</span> Documents
@@ -267,6 +270,48 @@ export default function TransactionDetails() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* LAND TITLES PANEL */}
+            <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
+              <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                <span>📜</span> Land Titles
+              </h3>
+              
+              <div className="space-y-3">
+                {linkedTitles.length ? (
+                  linkedTitles.map((title: any) => (
+                    <div key={title.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <span className="text-xl">📜</span>
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-xs font-bold text-slate-600 truncate">{title.title_number}</span>
+                          <span className="text-[8px] text-slate-400 font-black uppercase">{title.status}</span>
+                        </div>
+                      </div>
+                      <Link 
+                        to={`/land-titles/${title.id}`}
+                        className="text-blue-600 text-[10px] font-black hover:underline"
+                      >
+                        VIEW
+                      </Link>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-xs text-slate-400 font-bold italic">No titles linked yet.</p>
+                  </div>
+                )}
+                
+                {(isAdmin || isManager) && (
+                  <Link 
+                    to="/land-titles"
+                    className="block w-full text-center border-2 border-dashed border-slate-200 rounded-2xl p-3 text-[10px] font-black uppercase text-slate-400 hover:bg-slate-50 transition"
+                  >
+                    Manage Register
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
 
