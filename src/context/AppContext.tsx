@@ -684,13 +684,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (res.error) console.error('Table ' + i + ' failed:', res.error.message);
         });
 
+        // Trust the cloud as the source of truth for deletions.
+        // Only bring in local items that are brand-new (no id in cloud yet),
+        // which handles the offline-create case without resurrecting deleted rows.
         const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
           if (!cloud || !Array.isArray(cloud)) return prev || [];
           const cloudIds = new Set(cloud.map((item: any) => item.id));
-          const merged = [...cloud, ...prev.filter((item: any) => !cloudIds.has(item.id))];
-          const prevIds = prev.map((item: any) => item.id).join(',');
-          const nextIds = merged.map((item: any) => item.id).join(',');
-          return prevIds === nextIds ? prev : merged;
+          // Only keep local items that have never been synced to the cloud yet
+          // (i.e. created offline). Items absent from cloud but present locally
+          // are treated as deleted and are NOT restored.
+          const onlyLocalNew = prev.filter((item: any) => {
+            if (cloudIds.has(item.id)) return false; // already in cloud
+            // Only keep if it was created very recently (within last 60 seconds)
+            // meaning it is likely a pending offline create, not a deleted row.
+            const created = item.dateCreated || item.dateAdded || item.created_at || null;
+            if (!created) return false;
+            const age = Date.now() - new Date(created).getTime();
+            return age < 60000;
+          });
+          return [...cloud, ...onlyLocalNew];
         };
 
         const [courtData, txData, clientData, letterData, userData, taskData, invoiceData, expenseData, draftData, landData] = results.map(r => r.data);
@@ -992,7 +1004,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    setTransactions(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      localStorage.setItem('transactions', JSON.stringify(updated));
+      return updated;
+    });
     if (navigator.onLine) supabase.from('transactions').delete().eq('id', id).then();
   };
 
@@ -1099,7 +1115,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteCourtCase = (id: string) => {
-    setCourtCases(prev => prev.filter(c => c.id !== id));
+    setCourtCases(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      localStorage.setItem('courtCases', JSON.stringify(updated));
+      return updated;
+    });
     if (navigator.onLine) supabase.from('court_cases').delete().eq('id', id).then();
   };
 
@@ -1221,7 +1241,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteLetter = (id: string) => {
-    setLetters(prev => prev.filter(l => l.id !== id));
+    setLetters(prev => {
+      const updated = prev.filter(l => l.id !== id);
+      localStorage.setItem('letters', JSON.stringify(updated));
+      return updated;
+    });
     if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
   };
 
@@ -1291,7 +1315,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addInvoice = (inv: Invoice) => { setInvoices(prev => [...prev, inv]); instantSave('invoices', inv); };
   const updateInvoice = (inv: Invoice) => { setInvoices(prev => prev.map(i => i.id === inv.id ? inv : i)); instantSave('invoices', inv); };
   const deleteInvoice = (id: string) => {
-    setInvoices(prev => prev.filter(i => i.id !== id));
+    setInvoices(prev => {
+      const updated = prev.filter(i => i.id !== id);
+      localStorage.setItem('invoices', JSON.stringify(updated));
+      return updated;
+    });
     if (navigator.onLine) supabase.from('invoices').delete().eq('id', id).then();
   };
 
@@ -1327,7 +1355,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteClient = async (id: string) => {
-    setClients(prev => prev.filter(c => c.id !== id));
+    setClients(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      localStorage.setItem('clients', JSON.stringify(updated));
+      return updated;
+    });
     if (!navigator.onLine) return;
     const { error } = await supabase.from('clients').delete().eq('id', id);
     if (error) console.error("Failed to delete client:", error.message);
@@ -1430,7 +1462,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteDraftRequest = (id: string) => {
-    setDraftRequests(prev => prev.filter(d => d.id !== id));
+    setDraftRequests(prev => {
+      const updated = prev.filter(d => d.id !== id);
+      localStorage.setItem('draftRequests', JSON.stringify(updated));
+      return updated;
+    });
     if (navigator.onLine) supabase.from('draft_requests').delete().eq('id', id).then();
   };
 
