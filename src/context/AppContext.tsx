@@ -997,8 +997,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const billed = Number(updated.billedAmount) || 0;
       const paid = Number(updated.paidAmount) || 0;
       const final = { ...updated, billedAmount: billed, paidAmount: paid, balance: billed - paid };
-      const { progressNotes, documents, ...dbSafe } = final as any;
-      instantSave('transactions', dbSafe);
+
+      // Only update scalar fields - never overwrite progressNotes or documents
+      const scalarUpdate: Record<string, any> = {};
+      const safeFields = [
+        'fileName', 'type', 'lawyerId', 'billedAmount', 'paidAmount',
+        'balance', 'date', 'clientId', 'archived',
+      ];
+      safeFields.forEach(field => {
+        if ((final as any)[field] !== undefined) {
+          scalarUpdate[field] = (final as any)[field];
+        }
+      });
+
+      if (Object.keys(scalarUpdate).length > 0 && navigator.onLine) {
+        supabase.from('transactions').update(scalarUpdate).eq('id', id).then();
+      }
+
       return final;
     }));
   };
@@ -1104,12 +1119,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...data };
-      const { progressNotes, documents, deadlines, ...dbSafe } = updated as any;
-      instantSave('court_cases', dbSafe);
-      if (data.categories !== undefined) supabase.from('court_cases').update({ categories: data.categories }).eq('id', id).then();
-      if (data.sittingType !== undefined) supabase.from('court_cases').update({ sittingType: data.sittingType }).eq('id', id).then();
-      if (data.clientId !== undefined) supabase.from('court_cases').update({ clientId: data.clientId }).eq('id', id).then();
-      if (data.completedDate !== undefined) supabase.from('court_cases').update({ completedDate: data.completedDate }).eq('id', id).then();
+
+      // IMPORTANT: Never include progressNotes, documents, or deadlines in the
+      // edit save. Those are managed by their own dedicated functions
+      // (addCourtCaseProgress, uploadCourtCaseDocument, etc.) and must not be
+      // overwritten here  -  doing so would wipe notes added by other lawyers
+      // that are not yet in this user's local state.
+      const {
+        progressNotes, documents, deadlines,
+        // Also strip any undefined fields that would null-out DB columns
+        ...rawDbSafe
+      } = updated as any;
+
+      // Only send the scalar fields that were explicitly changed
+      const scalarUpdate: Record<string, any> = {};
+      const safeFields = [
+        'fileName', 'details', 'billed', 'paid', 'balance', 'status',
+        'nextCourtDate', 'completedDate', 'lawyerId', 'clientId',
+        'categories', 'sittingType', 'archived',
+      ];
+      safeFields.forEach(field => {
+        if (data[field as keyof CourtCase] !== undefined) {
+          scalarUpdate[field] = (data as any)[field];
+        }
+      });
+
+      if (Object.keys(scalarUpdate).length > 0 && navigator.onLine) {
+        supabase.from('court_cases').update(scalarUpdate).eq('id', id).then();
+      }
+
       return updated;
     }));
   };
@@ -1234,8 +1272,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLetters(prev => prev.map(l => {
       if (l.id !== id) return l;
       const updated = { ...l, ...data };
-      const { progressNotes, documents, ...dbSafe } = updated as any;
-      instantSave('letters', dbSafe);
+
+      // Only update scalar fields - never overwrite progressNotes or documents
+      const scalarUpdate: Record<string, any> = {};
+      const safeFields = [
+        'subject', 'type', 'recipient', 'lawyerId', 'clientId',
+        'status', 'archived', 'date', 'billed', 'paid',
+      ];
+      safeFields.forEach(field => {
+        if ((data as any)[field] !== undefined) {
+          scalarUpdate[field] = (data as any)[field];
+        }
+      });
+
+      if (Object.keys(scalarUpdate).length > 0 && navigator.onLine) {
+        supabase.from('letters').update(scalarUpdate).eq('id', id).then();
+      }
+
       return updated;
     }));
   };
