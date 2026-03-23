@@ -2,13 +2,11 @@ import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
-// ─── Typography system ────────────────────────────────────────────────────────
-// Display / headings : "Playfair Display" — authoritative, legal, refined
-// Body / UI          : "DM Sans"           — clean, modern, highly legible
-//
-// Add to your index.html <head>:
+// Typography system:
+// Display / headings : "Playfair Display"
+// Body / UI          : "DM Sans"
+// Add to index.html <head>:
 // <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
-// ─────────────────────────────────────────────────────────────────────────────
 
 const Clients: React.FC = () => {
   const {
@@ -38,13 +36,35 @@ const Clients: React.FC = () => {
         const clientCases = courtCases.filter(c => c.clientId === client.id || (!c.clientId && c.fileName.toLowerCase().includes(client.name.toLowerCase())));
         const clientTransactions = transactions.filter(t => t.clientId === client.id || (!t.clientId && t.fileName.toLowerCase().includes(client.name.toLowerCase())));
         const clientLetters = letters.filter(l => l.clientId === client.id || (!l.clientId && (l.subject || "").toLowerCase().includes(client.name.toLowerCase())));
-        const clientTitles = (landTitles || []).filter((t: any) => t.client_id === client.id || (!t.client_id && t.owner_name?.toLowerCase().includes(client.name.toLowerCase())));
+
+        // A title belongs to this client if:
+        // 1. It is directly linked via client_id
+        // 2. Its linked file (transaction_id) points to a transaction/case/letter
+        //    that already belongs to this client — handles the case where the title
+        //    owner name differs but the title was linked to one of the client's files
+        // 3. Fallback name match — only when the title has no explicit links at all
+        const clientTitles = (landTitles || []).filter((t: any) => {
+          if (t.client_id === client.id) return true;
+          if (t.transaction_id) {
+            const linkedTx = transactions.find(tx => tx.id === t.transaction_id && tx.clientId === client.id);
+            const linkedCase = courtCases.find(c => c.id === t.transaction_id && c.clientId === client.id);
+            const linkedLtr = letters.find(l => l.id === t.transaction_id && l.clientId === client.id);
+            if (linkedTx || linkedCase || linkedLtr) return true;
+          }
+          // Name fallback only when the title has no explicit client or file link
+          if (!t.client_id && !t.transaction_id) {
+            return t.owner_name?.toLowerCase().includes(client.name.toLowerCase());
+          }
+          return false;
+        });
+
         const totalFilesCount = clientCases.length + clientTransactions.length + clientLetters.length + clientTitles.length;
         const totalOwed =
           clientCases.reduce((sum, c) => sum + (c.balance || 0), 0) +
           clientTransactions.reduce((sum, t) => sum + (t.balance || 0), 0) +
           clientLetters.reduce((sum, l) => sum + ((l.billed || 0) - (l.paid || 0)), 0) +
           clientTitles.reduce((sum: number, t: any) => sum + ((t.total_billed || 0) - (t.total_paid || 0)), 0);
+
         return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, totalOwed, totalFilesCount };
       });
 
@@ -69,8 +89,8 @@ const Clients: React.FC = () => {
 
     const content = [
       "BUWEMBO & COMPANY ADVOCATES",
-      `CLIENT SERVICE REPORT — ${new Date().toLocaleString()}`,
-      "─".repeat(50),
+      `CLIENT SERVICE REPORT -- ${new Date().toLocaleString()}`,
+      "-".repeat(50),
       `CLIENT NAME : ${client.name}`,
       `TYPE        : ${client.type}`,
       `EMAIL       : ${client.email || "N/A"}`,
@@ -85,7 +105,7 @@ const Clients: React.FC = () => {
       "",
       "COMMUNICATION LOG",
       logEntries || "No logs recorded.",
-      "─".repeat(50),
+      "-".repeat(50),
       "CONFIDENTIAL LEGAL DOCUMENT",
     ].join("\n");
 
@@ -97,23 +117,16 @@ const Clients: React.FC = () => {
     a.click();
   };
 
-  // FIX: This function was previously referencing "FormData" incorrectly
   const handleSubmit = () => {
     const newClient = {
       id: crypto.randomUUID(),
-      name: name,
-      email: email,
-      phone: phone,
-      type: type,
+      name,
+      email,
+      phone,
+      type,
       dateAdded: new Date().toISOString(),
-      // Adding empty defaults to prevent Supabase errors if columns are expected
-      address: "",
-      tinNumber: ""
     };
-
     addClient(newClient);
-
-    // Clear the form and close modal
     setShowAddModal(false);
     setName("");
     setEmail("");
@@ -121,7 +134,6 @@ const Clients: React.FC = () => {
     setType("Individual");
   };
 
-  // FIX: Added the specific handler your form's onSubmit was looking for
   const handleAddClient = (e: React.FormEvent) => {
     e.preventDefault();
     handleSubmit();
@@ -129,7 +141,13 @@ const Clients: React.FC = () => {
 
   const handleSaveLog = () => {
     if (!commNote.trim() || !selectedClient) return;
-    addCommLog({ id: Date.now().toString(), clientId: selectedClient.id, note: commNote, date: new Date().toLocaleString(), authorName: currentUser?.name || "Admin" });
+    addCommLog({
+      id: Date.now().toString(),
+      clientId: selectedClient.id,
+      note: commNote,
+      date: new Date().toLocaleString(),
+      authorName: currentUser?.name || "Admin",
+    });
     setCommNote("");
   };
 
@@ -142,7 +160,7 @@ const Clients: React.FC = () => {
   return (
     <div style={body} className="min-h-screen bg-[#F4F7F9] p-8">
 
-      {/* ── HEADER ────────────────────────────────────────────── */}
+      {/* HEADER */}
       <div className="flex justify-between items-end mb-10">
         <div>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
@@ -160,18 +178,18 @@ const Clients: React.FC = () => {
         </button>
       </div>
 
-      {/* ── SEARCH & SORT ─────────────────────────────────────── */}
+      {/* SEARCH & SORT */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 mb-8 flex items-center gap-3 px-5">
         <span className="text-slate-300 text-base select-none">🔍</span>
         <input
           type="text"
-          placeholder="Search by name, company, or email…"
+          placeholder="Search by name, company, or email..."
           className="flex-1 bg-transparent py-4 text-sm text-slate-700 placeholder-slate-300 outline-none"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
         />
         {searchTerm && (
-          <button onClick={() => setSearchTerm("")} className="text-slate-300 hover:text-slate-500 text-lg font-bold leading-none transition">×</button>
+          <button onClick={() => setSearchTerm("")} className="text-slate-300 hover:text-slate-500 text-lg font-bold leading-none transition">x</button>
         )}
         <div className="w-px h-6 bg-slate-100" />
         <select
@@ -181,14 +199,14 @@ const Clients: React.FC = () => {
         >
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
-          <option value="az">Name A–Z</option>
-          <option value="za">Name Z–A</option>
+          <option value="az">Name A-Z</option>
+          <option value="za">Name Z-A</option>
           <option value="owed-desc">Highest Balance</option>
           <option value="files-desc">Most Active Files</option>
         </select>
       </div>
 
-      {/* ── CLIENT GRID ───────────────────────────────────────── */}
+      {/* CLIENT GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
         {filteredClients.map(client => (
           <div
@@ -197,18 +215,15 @@ const Clients: React.FC = () => {
             className="bg-white rounded-3xl p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group"
           >
             <div className="flex justify-between items-start mb-5">
-              <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${client.type === "Corporate" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-600"
-                }`}>
+              <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${client.type === "Corporate" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-600"}`}>
                 {client.type}
               </span>
               <span className="text-xs text-slate-300">#{client.id.split("-")[1]}</span>
             </div>
-
             <h3 style={serif} className="text-xl font-semibold text-[#0B1F3A] mb-1 group-hover:text-blue-700 transition-colors leading-snug">
               {client.name}
             </h3>
             <p className="text-sm text-slate-400 mb-6 truncate">{client.email || "No email on record"}</p>
-
             <div className="grid grid-cols-2 gap-3 border-t border-slate-50 pt-5">
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Active Files</p>
@@ -232,7 +247,7 @@ const Clients: React.FC = () => {
         )}
       </div>
 
-      {/* ── CLIENT DETAIL DRAWER ──────────────────────────────── */}
+      {/* CLIENT DETAIL DRAWER */}
       {selectedClient && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-[#0B1F3A]/40 backdrop-blur-sm" onClick={() => setSelectedClient(null)} />
@@ -242,15 +257,13 @@ const Clients: React.FC = () => {
             className="relative w-full max-w-2xl bg-white h-screen shadow-2xl overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            {/* Close button */}
             <button
               onClick={() => setSelectedClient(null)}
               className="absolute top-7 right-7 w-9 h-9 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white text-base font-bold z-10 transition"
             >
-              ✕
+              x
             </button>
 
-            {/* Header band */}
             <div className="bg-[#0B1F3A] px-10 pt-12 pb-10 text-white">
               <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest mb-2">
                 {selectedClient.type} Client
@@ -266,7 +279,6 @@ const Clients: React.FC = () => {
 
             <div className="px-10 py-8">
 
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-4 mb-8">
                 <div className="bg-slate-50 rounded-2xl p-4 text-center">
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Files</p>
@@ -284,7 +296,6 @@ const Clients: React.FC = () => {
                 </div>
               </div>
 
-              {/* Export */}
               <button
                 onClick={() => handleDownloadReport(selectedClient)}
                 className="w-full mb-8 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
@@ -292,14 +303,13 @@ const Clients: React.FC = () => {
                 📥 Export Client Report
               </button>
 
-              {/* Comm log */}
               <div className="mb-8 bg-blue-50 rounded-2xl border border-blue-100 p-6">
                 <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
                   Internal Notes & Communication Log
                 </h4>
                 <textarea
                   className="w-full bg-white border border-blue-100 rounded-xl p-4 text-sm text-slate-700 placeholder-slate-300 outline-none focus:ring-2 focus:ring-blue-400 resize-none mb-3"
-                  placeholder="e.g. Called client regarding overdue payment…"
+                  placeholder="e.g. Called client regarding overdue payment..."
                   rows={3}
                   value={commNote}
                   onChange={e => setCommNote(e.target.value)}
@@ -310,7 +320,6 @@ const Clients: React.FC = () => {
                 >
                   Save Log Entry
                 </button>
-
                 <div className="mt-5 space-y-3 max-h-48 overflow-y-auto pr-1">
                   {commLogs
                     ?.filter((l: any) => l.clientId === selectedClient.id)
@@ -326,7 +335,6 @@ const Clients: React.FC = () => {
                 </div>
               </div>
 
-              {/* Linked matters */}
               <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
                 Linked Matter History
               </h4>
@@ -347,17 +355,24 @@ const Clients: React.FC = () => {
                     onOpen={() => navigate(`/performance?file=${encodeURIComponent(l.subject)}&openDetails=true`)} />
                 ))}
                 {selectedClient.titles?.map((t: any) => (
-                  <MatterRow key={t.id}
+                  <MatterRow
+                    key={t.id}
                     title={`Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ""}`}
-                    badge="Land Title" badgeColor="text-emerald-600 bg-emerald-50"
-                    sub={t.status} onOpen={() => navigate(`/land-titles/${t.id}`)} />
+                    badge="Land Title"
+                    badgeColor="text-emerald-600 bg-emerald-50"
+                    sub={
+                      t.owner_name?.toLowerCase() !== selectedClient.name.toLowerCase()
+                        ? `${t.status} · Owner: ${t.owner_name}`
+                        : t.status
+                    }
+                    onOpen={() => navigate(`/land-titles/${t.id}`)}
+                  />
                 ))}
                 {selectedClient.totalFilesCount === 0 && (
                   <p className="text-slate-300 text-sm italic py-6 text-center">No matters linked to this client.</p>
                 )}
               </div>
 
-              {/* Delete */}
               <button
                 onClick={() => {
                   if (window.confirm("Permanently delete this client record?")) {
@@ -374,11 +389,10 @@ const Clients: React.FC = () => {
         </div>
       )}
 
-      {/* ── ADD CLIENT MODAL ──────────────────────────────────── */}
+      {/* ADD CLIENT MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#0B1F3A]/80 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
-
           <form
             onSubmit={handleAddClient}
             style={body}
@@ -390,20 +404,17 @@ const Clients: React.FC = () => {
               onClick={() => setShowAddModal(false)}
               className="absolute top-6 right-6 w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 font-bold transition-colors"
             >
-              ✕
+              x
             </button>
-
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Client Intake</p>
               <h2 style={serif} className="text-2xl font-bold text-[#0B1F3A]">New Client Registration</h2>
             </div>
-
             <div>
               <label className={lbl}>Full Name / Company</label>
               <input required className={inp} placeholder="e.g. Nakato Sarah or Kampala Holdings Ltd"
                 value={name} onChange={e => setName(e.target.value)} />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={lbl}>Client Type</label>
@@ -418,13 +429,11 @@ const Clients: React.FC = () => {
                   value={phone} onChange={e => setPhone(e.target.value)} />
               </div>
             </div>
-
             <div>
               <label className={lbl}>Email Address <span className="normal-case font-normal text-slate-300">(optional)</span></label>
               <input type="email" className={inp} placeholder="client@example.com"
                 value={email} onChange={e => setEmail(e.target.value)} />
             </div>
-
             <button
               type="submit"
               className="w-full bg-[#0B1F3A] text-white text-sm font-semibold py-4 rounded-2xl shadow-lg hover:bg-blue-900 active:scale-95 transition-all mt-2"
@@ -438,7 +447,7 @@ const Clients: React.FC = () => {
   );
 };
 
-/* ── Reusable matter row ─────────────────────────────────────────────────── */
+/* Reusable matter row */
 const MatterRow = ({ title, badge, badgeColor, sub, onOpen }: {
   title: string; badge: string; badgeColor: string; sub: string; onOpen: () => void;
 }) => (

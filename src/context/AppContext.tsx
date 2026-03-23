@@ -478,7 +478,7 @@ function buildDraftEmail(
     '<p style="color:#93c5fd;margin:4px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">' + headerLabel + '</p>' +
     '</div>' +
     '<div style="background:white;padding:32px;border-radius:0 0 16px 16px;border:1px solid #e2e8f0;border-top:none;">' +
-    '<p style="color:#64748b;font-size:14px;">Hi <strong>' + recipientName + '</strong>,</p>' +
+    '<p style="color:#64748b;font-size:14px;">Dear <strong>' + recipientName + '</strong>,</p>' +
     '<p style="color:#64748b;font-size:14px;">' + bodyLine + '</p>' +
     '<div style="background:#f1f5f9;border-left:4px solid #2563EB;padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0;">' +
     '<p style="margin:0 0 4px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;">Court Case</p>' +
@@ -684,19 +684,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (res.error) console.error('Table ' + i + ' failed:', res.error.message);
         });
 
-        // Trust the cloud as the source of truth for deletions.
-        // Only bring in local items that are brand-new (no id in cloud yet),
-        // which handles the offline-create case without resurrecting deleted rows.
         const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
           if (!cloud || !Array.isArray(cloud)) return prev || [];
           const cloudIds = new Set(cloud.map((item: any) => item.id));
-          // Only keep local items that have never been synced to the cloud yet
-          // (i.e. created offline). Items absent from cloud but present locally
-          // are treated as deleted and are NOT restored.
           const onlyLocalNew = prev.filter((item: any) => {
-            if (cloudIds.has(item.id)) return false; // already in cloud
-            // Only keep if it was created very recently (within last 60 seconds)
-            // meaning it is likely a pending offline create, not a deleted row.
+            if (cloudIds.has(item.id)) return false;
             const created = item.dateCreated || item.dateAdded || item.created_at || null;
             if (!created) return false;
             const age = Date.now() - new Date(created).getTime();
@@ -927,10 +919,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       relatedFileId, relatedFileType, relatedFileName, deleted,
     }));
 
-    // For court_cases, transactions, and letters we must NEVER upsert progressNotes
-    // or documents from local state - those are always managed by their own dedicated
-    // functions and local state may be stale (missing notes added by other users).
-    // We use update() per-row with only scalar fields instead.
+
     const courtCaseScalarFields = [
       'id', 'fileName', 'details', 'billed', 'paid', 'balance', 'status',
       'nextCourtDate', 'completedDate', 'lawyerId', 'clientId',
@@ -1140,7 +1129,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ======================= */
   const addCourtCase = (c: CourtCase) => {
     setCourtCases(prev => [...prev, c]);
-    // Strip JSON-column fields before insert - they are managed separately
     const { progressNotes, documents, deadlines, ...dbSafe } = c as any;
     instantSave('court_cases', dbSafe);
   };
@@ -1149,19 +1137,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...data };
-
-      // IMPORTANT: Never include progressNotes, documents, or deadlines in the
-      // edit save. Those are managed by their own dedicated functions
-      // (addCourtCaseProgress, uploadCourtCaseDocument, etc.) and must not be
-      // overwritten here  -  doing so would wipe notes added by other lawyers
-      // that are not yet in this user's local state.
       const {
         progressNotes, documents, deadlines,
-        // Also strip any undefined fields that would null-out DB columns
         ...rawDbSafe
       } = updated as any;
-
-      // Only send the scalar fields that were explicitly changed
       const scalarUpdate: Record<string, any> = {};
       const safeFields = [
         'fileName', 'details', 'billed', 'paid', 'balance', 'status',
