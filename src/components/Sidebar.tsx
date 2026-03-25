@@ -125,7 +125,7 @@ export default function Sidebar() {
 
         {/* 5. VERSION NUMBER */}
         <div style={{ ...sidebarStyles.versionBadge, color: "white", fontSize: "12px", fontStyle: "italic" }}>
-          v1.3.0
+          v1.4.0
         </div>
       </div>
     </>

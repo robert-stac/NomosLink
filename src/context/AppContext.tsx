@@ -561,15 +561,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       SEND EMAIL
   ======================= */
-  const sendEmail = (to: string, subject: string, html: string) => {
+  const sendEmail = (to: string | string[], subject: string, html: string) => {
     if (!navigator.onLine || !to) return;
+    
+    let recipients = Array.isArray(to) ? [...to] : [to];
+    const senderEmail = currentUserRef.current?.email;
+    if (senderEmail && !recipients.includes(senderEmail)) {
+      recipients.push(senderEmail);
+    }
+    
     fetch(import.meta.env.VITE_SUPABASE_URL + '/functions/v1/send-email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + import.meta.env.VITE_SUPABASE_SERVICE_KEY,
       },
-      body: JSON.stringify({ to, subject, html }),
+      body: JSON.stringify({ to: recipients, subject, html }),
     }).catch(() => { });
   };
 

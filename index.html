@@ -16,7 +16,7 @@
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(registrations => {
           registrations.forEach(reg => {
-            if (!reg.active?.scriptURL?.includes('sw.js')) {
+            if (!reg.active?.scriptURL?.includes('sw-custom.js') && !reg.active?.scriptURL?.includes('sw.js')) {
               reg.unregister();
             }
           });

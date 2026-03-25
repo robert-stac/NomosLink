@@ -1,3 +1,11 @@
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
 // Push notification handler — injected into VitePWA's service worker
 self.addEventListener('push', (event) => {
   let data = { title: 'NomoSLink', body: 'You have a new notification.', icon: '/icon.png', badge: '/badge.png' };

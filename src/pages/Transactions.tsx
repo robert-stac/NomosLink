@@ -5,6 +5,7 @@ export default function Transactions() {
   const { 
     transactions = [], 
     lawyers = [], 
+    clients = [],
     addTransaction, 
     editTransaction, 
     deleteTransaction, 
@@ -22,6 +23,7 @@ export default function Transactions() {
     fileName: "", 
     type: "",
     lawyerId: "",
+    clientId: "",
     billedAmount: "",
     paidAmount: "",
     date: new Date().toISOString().split("T")[0],
@@ -125,6 +127,7 @@ export default function Transactions() {
       fileName: "",
       type: "",
       lawyerId: "",
+      clientId: "",
       billedAmount: "",
       paidAmount: "",
       date: new Date().toISOString().split("T")[0],
@@ -210,6 +213,13 @@ export default function Transactions() {
             </select>
           </div>
           <div className="flex flex-col gap-1">
+            <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Client Selection</label>
+            <select name="clientId" value={form.clientId} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
+              <option value="">Select client (Optional)</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Billed (UGX)</label>
             <input name="billedAmount" type="number" placeholder="0" value={form.billedAmount} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
           </div>
@@ -275,6 +285,7 @@ export default function Transactions() {
                           fileName: t.fileName || "",
                           type: t.type || "",
                           lawyerId: t.lawyerId || "",
+                          clientId: t.clientId || "",
                           billedAmount: String(t.billedAmount || ""),
                           paidAmount: String(t.paidAmount || ""),
                           date: t.date ? t.date.split('T')[0] : ""

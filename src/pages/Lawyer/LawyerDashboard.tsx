@@ -38,6 +38,7 @@ export default function LawyerDashboard() {
     users, tasks, addTask, deleteTask, updateTask,
     notifications, markNotificationsAsRead,
     draftRequests, completeDraftRequest,
+    updateCourtCaseDeadline,
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters" | "Drafts">("Cases");
@@ -115,12 +116,21 @@ export default function LawyerDashboard() {
       return d.getTime() === now.getTime() || d.getTime() === tomorrow.getTime();
     });
 
+    const pendingDeadlines = assignedCases.flatMap(c => 
+      (c.deadlines || []).filter(d => d.status === 'Pending').map(d => ({
+        ...d,
+        caseId: c.id,
+        caseFileName: c.fileName
+      }))
+    ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
     return {
       cases: assignedCases,
       txs: transactions.filter(t => String(t.lawyerId) === userId && !t.archived),
       ltrs: letters.filter(l => (String(l.lawyerId) === userId || String((l as any).lawyer?.id) === userId) && !l.archived),
       nextHearing: upcoming || null,
       urgentReminders,
+      pendingDeadlines,
     };
   }, [courtCases, transactions, letters, currentUser.id, draftRequests]);
 
@@ -217,6 +227,56 @@ export default function LawyerDashboard() {
                 <h3 className="text-orange-900 font-semibold text-xs uppercase tracking-wider">Drafting Work Pending</h3>
                 <p className="text-orange-600/80 text-xs font-medium mt-0.5">You have {pendingIncomingCount} draft request{pendingIncomingCount > 1 ? 's' : ''} awaiting your attention.</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* UPCOMING DEADLINES */}
+        {myData.pendingDeadlines.length > 0 && (
+          <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+            <h2 className="text-sm font-semibold text-slate-800 mb-6 uppercase tracking-wider">Upcoming Court Deadlines</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="pb-4">Deadline / Required Action</th>
+                    <th className="pb-4">Related Matter</th>
+                    <th className="pb-4">Due Date</th>
+                    <th className="pb-4">Category</th>
+                    <th className="pb-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {myData.pendingDeadlines.map(deadline => (
+                    <tr key={deadline.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition">
+                      <td className="py-4 pr-4">
+                        <p className="font-semibold text-slate-800">{deadline.title}</p>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <button onClick={() => navigate(`/lawyer/cases/${deadline.caseId}`)} className="text-blue-500 hover:text-blue-700 font-medium text-xs uppercase tracking-wide transition truncate max-w-[200px] block text-left">
+                          ⚖️ {deadline.caseFileName}
+                        </button>
+                      </td>
+                      <td className="py-4 pr-4 font-medium text-slate-600 whitespace-nowrap">
+                        {new Date(deadline.dueDate).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 pr-4">
+                        <span className="px-2.5 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 uppercase">
+                          {deadline.category || "GENERAL"}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right">
+                        <button 
+                          onClick={() => updateCourtCaseDeadline(deadline.caseId, deadline.id, { status: 'Completed' })}
+                          className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-4 py-2 rounded-xl text-xs font-semibold transition whitespace-nowrap flex items-center gap-2 ml-auto"
+                        >
+                          ✓ Mark Done
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
