@@ -13,6 +13,7 @@ export default function AccountantDashboard() {
   const [invoiceTarget, setInvoiceTarget] = useState<any>(null);
   const [viewScanUrl, setViewScanUrl] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+  const [selectedCaseForProgress, setSelectedCaseForProgress] = useState<any>(null);
 
   const formatUGX = (val: number) => "UGX " + val.toLocaleString();
 
@@ -191,7 +192,8 @@ export default function AccountantDashboard() {
               return (
                 <div
                   key={c.id}
-                  className="p-5 rounded-2xl border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all"
+                  onClick={() => setSelectedCaseForProgress(c)}
+                  className="p-5 rounded-2xl border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer relative group"
                   style={{ backgroundColor: style.bg + "40" }}
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -226,6 +228,14 @@ export default function AccountantDashboard() {
                         {lawyer.name}
                       </span>
                     )}
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-200/50 flex items-center justify-between opacity-60 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                      <span>📄</span> View Case Progress
+                    </span>
+                    <span className="text-[10px] font-bold bg-white/50 px-2 py-0.5 rounded text-slate-600 border border-slate-200/50">
+                      {c.progressNotes?.length || 0} updates
+                    </span>
                   </div>
                 </div>
               );
@@ -458,6 +468,40 @@ export default function AccountantDashboard() {
             <div className="p-4 flex gap-4 justify-end">
               <button onClick={() => window.open(viewScanUrl, "_blank")} className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Open in New Tab</button>
               <button onClick={() => setViewScanUrl(null)} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20">Close Viewer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Case Progress Modal */}
+      {selectedCaseForProgress && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedCaseForProgress(null)}></div>
+          <div className="relative bg-white w-full max-w-2xl max-h-[85vh] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
+            <div className="p-8 border-b bg-slate-50 flex justify-between items-center rounded-t-[32px]">
+              <div>
+                <span className="text-[10px] font-black uppercase text-blue-600 px-2 py-1 bg-blue-50 rounded mb-1 inline-block">Case Progress History</span>
+                <h3 className="font-black text-2xl text-slate-800 break-words pr-4">{selectedCaseForProgress.fileName}</h3>
+              </div>
+              <button onClick={() => setSelectedCaseForProgress(null)} className="w-9 h-9 bg-slate-200 hover:bg-rose-100 hover:text-rose-600 rounded-full flex items-center justify-center font-bold text-slate-500 transition-colors shrink-0">✕</button>
+            </div>
+            <div className="p-8 overflow-y-auto flex-1 space-y-4">
+              {selectedCaseForProgress.progressNotes?.length > 0 ? (
+                [...selectedCaseForProgress.progressNotes].reverse().map((n: any, idx: number) => (
+                  <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div className="flex justify-between mb-2">
+                      <span className="text-xs font-bold text-blue-700">{n.authorName}</span>
+                      <span className="text-[10px] text-slate-400">{n.date}</span>
+                    </div>
+                    <p className="text-sm text-slate-700 leading-relaxed break-words">{n.message}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <span className="text-2xl mb-2 block">📝</span>
+                  <p className="text-slate-500 font-bold text-sm">No progress notes have been filed for this case yet.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

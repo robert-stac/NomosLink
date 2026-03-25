@@ -4,7 +4,7 @@ import { useAppContext } from "../../context/AppContext";
 
 export default function LawyerPerformanceDashboard() {
   const {
-    users, transactions, courtCases, letters, draftRequests, tasks,
+    users, transactions, courtCases, letters, draftRequests, tasks, currentUser,
     addTransactionProgress, addCourtCaseProgress, addLetterProgress
   } = useAppContext();
 
@@ -49,14 +49,14 @@ export default function LawyerPerformanceDashboard() {
     const tenDaysAgo = new Date(); tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
     const sid = String(selectedLawyerId);
 
-    const myCases = activeCases.filter(c => String(c.lawyerId) === sid);
-    const myTransactions = activeTransactions.filter(t => String(t.lawyerId) === sid);
-    const myLetters = activeLetters.filter(l => String(l.lawyerId) === sid || String((l as any).lawyer?.id) === sid);
-    const myDrafts = draftRequests.filter(d => String(d.assignedToId) === sid);
+    const myCases = sid === "ALL" ? activeCases : activeCases.filter(c => String(c.lawyerId) === sid);
+    const myTransactions = sid === "ALL" ? activeTransactions : activeTransactions.filter(t => String(t.lawyerId) === sid);
+    const myLetters = sid === "ALL" ? activeLetters : activeLetters.filter(l => String(l.lawyerId) === sid || String((l as any).lawyer?.id) === sid);
+    const myDrafts = sid === "ALL" ? draftRequests : draftRequests.filter(d => String(d.assignedToId) === sid);
     const completedDrafts = myDrafts.filter(d => d.status === 'Completed');
     const pendingDrafts = myDrafts.filter(d => d.status === 'Pending');
     const totalDraftHours = completedDrafts.reduce((sum, d) => sum + (d.hoursSpent || 0), 0);
-    const myTasks = tasks.filter(t => String(t.assignedToId) === sid);
+    const myTasks = sid === "ALL" ? tasks : tasks.filter(t => String(t.assignedToId) === sid);
     const completedTasks = myTasks.filter(t => t.status === 'Completed');
     const pendingTasks = myTasks.filter(t => t.status === 'Pending');
 
@@ -70,6 +70,10 @@ export default function LawyerPerformanceDashboard() {
     myTransactions.forEach(t => {
       financials.billed += Number(t.billedAmount || (t as any).billed || 0);
       financials.collected += Number(t.paidAmount || (t as any).paid || 0);
+    });
+    myCases.forEach(c => {
+      financials.billed += Number(c.billed || 0);
+      financials.collected += Number(c.paid || 0);
     });
     myLetters.forEach(l => {
       financials.billed += Number(l.billed || (l as any).billedAmount || 0);
@@ -115,7 +119,7 @@ export default function LawyerPerformanceDashboard() {
 
   const downloadWorkReport = () => {
     if (!stats) return;
-    const staffName = users.find(u => String(u.id) === String(selectedLawyerId))?.name || "Staff";
+    const staffName = selectedLawyerId === "ALL" ? "Firm_Overview" : (users.find(u => String(u.id) === String(selectedLawyerId))?.name || "Staff");
     const headers = ["Type", "Title", "Description", "Deadline/Date", "Status", "Report/Note", "Hours", "Linked File"];
 
     const draftRows = stats.drafts.all.map(d => [
@@ -224,6 +228,9 @@ export default function LawyerPerformanceDashboard() {
                 className="bg-transparent font-bold p-2 min-w-[180px] outline-none text-sm cursor-pointer"
               >
                 <option value="">Select Staff...</option>
+                {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+                  <option value="ALL">All Staff (Firm Overview)</option>
+                )}
                 {lawyers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>

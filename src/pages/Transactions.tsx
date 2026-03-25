@@ -10,6 +10,8 @@ export default function Transactions() {
     editTransaction, 
     deleteTransaction, 
     addTransactionProgress, 
+    editTransactionProgress,
+    deleteTransactionProgress,
     currentUser 
   } = useAppContext();
 
@@ -18,6 +20,8 @@ export default function Transactions() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteViewId, setNoteViewId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
   
   const [form, setForm] = useState({
     fileName: "", 
@@ -311,16 +315,65 @@ export default function Transactions() {
                 <h3 className="font-black text-slate-800 text-lg">Activity Log</h3>
                 <p className="text-[10px] font-bold text-blue-600 uppercase">{activeTransaction?.fileName}</p>
               </div>
-              <button onClick={() => setNoteViewId(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border text-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm">&times;</button>
+              <button onClick={() => { setNoteViewId(null); setEditingNoteId(null); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border text-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm">&times;</button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 space-y-4 bg-white">
               {[...(activeTransaction?.progressNotes || [])].reverse().map((n: any) => (
-                <div key={n.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[9px] font-black text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded">{n.authorName}</span>
-                    <span className="text-[9px] font-bold text-slate-400">{n.date}</span>
+                <div key={n.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col group">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[9px] font-black text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded shrink-0">{n.authorName}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[9px] font-bold text-slate-400 shrink-0">{n.date}</span>
+                      {currentUser?.id === n.authorId && editingNoteId !== n.id && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => { setEditingNoteId(n.id); setEditingNoteText(n.message); }}
+                            className="w-6 h-6 flex items-center justify-center bg-white border border-slate-200 rounded text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-all font-bold text-xs"
+                            title="Edit"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => { if (confirm("Delete this progress note?")) deleteTransactionProgress(activeTransaction!.id, n.id); }}
+                            className="w-6 h-6 flex items-center justify-center bg-white border border-slate-200 rounded text-slate-400 hover:text-red-500 hover:border-red-300 transition-all font-bold text-xs"
+                            title="Delete"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-700 leading-relaxed font-medium">{n.message}</p>
+                  {editingNoteId === n.id ? (
+                    <div className="mt-2 flex flex-col gap-2">
+                      <textarea
+                        className="w-full bg-white border border-blue-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium min-h-[80px]"
+                        value={editingNoteText}
+                        onChange={(e) => setEditingNoteText(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => { setEditingNoteId(null); setEditingNoteText(""); }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-200 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!editingNoteText.trim() || !activeTransaction) return;
+                            editTransactionProgress(activeTransaction.id, n.id, editingNoteText.trim());
+                            setEditingNoteId(null);
+                            setEditingNoteText("");
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow-sm"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-700 leading-relaxed font-medium block whitespace-pre-wrap">{n.message}</p>
+                  )}
                 </div>
               ))}
               {(!activeTransaction?.progressNotes || activeTransaction.progressNotes.length === 0) && (
