@@ -299,7 +299,7 @@ export default function App() {
         <Route
           path="/lawyer/transactions/:id"
           element={
-            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager"]}>
+            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant"]}>
               <div style={{ paddingTop: isOnline ? 0 : "40px" }}>
                 <TransactionDetails />
               </div>
@@ -310,7 +310,7 @@ export default function App() {
         <Route 
           path="/lawyer/cases/:id" 
           element={
-            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager"]}>
+            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant"]}>
               <div style={{ paddingTop: isOnline ? 0 : "40px" }}>
                 <CourtCaseDetails />
               </div>
@@ -321,7 +321,7 @@ export default function App() {
         <Route 
           path="/lawyer/letters/:id" 
           element={
-            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager"]}>
+            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant"]}>
               <div style={{ paddingTop: isOnline ? 0 : "40px" }}>
                 <LawyerLetterDetails />
               </div>

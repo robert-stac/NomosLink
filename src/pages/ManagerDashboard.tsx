@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask } = useAppContext();
+  const { users, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline } = useAppContext();
   const navigate = useNavigate();
 
   const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(null);
@@ -114,6 +114,14 @@ export default function ManagerDashboard() {
       })
       .sort((a, b) => new Date(a.nextCourtDate || 0).getTime() - new Date(b.nextCourtDate || 0).getTime());
   })();
+
+  const pendingDeadlines = filteredCases.flatMap(c => 
+    (c.deadlines || []).filter((d: any) => d.status === 'Pending').map((d: any) => ({
+      ...d,
+      caseId: c.id,
+      caseFileName: c.fileName
+    }))
+  ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
   const handleSaveTask = () => {
     const clerk = clerks.find(c => String(c.id) === String(taskForm.assignedToId));
@@ -278,6 +286,68 @@ export default function ManagerDashboard() {
           </div>
         ) : (
           <p className="text-center text-gray-500 italic py-6">No upcoming hearings scheduled in the next 14 days.</p>
+        )}
+      </div>
+
+      {/* PENDING DEADLINES */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border mt-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-slate-700">Upcoming Court Deadlines</h3>
+          <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full">{pendingDeadlines.length}</span>
+        </div>
+        {pendingDeadlines.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-xs font-bold text-gray-500 uppercase tracking-wider border-b">
+                  <th className="pb-3 pr-4">Deadline / Required Action</th>
+                  <th className="pb-3 pr-4">Related Matter</th>
+                  <th className="pb-3 pr-4">Due Date</th>
+                  <th className="pb-3 pr-4">Category</th>
+                  <th className="pb-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {pendingDeadlines.map((deadline: any) => {
+                  const countdown = getDaysRemaining(deadline.dueDate);
+                  return (
+                  <tr key={deadline.id} className="border-b last:border-0 hover:bg-slate-50 transition">
+                    <td className="py-3 pr-4">
+                      <p className="font-bold text-slate-800">{deadline.title}</p>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <button onClick={() => navigate(`/lawyer/cases/${deadline.caseId}`)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase transition truncate max-w-[200px] block text-left">
+                        ⚖️ {deadline.caseFileName}
+                      </button>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="font-medium text-slate-700 whitespace-nowrap">
+                        {new Date(deadline.dueDate).toLocaleDateString()}
+                      </div>
+                      <div className={`text-xs font-bold ${countdown.urgent ? "text-red-500" : "text-gray-500"}`}>
+                        {countdown.text}
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className="px-2 py-1 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border uppercase">
+                        {deadline.category || "GENERAL"}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <button 
+                        onClick={() => updateCourtCaseDeadline(deadline.caseId, deadline.id, { status: 'Completed' })}
+                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-md text-xs font-bold transition whitespace-nowrap inline-flex items-center gap-2"
+                      >
+                        ✓ Mark Done
+                      </button>
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-center text-gray-500 italic py-6">No pending court deadlines.</p>
         )}
       </div>
 

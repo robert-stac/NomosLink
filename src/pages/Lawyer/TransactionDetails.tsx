@@ -144,7 +144,12 @@ export default function TransactionDetails() {
 
               <div className="space-y-6 relative before:absolute before:inset-y-0 before:left-4 before:w-0.5 before:bg-slate-100">
                 {transaction.progressNotes?.length ? (
-                  [...transaction.progressNotes].reverse().map((n: any) => {
+                  [...transaction.progressNotes].map((n: any) => {
+                    const renderDate = (dStr: string) => {
+                      const d = new Date(dStr);
+                      if (isNaN(d.getTime())) return dStr;
+                      return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                    };
                     const isNoteOwner = n.authorId === currentUser.id;
                     return (
                       <div key={n.id} className="relative pl-10 group">
@@ -167,7 +172,7 @@ export default function TransactionDetails() {
                             <p className="text-sm font-medium text-slate-700 leading-relaxed mb-2">{n.message}</p>
                             <div className="flex justify-between items-center">
                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                                {n.authorName} • {n.date}
+                                {n.authorName} • {renderDate(n.date)}
                               </p>
                               {isNoteOwner && (
                                 <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition">

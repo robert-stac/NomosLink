@@ -318,12 +318,18 @@ export default function Transactions() {
               <button onClick={() => { setNoteViewId(null); setEditingNoteId(null); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border text-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm">&times;</button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 space-y-4 bg-white">
-              {[...(activeTransaction?.progressNotes || [])].reverse().map((n: any) => (
+              {[...(activeTransaction?.progressNotes || [])].map((n: any) => {
+                const renderDate = (dStr: string) => {
+                  const d = new Date(dStr);
+                  if (isNaN(d.getTime())) return dStr;
+                  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                };
+                return (
                 <div key={n.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col group">
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-[9px] font-black text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded shrink-0">{n.authorName}</span>
                     <div className="flex items-center gap-3">
-                      <span className="text-[9px] font-bold text-slate-400 shrink-0">{n.date}</span>
+                      <span className="text-[9px] font-bold text-slate-400 shrink-0">{renderDate(n.date)}</span>
                       {currentUser?.id === n.authorId && editingNoteId !== n.id && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
@@ -375,7 +381,7 @@ export default function Transactions() {
                     <p className="text-sm text-slate-700 leading-relaxed font-medium block whitespace-pre-wrap">{n.message}</p>
                   )}
                 </div>
-              ))}
+              )})}
               {(!activeTransaction?.progressNotes || activeTransaction.progressNotes.length === 0) && (
                 <div className="text-center py-10 opacity-40">
                   <p className="text-3xl mb-2">📁</p>

@@ -444,15 +444,21 @@ export default function LawyerPerformanceDashboard() {
             {/* Progress notes */}
             <div className="p-8 overflow-y-auto flex-1 space-y-4">
               {activeFile.progressNotes?.length > 0 ? (
-                [...activeFile.progressNotes].reverse().map((n: any, idx: number) => (
+                [...activeFile.progressNotes].map((n: any, idx: number) => {
+                  const renderDate = (dStr: string) => {
+                    const d = new Date(dStr);
+                    if (isNaN(d.getTime())) return dStr;
+                    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                  };
+                  return (
                   <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex justify-between mb-2">
                       <span className="text-xs font-bold text-blue-700">{n.authorName}</span>
-                      <span className="text-[10px] text-slate-400">{n.date}</span>
+                      <span className="text-[10px] text-slate-400">{renderDate(n.date)}</span>
                     </div>
                     <p className="text-sm text-slate-700 leading-relaxed">{n.message}</p>
                   </div>
-                ))
+                )})
               ) : (
                 <p className="text-slate-400 italic text-sm text-center py-10">No progress history found for this file.</p>
               )}

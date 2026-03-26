@@ -145,7 +145,13 @@ export default function LawyerCourtCaseDetails() {
               <h3 className="text-lg font-semibold text-slate-900 mb-8">Matter Progression</h3>
               <div className="space-y-8 relative before:absolute before:inset-y-0 before:left-3 before:w-0.5 before:bg-slate-100">
                 {courtCase.progressNotes?.length ? (
-                  [...courtCase.progressNotes].reverse().map((note) => (
+                  [...courtCase.progressNotes].map((note) => {
+                    const renderDate = (dStr: string) => {
+                      const d = new Date(dStr);
+                      if (isNaN(d.getTime())) return dStr;
+                      return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                    };
+                    return (
                     <div key={note.id} className="relative pl-10 group">
                       <div className="absolute left-1.5 top-2 w-3 h-3 rounded-full bg-blue-600 border-2 border-white shadow-sm"></div>
                       <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 relative">
@@ -165,11 +171,11 @@ export default function LawyerCourtCaseDetails() {
 
                         <p className="text-sm font-medium text-slate-700 mb-2">{note.message}</p>
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-tighter">
-                          Logged on {note.date} by {note.authorName}
+                          Logged on {renderDate(note.date)} by {note.authorName}
                         </p>
                       </div>
                     </div>
-                  ))
+                  )})
                 ) : (
                   <div className="pl-10 text-slate-400 font-medium italic text-sm">No recorded updates.</div>
                 )}

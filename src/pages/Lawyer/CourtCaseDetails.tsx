@@ -406,7 +406,13 @@ export default function CourtCaseDetails() {
                   </h3>
                   <div className="space-y-8 relative before:absolute before:inset-y-0 before:left-5 before:w-0.5 before:bg-slate-50">
                     {courtCase.progressNotes?.length ? (
-                      [...courtCase.progressNotes].reverse().map((note) => (
+                      [...courtCase.progressNotes].map((note) => {
+                        const renderDate = (dStr: string) => {
+                          const d = new Date(dStr);
+                          if (isNaN(d.getTime())) return dStr;
+                          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                        };
+                        return (
                         <div key={note.id} className="relative pl-14 group">
                           <div className="absolute left-4 top-2 w-2.5 h-2.5 rounded-full bg-blue-600 border-4 border-white shadow-sm"></div>
                           <div className="bg-slate-50/50 p-6 rounded-[28px] border border-transparent hover:border-slate-100 transition-all relative">
@@ -420,11 +426,11 @@ export default function CourtCaseDetails() {
                             )}
                             <p className="text-sm font-semibold text-slate-700 leading-relaxed mb-4">{note.message}</p>
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                              {note.authorName} • {note.date}
+                              {note.authorName} • {renderDate(note.date)}
                             </p>
                           </div>
                         </div>
-                      ))
+                      )})
                     ) : (
                       <div className="pl-14 py-6 text-slate-400 font-bold italic text-sm">No recorded actions for this case.</div>
                     )}

@@ -317,7 +317,13 @@ export default function AccountantDashboard() {
                       const scanUrl = item.scannedInvoiceUrl || linkedInvoice?.scannedInvoiceUrl;
                       return (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
-                          <td className="py-4 px-2 text-sm font-bold text-slate-800">{name}</td>
+                          <td 
+                            className="py-4 px-2 text-sm font-bold text-slate-800 cursor-pointer hover:text-blue-600 underline decoration-slate-300 underline-offset-4" 
+                            onClick={() => setSelectedCaseForProgress(item)}
+                            title="Click to view file progress notes"
+                          >
+                            {name}
+                          </td>
                           <td className="py-4 px-2 text-xs font-bold text-slate-500">{formatUGX(billed)}</td>
                           <td className="py-4 px-2 text-sm font-black text-rose-500 text-right">{formatUGX(unpaid)}</td>
                           <td className="py-4 px-2 text-center">
@@ -480,22 +486,28 @@ export default function AccountantDashboard() {
           <div className="relative bg-white w-full max-w-2xl max-h-[85vh] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
             <div className="p-8 border-b bg-slate-50 flex justify-between items-center rounded-t-[32px]">
               <div>
-                <span className="text-[10px] font-black uppercase text-blue-600 px-2 py-1 bg-blue-50 rounded mb-1 inline-block">Case Progress History</span>
-                <h3 className="font-black text-2xl text-slate-800 break-words pr-4">{selectedCaseForProgress.fileName}</h3>
+                <span className="text-[10px] font-black uppercase text-blue-600 px-2 py-1 bg-blue-50 rounded mb-1 inline-block">File Progress History</span>
+                <h3 className="font-black text-2xl text-slate-800 break-words pr-4">{selectedCaseForProgress.fileName || selectedCaseForProgress.subject}</h3>
               </div>
               <button onClick={() => setSelectedCaseForProgress(null)} className="w-9 h-9 bg-slate-200 hover:bg-rose-100 hover:text-rose-600 rounded-full flex items-center justify-center font-bold text-slate-500 transition-colors shrink-0">✕</button>
             </div>
             <div className="p-8 overflow-y-auto flex-1 space-y-4">
               {selectedCaseForProgress.progressNotes?.length > 0 ? (
-                [...selectedCaseForProgress.progressNotes].reverse().map((n: any, idx: number) => (
+                [...selectedCaseForProgress.progressNotes].map((n: any, idx: number) => {
+                  const renderDate = (dStr: string) => {
+                    const d = new Date(dStr);
+                    if (isNaN(d.getTime())) return dStr;
+                    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                  };
+                  return (
                   <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div className="flex justify-between mb-2">
                       <span className="text-xs font-bold text-blue-700">{n.authorName}</span>
-                      <span className="text-[10px] text-slate-400">{n.date}</span>
+                      <span className="text-[10px] text-slate-400">{renderDate(n.date)}</span>
                     </div>
                     <p className="text-sm text-slate-700 leading-relaxed break-words">{n.message}</p>
                   </div>
-                ))
+                )})
               ) : (
                 <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <span className="text-2xl mb-2 block">📝</span>

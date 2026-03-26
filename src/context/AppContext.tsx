@@ -852,7 +852,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       recipientId: rid,
       message,
       type,
-      date: new Date().toLocaleString(),
+      date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
       read: false,
       relatedId,
       relatedType,
@@ -1063,7 +1063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           authorId: currentUser.id,
           authorName: currentUser.name,
           authorRole: currentUser.role,
-          date: new Date().toLocaleString(),
+          date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
         }],
       };
       supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
@@ -1187,7 +1187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         authorId: currentUser.id,
         authorName: currentUser.name,
         authorRole: currentUser.role,
-        date: new Date().toLocaleString(),
+        date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
       };
       const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
       supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
@@ -1328,7 +1328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         authorId: currentUser.id,
         authorName: currentUser.name,
         authorRole: currentUser.role,
-        date: new Date().toLocaleString(),
+        date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
       };
       const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
       supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
@@ -1483,7 +1483,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const appendTaskNote = (id: string, note: string) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
-    const newNote: TaskProgressNote = { date: new Date().toLocaleString(), note };
+    const newNote: TaskProgressNote = { date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`, note };
     updateTask(id, { progressNotes: [...(task.progressNotes || []), newNote] });
     sendNotification(task.assignedById, 'Task Update from ' + task.assignedToName + ': "' + task.title + '"  -  "' + note + '"', 'task', task.id, 'task');
   };
