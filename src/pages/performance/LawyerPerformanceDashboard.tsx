@@ -4,7 +4,7 @@ import { useAppContext } from "../../context/AppContext";
 
 export default function LawyerPerformanceDashboard() {
   const {
-    users, transactions, courtCases, letters, draftRequests, tasks, currentUser,
+    users, transactions, courtCases, letters, draftRequests, tasks, filingRequests, currentUser,
     addTransactionProgress, addCourtCaseProgress, addLetterProgress
   } = useAppContext();
 
@@ -60,6 +60,11 @@ export default function LawyerPerformanceDashboard() {
     const completedTasks = myTasks.filter(t => t.status === 'Completed');
     const pendingTasks = myTasks.filter(t => t.status === 'Pending');
 
+    const myFilings = sid === "ALL" ? filingRequests : filingRequests.filter(f => String(f.assignedToId) === sid);
+    const completedFilings = myFilings.filter(f => f.status === 'Completed');
+    const pendingFilings = myFilings.filter(f => f.status === 'Pending');
+    const totalFilingHours = completedFilings.reduce((sum, f) => sum + (f.hoursSpent || 0), 0);
+
     const allFiles = [
       ...myCases.map(i => ({ ...i, category: "Court Case", title: i.fileName })),
       ...myTransactions.map(i => ({ ...i, category: "Transaction", title: i.fileName })),
@@ -103,6 +108,11 @@ export default function LawyerPerformanceDashboard() {
       tasks: {
         all: myTasks, completed: completedTasks, pending: pendingTasks,
         completionRate: myTasks.length ? Math.round((completedTasks.length / myTasks.length) * 100) : 0
+      },
+      filings: {
+        all: myFilings, completed: completedFilings, pending: pendingFilings,
+        totalHours: totalFilingHours,
+        completionRate: myFilings.length ? Math.round((completedFilings.length / myFilings.length) * 100) : 0
       }
     };
   }, [selectedLawyerId, activeCases, activeTransactions, activeLetters, draftRequests, tasks]);
@@ -143,6 +153,17 @@ export default function LawyerPerformanceDashboard() {
       '""',
       `"${t.relatedFileName || ''}"`
     ]);
+    
+    const filingRows = stats.filings.all.map(f => [
+      "Registry Filing",
+      `"${f.documentName.replace(/"/g, '""')}"`,
+      `"${(f.description || '').replace(/"/g, '""')}"`,
+      `"${f.dateCreated}"`,
+      `"${f.status}"`,
+      `"ECCMIS Ref: ${f.eccmisReference || ''} | Note: ${(f.registryNote || '').replace(/"/g, '""')}"`,
+      `"${f.hoursSpent || ''}"`,
+      `"Case: ${f.caseFileName}"`
+    ]);
 
     const caseRows = stats.cases.map(c => [
       "Court Case",
@@ -170,7 +191,7 @@ export default function LawyerPerformanceDashboard() {
       '""', '""', '""'
     ]);
 
-    const csvContent = [headers, ...draftRows, ...taskRows, ...caseRows, ...txRows, ...letterRows]
+    const csvContent = [headers, ...draftRows, ...taskRows, ...filingRows, ...caseRows, ...txRows, ...letterRows]
       .map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -318,6 +339,40 @@ export default function LawyerPerformanceDashboard() {
                                 </span>
                               </td>
                               <td className="py-4 text-slate-500 text-xs font-bold text-right">{d.hoursSpent || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {stats.filings.all.length > 0 && (
+                    <div className="mb-10">
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Registry Filings</h4>
+                      <table className="w-full text-sm text-left">
+                        <thead className="text-[10px] font-black text-slate-300 uppercase tracking-widest border-b border-slate-100">
+                          <tr>
+                            <th className="pb-3">Document Name</th>
+                            <th className="pb-3">Status</th>
+                            <th className="pb-3">ECCMIS Ref / Note</th>
+                            <th className="pb-3 text-right">Matter</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {stats.filings.all.map((f: any) => (
+                            <tr key={f.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4 font-bold text-slate-800">{f.documentName}</td>
+                              <td className="py-4">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${f.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                                  {f.status}
+                                </span>
+                              </td>
+                              <td className="py-4">
+                                {f.eccmisReference && <p className="text-[11px] text-blue-600 font-bold leading-tight">Ref: {f.eccmisReference}</p>}
+                                {f.registryNote && <p className="text-[10px] text-slate-400 italic">Note: {f.registryNote}</p>}
+                                {!f.eccmisReference && !f.registryNote && <span className="text-slate-300 text-[10px]">Pending Completion</span>}
+                              </td>
+                              <td className="py-4 text-slate-500 text-[10px] font-black uppercase text-right">⚖️ {f.caseFileName}</td>
                             </tr>
                           ))}
                         </tbody>

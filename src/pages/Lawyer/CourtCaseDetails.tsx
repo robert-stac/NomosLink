@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
+import { getDeadlineUrgency, getUrgencyStyles } from "../../utils/dateUtils";
 
 export default function CourtCaseDetails() {
   const { id } = useParams<{ id: string }>();
@@ -11,10 +12,11 @@ export default function CourtCaseDetails() {
     uploadCourtCaseDocument, deleteCourtCaseDocument,
     addCourtCaseDeadline, updateCourtCaseDeadline, deleteCourtCaseDeadline,
     draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest,
+    filingRequests, addFilingRequest, updateFilingRequest, deleteFilingRequest,
     clients
   } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<"timeline" | "drafts" | "deadlines">("timeline");
+  const [activeTab, setActiveTab] = useState<"timeline" | "drafts" | "deadlines" | "registry">("timeline");
   const [newNote, setNewNote] = useState("");
   const [isCaseUploading, setIsCaseUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -22,6 +24,11 @@ export default function CourtCaseDetails() {
   // Draft request form state
   const [showDraftForm, setShowDraftForm] = useState(false);
   const [draftForm, setDraftForm] = useState({ title: "", description: "", deadline: "", assignedToId: "" });
+
+  // Filing request form state
+  const [showFilingForm, setShowFilingForm] = useState(false);
+  const [filingForm, setFilingForm] = useState({ documentName: "", title: "", description: "", assignedToId: "" });
+  const [editingFilingId, setEditingFilingId] = useState<string | null>(null);
 
   // Complete draft modal state
   const [completingDraftId, setCompletingDraftId] = useState<string | null>(null);
@@ -185,6 +192,49 @@ export default function CourtCaseDetails() {
     setShowDeadlineForm(false);
   };
 
+  const handleCreateFiling = async () => {
+    if (!filingForm.documentName || !filingForm.assignedToId || !currentUser) return alert("Missing fields");
+    const assignedUser = users.find(u => u.id === filingForm.assignedToId);
+
+    if (editingFilingId) {
+      updateFilingRequest(editingFilingId, {
+        documentName: filingForm.documentName,
+        title: filingForm.title,
+        description: filingForm.description,
+        assignedToId: filingForm.assignedToId,
+        assignedToName: assignedUser?.name || "Unknown"
+      });
+      setEditingFilingId(null);
+    } else {
+      await addFilingRequest({
+        caseId: courtCase.id,
+        caseFileName: courtCase.fileName,
+        documentName: filingForm.documentName,
+        title: filingForm.title,
+        description: filingForm.description,
+        assignedToId: filingForm.assignedToId,
+        assignedToName: assignedUser?.name || "Unknown",
+        requestedById: currentUser.id,
+        requestedByName: currentUser.name
+      });
+    }
+    setFilingForm({ documentName: "", title: "", description: "", assignedToId: "" });
+    setShowFilingForm(false);
+  };
+
+  const openEditFiling = (f: any) => {
+    setFilingForm({
+      documentName: f.documentName,
+      title: f.title || "",
+      description: f.description || "",
+      assignedToId: f.assignedToId
+    });
+    setEditingFilingId(f.id);
+    setShowFilingForm(true);
+  };
+
+  const caseFilingRequests = filingRequests.filter(f => f.caseId === courtCase.id);
+
   const associatedClient = clients.find(cl => cl.id === courtCase.clientId);
 
   const billed = courtCase.billed || 0;
@@ -246,8 +296,8 @@ export default function CourtCaseDetails() {
               </span>
               {isManagerOrAdmin && <span className="bg-purple-600 text-white px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest">Management View</span>}
               {associatedClient && (
-                <button 
-                  onClick={() => navigate('/clients')} 
+                <button
+                  onClick={() => navigate('/clients')}
                   className="bg-emerald-50 text-emerald-700 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 hover:bg-emerald-100 transition"
                 >
                   Client: {associatedClient.name}
@@ -265,16 +315,17 @@ export default function CourtCaseDetails() {
 
             {/* TABS */}
             <div className="flex gap-8 border-b border-slate-200">
-              {(["timeline", "deadlines", "drafts"] as const).map(tab => (
+              {(["timeline", "deadlines", "drafts", "registry"] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
                     }`}
                 >
-                  {tab === "timeline" ? "Case Timeline" : 
-                   tab === "deadlines" ? "Directives & Deadlines" : 
-                   `Draft Requests ${caseDrafts.length > 0 ? `(${caseDrafts.length})` : ''}`}
+                  {tab === "timeline" ? "Case Timeline" :
+                    tab === "deadlines" ? "Directives & Deadlines" :
+                      tab === "drafts" ? `Draft Requests ${caseDrafts.length > 0 ? `(${caseDrafts.length})` : ''}` :
+                        `Registry Filing ${caseFilingRequests.length > 0 ? `(${caseFilingRequests.length})` : ''}`}
                 </button>
               ))}
             </div>
@@ -283,7 +334,7 @@ export default function CourtCaseDetails() {
             {activeTab === "deadlines" && (
               <div className="space-y-6">
                 <div className="flex justify-end">
-                  <button 
+                  <button
                     onClick={() => setShowDeadlineForm(!showDeadlineForm)}
                     className="bg-[#0B1F3A] text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-900 transition"
                   >
@@ -297,28 +348,28 @@ export default function CourtCaseDetails() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="md:col-span-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Action Required *</label>
-                        <input 
+                        <input
                           placeholder="e.g. File Written Submissions, Serve Summons..."
                           className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                           value={deadlineForm.title}
-                          onChange={e => setDeadlineForm({...deadlineForm, title: e.target.value})}
+                          onChange={e => setDeadlineForm({ ...deadlineForm, title: e.target.value })}
                         />
                       </div>
                       <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Due Date *</label>
-                        <input 
+                        <input
                           type="date"
                           className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                           value={deadlineForm.dueDate}
-                          onChange={e => setDeadlineForm({...deadlineForm, dueDate: e.target.value})}
+                          onChange={e => setDeadlineForm({ ...deadlineForm, dueDate: e.target.value })}
                         />
                       </div>
                       <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Category</label>
-                        <select 
+                        <select
                           className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                           value={deadlineForm.category}
-                          onChange={e => setDeadlineForm({...deadlineForm, category: e.target.value as any})}
+                          onChange={e => setDeadlineForm({ ...deadlineForm, category: e.target.value as any })}
                         >
                           <option value="Directive">Court Directive</option>
                           <option value="Filing">Filing Deadline</option>
@@ -326,16 +377,16 @@ export default function CourtCaseDetails() {
                           <option value="Other">Other (Custom)...</option>
                         </select>
                         {deadlineForm.category === "Other" && (
-                          <input 
+                          <input
                             placeholder="Type custom category name..."
                             className="w-full bg-blue-50 border-blue-200 border p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 mt-2"
                             value={deadlineForm.customCategory}
-                            onChange={e => setDeadlineForm({...deadlineForm, customCategory: e.target.value})}
+                            onChange={e => setDeadlineForm({ ...deadlineForm, customCategory: e.target.value })}
                           />
                         )}
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={handleAddDeadline}
                       className="mt-6 bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition"
                     >
@@ -348,36 +399,50 @@ export default function CourtCaseDetails() {
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Active Court Deadlines</h3>
                   <div className="space-y-4">
                     {courtCase.deadlines?.map(deadline => (
-                      <div key={deadline.id} className={`p-6 rounded-[28px] border transition-all flex justify-between items-center ${deadline.status === 'Completed' ? 'bg-slate-50 border-transparent opacity-60' : 'bg-red-50/30 border-red-100 shadow-sm'}`}>
+                      <div key={deadline.id} className={`p-6 rounded-[28px] border transition-all flex justify-between items-center ${deadline.status === 'Completed' ? 'bg-slate-50 border-transparent opacity-60' :
+                          getDeadlineUrgency(deadline.dueDate) === 'overdue' ? 'bg-red-50 border-red-200 shadow-sm' :
+                            getDeadlineUrgency(deadline.dueDate) === 'soon' ? 'bg-amber-50 border-amber-200 shadow-sm' :
+                              'bg-slate-50/30 border-slate-100 shadow-sm'
+                        }`}>
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${deadline.status === 'Completed' ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-red-100 text-red-600 border-red-200'}`}>
+                            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${deadline.status === 'Completed' ? 'bg-slate-100 text-slate-400 border-slate-200' :
+                                getUrgencyStyles(getDeadlineUrgency(deadline.dueDate))
+                              }`}>
                               {deadline.category || "GENERAL"}
                             </span>
                             <p className={`font-black text-sm ${deadline.status === 'Completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{deadline.title}</p>
                           </div>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                            Due: {new Date(deadline.dueDate).toLocaleDateString()}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                              Due: {new Date(deadline.dueDate).toLocaleDateString()}
+                            </p>
+                            {deadline.status === 'Pending' && getDeadlineUrgency(deadline.dueDate) !== 'normal' && (
+                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getDeadlineUrgency(deadline.dueDate) === 'overdue' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'
+                                }`}>
+                                {getDeadlineUrgency(deadline.dueDate)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           {deadline.status === 'Pending' ? (
-                            <button 
+                            <button
                               onClick={() => updateCourtCaseDeadline(courtCase.id, deadline.id, { status: 'Completed' })}
                               className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-700 transition shadow-lg shadow-emerald-900/10"
                             >
                               ✓ DONE
                             </button>
                           ) : (
-                            <button 
+                            <button
                               onClick={() => updateCourtCaseDeadline(courtCase.id, deadline.id, { status: 'Pending' })}
                               className="text-slate-400 text-[10px] font-black uppercase hover:underline"
                             >
                               Re-open
                             </button>
                           )}
-                          <button 
-                            onClick={() => { if(confirm("Remove this deadline?")) deleteCourtCaseDeadline(courtCase.id, deadline.id); }}
+                          <button
+                            onClick={() => { if (confirm("Remove this deadline?")) deleteCourtCaseDeadline(courtCase.id, deadline.id); }}
                             className="p-2 text-slate-300 hover:text-red-500 transition-colors"
                           >
                             🗑️
@@ -413,24 +478,25 @@ export default function CourtCaseDetails() {
                           return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
                         };
                         return (
-                        <div key={note.id} className="relative pl-14 group">
-                          <div className="absolute left-4 top-2 w-2.5 h-2.5 rounded-full bg-blue-600 border-4 border-white shadow-sm"></div>
-                          <div className="bg-slate-50/50 p-6 rounded-[28px] border border-transparent hover:border-slate-100 transition-all relative">
-                            {(note.authorId === currentUser.id || isManagerOrAdmin) && (
-                              <button
-                                onClick={() => handleDeleteNote(note.id)}
-                                className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                              >
-                                <span className="text-[10px]">🗑️</span>
-                              </button>
-                            )}
-                            <p className="text-sm font-semibold text-slate-700 leading-relaxed mb-4">{note.message}</p>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                              {note.authorName} • {renderDate(note.date)}
-                            </p>
+                          <div key={note.id} className="relative pl-14 group">
+                            <div className="absolute left-4 top-2 w-2.5 h-2.5 rounded-full bg-blue-600 border-4 border-white shadow-sm"></div>
+                            <div className="bg-slate-50/50 p-6 rounded-[28px] border border-transparent hover:border-slate-100 transition-all relative">
+                              {(note.authorId === currentUser.id || isManagerOrAdmin) && (
+                                <button
+                                  onClick={() => handleDeleteNote(note.id)}
+                                  className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                  <span className="text-[10px]">🗑️</span>
+                                </button>
+                              )}
+                              <p className="text-sm font-semibold text-slate-700 leading-relaxed mb-4">{note.message}</p>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                                {note.authorName} • {renderDate(note.date)}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      )})
+                        )
+                      })
                     ) : (
                       <div className="pl-14 py-6 text-slate-400 font-bold italic text-sm">No recorded actions for this case.</div>
                     )}
@@ -620,9 +686,126 @@ export default function CourtCaseDetails() {
                   <div className="bg-white p-12 rounded-[40px] shadow-sm border border-slate-100 text-center">
                     <p className="text-4xl mb-4">📝</p>
                     <p className="text-slate-400 font-bold italic">No draft requests for this case yet.</p>
-                    {canCreateDraft && <p className="text-slate-300 text-sm mt-2">Use the button above to assign drafting work to an assistant.</p>}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* REGISTRY TAB */}
+            {activeTab === "registry" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-black text-slate-900 uppercase">ECCMIS Filing Requests</h3>
+                  <button
+                    onClick={() => { setShowFilingForm(!showFilingForm); setEditingFilingId(null); setFilingForm({ documentName: "", title: "", description: "", assignedToId: "" }); }}
+                    className="bg-[#0B1F3A] text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-900 transition"
+                  >
+                    {showFilingForm ? "✕ Cancel" : "+ Request Filing"}
+                  </button>
+                </div>
+
+                {showFilingForm && (
+                  <div className="bg-white p-8 rounded-[40px] shadow-sm border border-blue-100">
+                    <h3 className="text-sm font-black text-slate-900 mb-6 uppercase tracking-widest">
+                      {editingFilingId ? "Edit Filing Request" : "New Filing Request"}
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Document Name *</label>
+                          <input
+                            placeholder="e.g. Plaint, Affidavit, Notice of Motion"
+                            className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            value={filingForm.documentName}
+                            onChange={e => setFilingForm({ ...filingForm, documentName: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Assign To (Registry) *</label>
+                          <select
+                            className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none"
+                            value={filingForm.assignedToId}
+                            onChange={e => setFilingForm({ ...filingForm, assignedToId: e.target.value })}
+                          >
+                            <option value="">Select Staff...</option>
+                            {users.filter(u => u.role === 'manager' || u.role === 'clerk').map(l => (
+                              <option key={l.id} value={l.id}>{l.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Instructions / Purpose</label>
+                        <textarea
+                          placeholder="Provide specific instructions for the filing staff..."
+                          className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          rows={3}
+                          value={filingForm.description}
+                          onChange={e => setFilingForm({ ...filingForm, description: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={handleCreateFiling}
+                          className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition"
+                        >
+                          {editingFilingId ? "Update Request" : "Send Filing Request"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Matter Filings ({caseFilingRequests.length})</h4>
+                  <div className="space-y-4">
+                    {caseFilingRequests.map(f => (
+                      <div key={f.id} className={`p-6 rounded-[24px] border ${f.status === 'Completed' ? 'bg-slate-50 border-transparent' : 'bg-blue-50 border-blue-100'}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-black text-slate-900 text-sm">{f.documentName}</p>
+                            {f.status === 'Pending' && <p className="text-[10px] text-blue-600 font-bold mt-0.5">OUTGOING FILING REQUEST</p>}
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${f.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-600 text-white animate-pulse'}`}>
+                            {f.status}
+                          </span>
+                        </div>
+                        {f.description && <p className="text-xs text-slate-500 mb-3 italic">"{f.description}"</p>}
+
+                        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[10px] font-black text-slate-400 uppercase mb-3">
+                          <span>👤 Staff: {f.assignedToName}</span>
+                          <span>📦 Requested: {new Date(f.dateCreated).toLocaleDateString('en-GB')}</span>
+                          {f.status === 'Completed' && f.eccmisReference && (
+                            <span className="text-emerald-600">✅ Ref: {f.eccmisReference}</span>
+                          )}
+                          {f.status === 'Completed' && f.hoursSpent && (
+                            <span className="text-slate-500">⏱ {f.hoursSpent} hrs spent</span>
+                          )}
+                        </div>
+
+                        {f.status === 'Pending' && (
+                          <div className="flex gap-2 border-t border-blue-100 pt-3 mt-3">
+                            {(String(f.requestedById) === String(currentUser.id) || isManagerOrAdmin) && (
+                              <>
+                                <button onClick={() => openEditFiling(f)} className="text-[9px] font-black text-blue-600 uppercase hover:underline">Edit</button>
+                                <button onClick={() => deleteFilingRequest(f.id)} className="text-[9px] font-black text-red-600 uppercase hover:underline">Cancel</button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {f.status === 'Completed' && f.registryNote && (
+                          <div className="bg-white/50 p-4 rounded-xl mt-3 border border-slate-100">
+                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Filing Note:</p>
+                            <p className="text-xs text-slate-600 leading-relaxed font-medium">"{f.registryNote}"</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {caseFilingRequests.length === 0 && (
+                      <p className="text-center text-slate-400 italic text-sm py-10">No filing requests have been made for this matter yet.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -702,7 +885,16 @@ export default function CourtCaseDetails() {
                 </div>
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Next Court Date</p>
-                  <p className="text-sm font-bold text-blue-600">{courtCase.nextCourtDate || "TBD"}</p>
+                  <p className={`text-sm font-bold ${getDeadlineUrgency(courtCase.nextCourtDate) === 'overdue' ? 'text-red-500' :
+                      getDeadlineUrgency(courtCase.nextCourtDate) === 'soon' ? 'text-amber-500' : 'text-blue-600'
+                    }`}>
+                    {courtCase.nextCourtDate || "TBD"}
+                    {courtCase.nextCourtDate && getDeadlineUrgency(courtCase.nextCourtDate) !== 'normal' && (
+                      <span className="ml-1 text-[8px] font-black uppercase">
+                        ({getDeadlineUrgency(courtCase.nextCourtDate)})
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Reference ID</p>

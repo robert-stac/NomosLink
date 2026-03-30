@@ -85,6 +85,25 @@ export interface DraftRequest {
   dateCompleted?: string;
 }
 
+export interface FilingRequest {
+  id: string;
+  caseId: string;
+  caseFileName: string;
+  documentName: string;
+  title: string;
+  description: string;
+  assignedToId: string;
+  assignedToName: string;
+  requestedById: string;
+  requestedByName: string;
+  status: "Pending" | "Completed";
+  eccmisReference?: string;
+  registryNote?: string;
+  hoursSpent?: number;
+  dateCreated: string;
+  dateCompleted?: string;
+}
+
 export interface Transaction {
   id: string;
   fileName: string;
@@ -292,6 +311,12 @@ interface AppContextType {
   addDraftRequest: (draft: Omit<DraftRequest, "id" | "status" | "dateCreated">) => Promise<void>;
   completeDraftRequest: (id: string, hoursSpent?: number, documentUrl?: string, documentName?: string) => void;
   deleteDraftRequest: (id: string) => void;
+
+  filingRequests: FilingRequest[];
+  addFilingRequest: (filing: Omit<FilingRequest, "id" | "status" | "dateCreated">) => Promise<void>;
+  updateFilingRequest: (id: string, data: Partial<FilingRequest>) => void;
+  completeFilingRequest: (id: string, hoursSpent: number, eccmisReference?: string, registryNote?: string) => void;
+  deleteFilingRequest: (id: string) => void;
 
   notifications: AppNotification[];
   sendNotification: (recipientId: string, message: string, type: 'alert' | 'task' | 'file', relatedId?: string, relatedType?: 'case' | 'transaction' | 'letter' | 'task') => void;
@@ -535,6 +560,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [clients, setClients] = useState<Client[]>(() => JSON.parse(localStorage.getItem("clients") || "[]"));
   const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem("tasks") || "[]").map(normalizeTask));
   const [draftRequests, setDraftRequests] = useState<DraftRequest[]>(() => JSON.parse(localStorage.getItem("draftRequests") || "[]"));
+  const [filingRequests, setFilingRequests] = useState<FilingRequest[]>(() => JSON.parse(localStorage.getItem("filingRequests") || "[]"));
   const [landTitles, setLandTitles] = useState<LandTitle[]>(() => JSON.parse(localStorage.getItem("landTitles") || "[]"));
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
@@ -684,6 +710,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabase.from('invoices').select('*'),
           supabase.from('expenses').select('*').order('date', { ascending: false }),
           supabase.from('draft_requests').select('*'),
+          supabase.from('filing_requests').select('*'),
           supabase.from('land_titles').select('*, notes_history:land_title_notes(*)'),
         ]);
 
@@ -715,6 +742,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData));
         if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData));
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
+        if (results[10]?.data) setFilingRequests(prev => mergeIfChanged(prev, results[10].data));
         if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));
 
         setInitialDataLoaded(true);
@@ -1540,6 +1568,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /* =======================
+      FILING REQUESTS
+  ======================= */
+  const addFilingRequest = async (filingData: Omit<FilingRequest, "id" | "status" | "dateCreated">) => {
+    const newFiling: FilingRequest = {
+      ...filingData,
+      id: crypto.randomUUID(),
+      status: "Pending",
+      dateCreated: new Date().toISOString(),
+    };
+    setFilingRequests(prev => [...prev, newFiling]);
+    await supabase.from('filing_requests').insert([newFiling]);
+    sendNotification(filingData.assignedToId, 'New Registry Filing Requested: "' + filingData.documentName + '"', 'task', newFiling.id, 'task');
+  };
+
+  const updateFilingRequest = async (id: string, data: Partial<FilingRequest>) => {
+    setFilingRequests(prev => prev.map(f => f.id === id ? { ...f, ...data } : f));
+    await supabase.from('filing_requests').update(data).eq('id', id);
+  };
+
+  const completeFilingRequest = async (id: string, hoursSpent: number, eccmisReference?: string, registryNote?: string) => {
+    const update = {
+      status: "Completed" as const,
+      hoursSpent,
+      eccmisReference,
+      registryNote,
+      dateCompleted: new Date().toISOString()
+    };
+    const filing = filingRequests.find(f => f.id === id);
+    setFilingRequests(prev => prev.map(f => f.id === id ? { ...f, ...update } : f));
+    await supabase.from('filing_requests').update(update).eq('id', id);
+    if (filing) {
+      sendNotification(filing.requestedById, `Filing Completed: "${filing.documentName}" (Ref: ${eccmisReference || 'N/A'})`, 'file', filing.caseId, 'case');
+    }
+  };
+
+  const deleteFilingRequest = async (id: string) => {
+    setFilingRequests(prev => prev.filter(f => f.id !== id));
+    await supabase.from('filing_requests').delete().eq('id', id);
+  };
+
+  /* =======================
       INVOICE SCAN UPLOAD
   ======================= */
   const uploadInvoiceScan = async (id: string, file: File): Promise<string> => {
@@ -1585,6 +1654,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("clients", JSON.stringify(clients));
     localStorage.setItem("tasks", JSON.stringify(tasks));
     localStorage.setItem("draftRequests", JSON.stringify(draftRequests));
+    localStorage.setItem("filingRequests", JSON.stringify(filingRequests));
     localStorage.setItem("landTitles", JSON.stringify(landTitles));
     localStorage.setItem("commLogs", JSON.stringify(commLogs));
     localStorage.setItem("expenses", JSON.stringify(expenses));
@@ -1636,6 +1706,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         tasks, addTask, updateTask, deleteTask, completeTask, appendTaskNote,
 
         draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest,
+
+        filingRequests, addFilingRequest, updateFilingRequest, completeFilingRequest, deleteFilingRequest,
 
         landTitles, addLandTitle, updateLandTitle, deleteLandTitle, addLandTitleNote, uploadLandTitleScan,
 

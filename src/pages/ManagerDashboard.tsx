@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline } = useAppContext();
+  const { users, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest } = useAppContext();
   const navigate = useNavigate();
 
   const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(null);
@@ -123,6 +123,11 @@ export default function ManagerDashboard() {
     }))
   ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
+  const pendingFilings = filingRequests.filter(f => 
+    f.status === 'Pending' && 
+    (!selectedLawyerId || f.assignedToId === selectedLawyerId || f.requestedById === selectedLawyerId)
+  ).sort((a, b) => new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime());
+
   const handleSaveTask = () => {
     const clerk = clerks.find(c => String(c.id) === String(taskForm.assignedToId));
     if (!taskForm.title || !clerk) return alert("Please fill title and select a clerk");
@@ -179,8 +184,64 @@ export default function ManagerDashboard() {
     setIsTaskModalOpen(false);
   };
 
+  const [showRegistryBanner, setShowRegistryBanner] = useState(() => !localStorage.getItem("dismissed_registry_banner_manager_v1"));
+
+  const dismissBanner = () => {
+    localStorage.setItem("dismissed_registry_banner_manager_v1", "true");
+    setShowRegistryBanner(false);
+  };
+
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-6 relative">
+      {/* GLASSMORPHISM FEATURE ANNOUNCEMENT OVERLAY */}
+      {showRegistryBanner && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-500">
+          <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[48px] p-10 md:p-14 text-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] max-w-2xl w-full text-center relative overflow-hidden group">
+            {/* Decorative elements */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-400/30 transition-colors" />
+            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-400/30 transition-colors" />
+            
+            <div className="relative z-10">
+              <div className="w-24 h-24 bg-white/10 rounded-[32px] flex items-center justify-center text-5xl mb-8 mx-auto border border-white/10 shadow-inner">
+                ⚖️
+              </div>
+              
+              <span className="bg-blue-400/20 text-blue-200 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-6 inline-block border border-blue-400/20">
+                New Feature Release
+              </span>
+              
+              <h1 className="text-4xl md:text-5xl font-black mb-6 tracking-tight leading-tight">
+                Registry Filing <br />
+                <span className="text-blue-300">Management</span>
+              </h1>
+              
+              <p className="text-blue-100/80 text-lg leading-relaxed mb-10 font-medium max-w-lg mx-auto">
+                Oversee the new document filing workflow. Track pending lawyer requests, assign registry tasks, and monitor ECCMIS submission performance.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <button 
+                  onClick={() => {
+                    const el = document.getElementById('registry-filings-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    dismissBanner();
+                  }}
+                  className="w-full sm:w-auto bg-white text-blue-900 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-50 transition-all hover:scale-105 active:scale-95 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.3)]"
+                >
+                  View Pending Filings 🚀
+                </button>
+                <button 
+                  onClick={dismissBanner}
+                  className="w-full sm:w-auto bg-white/5 border border-white/10 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
+                >
+                  Dismiss Update
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -229,6 +290,54 @@ export default function ManagerDashboard() {
           </div>
         </div>
       </header>
+
+      {/* REGISTRY FILINGS SECTION */}
+      {pendingFilings.length > 0 && (
+        <div id="registry-filings-section" className="bg-blue-50 border border-blue-100 p-6 rounded-xl shadow-sm scroll-mt-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-black text-blue-900 uppercase tracking-tight">Pending Registry Filings</h3>
+              <p className="text-xs text-blue-600 font-bold">Action required for court document submissions</p>
+            </div>
+            <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black">{pendingFilings.length}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {pendingFilings.map(f => (
+              <div key={f.id} className="bg-white p-4 rounded-lg border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-slate-800 text-sm truncate pr-2">{f.documentName}</h4>
+                  <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-black uppercase animate-pulse">Pending</span>
+                </div>
+                <p className="text-xs text-blue-700 font-bold mb-1 uppercase tracking-tighter">⚖️ {f.caseFileName}</p>
+                {f.description && <p className="text-[11px] text-slate-500 line-clamp-2 italic mb-3">"{f.description}"</p>}
+                
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-100">
+                  <div className="text-[10px] text-slate-400 font-black uppercase">
+                    From: {f.requestedByName}
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const ref = prompt("Enter ECCMIS Reference Number:");
+                      if (ref !== null) {
+                        const note = prompt("Any notes for the lawyer? (Optional)");
+                        updateFilingRequest(f.id, { 
+                          status: 'Completed', 
+                          eccmisReference: ref, 
+                          registryNote: note || undefined,
+                          dateCompleted: new Date().toISOString()
+                        });
+                      }
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-colors shadow-sm"
+                  >
+                    Mark as Filed
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* SUMMARY STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -350,6 +459,53 @@ export default function ManagerDashboard() {
           <p className="text-center text-gray-500 italic py-6">No pending court deadlines.</p>
         )}
       </div>
+      
+      {/* PENDING REGISTRY FILINGS */}
+      {pendingFilings.length > 0 && (
+        <div className="bg-white p-6 rounded-lg shadow-sm border mt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-blue-700 flex items-center gap-2">
+              <span>📂</span> Pending Registry Filings
+            </h3>
+            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">{pendingFilings.length}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pendingFilings.map(f => (
+              <div key={f.id} className="p-4 border rounded-lg bg-blue-50/50 hover:border-blue-300 transition-all group">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-slate-800 text-sm truncate pr-2">{f.documentName}</h4>
+                  <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-black uppercase animate-pulse">Pending</span>
+                </div>
+                <p className="text-xs text-blue-700 font-bold mb-1 uppercase tracking-tighter">⚖️ {f.caseFileName}</p>
+                {f.description && <p className="text-[11px] text-slate-500 line-clamp-2 italic mb-3">"{f.description}"</p>}
+                
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-100">
+                  <div className="text-[10px] text-slate-400 font-black uppercase">
+                    From: {f.requestedByName}
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const ref = prompt("Enter ECCMIS Reference Number:");
+                      if (ref !== null) {
+                        const note = prompt("Any notes for the lawyer? (Optional)");
+                        updateFilingRequest(f.id, { 
+                          status: 'Completed', 
+                          eccmisReference: ref, 
+                          registryNote: note || undefined,
+                          dateCompleted: new Date().toISOString()
+                        });
+                      }
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-colors shadow-sm"
+                  >
+                    Mark as Filed
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* STAFF FILTER PILLS */}
       <div className="flex gap-3 overflow-x-auto pb-2">

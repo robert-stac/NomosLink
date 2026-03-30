@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
+import { getDeadlineUrgency } from "../../utils/dateUtils";
 
 export default function LawyerCourtCaseDetails() {
   const { id } = useParams<{ id: string }>();
@@ -252,7 +253,21 @@ export default function LawyerCourtCaseDetails() {
               <div className="space-y-6">
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase">Next Court Date</p>
-                  <p className="text-lg font-bold text-blue-200">{courtCase.nextCourtDate || "TBD"}</p>
+                  <div className="flex items-center gap-2">
+                    <p className={`text-lg font-bold ${
+                      getDeadlineUrgency(courtCase.nextCourtDate) === 'overdue' ? 'text-red-400' : 
+                      getDeadlineUrgency(courtCase.nextCourtDate) === 'soon' ? 'text-amber-400' : 'text-blue-200'
+                    }`}>
+                      {courtCase.nextCourtDate || "TBD"}
+                    </p>
+                    {courtCase.nextCourtDate && getDeadlineUrgency(courtCase.nextCourtDate) !== 'normal' && (
+                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
+                        getDeadlineUrgency(courtCase.nextCourtDate) === 'overdue' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
+                      }`}>
+                        {getDeadlineUrgency(courtCase.nextCourtDate)}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-white/10">

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import NotificationBell from "../NotificationBell";
+import { getDeadlineUrgency, getUrgencyStyles } from "../../utils/dateUtils";
 
 const body: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 const serif: React.CSSProperties = { fontFamily: "'Playfair Display', serif" };
@@ -38,10 +39,11 @@ export default function LawyerDashboard() {
     users, tasks, addTask, deleteTask, updateTask,
     notifications, markNotificationsAsRead,
     draftRequests, completeDraftRequest,
+    filingRequests, updateFilingRequest,
     updateCourtCaseDeadline,
   } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters" | "Drafts">("Cases");
+  const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters" | "Drafts" | "Registry">("Cases");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -60,6 +62,8 @@ export default function LawyerDashboard() {
   const draftsAssignedToMe = draftRequests.filter(d => String(d.assignedToId) === String(currentUser.id));
   const draftsRequestedByMe = draftRequests.filter(d => String(d.requestedById) === String(currentUser.id));
   const pendingIncomingCount = draftsAssignedToMe.filter(d => d.status === 'Pending').length;
+  const filingsAssignedToMe = filingRequests.filter(f => String(f.assignedToId) === String(currentUser.id));
+  const filingsRequestedByMe = filingRequests.filter(f => String(f.requestedById) === String(currentUser.id));
 
   const handleSaveTask = () => {
     const clerk = clerks.find(c => String(c.id) === String(taskForm.assignedToId));
@@ -92,6 +96,8 @@ export default function LawyerDashboard() {
     completeDraftRequest(completingDraftId, completeForm.hoursSpent ? Number(completeForm.hoursSpent) : undefined, documentUrl, documentName);
     setCompletingDraftId(null); setCompleteForm({ hoursSpent: "", documentFile: null }); setUploading(false);
   };
+
+  const [showRegistryBanner, setShowRegistryBanner] = useState(() => !localStorage.getItem("dismissed_registry_banner_v1"));
 
   const myData = useMemo(() => {
     const userId = String(currentUser.id);
@@ -128,19 +134,28 @@ export default function LawyerDashboard() {
       cases: assignedCases,
       txs: transactions.filter(t => String(t.lawyerId) === userId && !t.archived),
       ltrs: letters.filter(l => (String(l.lawyerId) === userId || String((l as any).lawyer?.id) === userId) && !l.archived),
+      filings: filingsRequestedByMe,
+      assignedFilings: filingsAssignedToMe,
       nextHearing: upcoming || null,
       urgentReminders,
       pendingDeadlines,
     };
-  }, [courtCases, transactions, letters, currentUser.id, draftRequests]);
+  }, [courtCases, transactions, letters, currentUser.id, draftRequests, filingRequests]);
+
+  const dismissBanner = () => {
+    localStorage.setItem("dismissed_registry_banner_v1", "true");
+    setShowRegistryBanner(false);
+  };
 
   const filteredCases = myData.cases.filter(c => c.fileName?.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredTxs = myData.txs.filter(t => t.fileName?.toLowerCase().includes(searchQuery.toLowerCase()) || t.type?.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredLtrs = myData.ltrs.filter(l => l.subject?.toLowerCase().includes(searchQuery.toLowerCase()) || l.type?.toLowerCase().includes(searchQuery.toLowerCase()) || l.recipient?.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredAssignedDrafts = draftsAssignedToMe.filter(d => d.title?.toLowerCase().includes(searchQuery.toLowerCase()) || d.caseFileName?.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredRequestedDrafts = draftsRequestedByMe.filter(d => d.title?.toLowerCase().includes(searchQuery.toLowerCase()) || d.caseFileName?.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredAssignedFilings = filingsAssignedToMe.filter(f => f.documentName?.toLowerCase().includes(searchQuery.toLowerCase()) || f.caseFileName?.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredRequestedFilings = filingsRequestedByMe.filter(f => f.documentName?.toLowerCase().includes(searchQuery.toLowerCase()) || f.caseFileName?.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const currentCount = activeTab === "Cases" ? filteredCases.length : activeTab === "Transactions" ? filteredTxs.length : activeTab === "Letters" ? filteredLtrs.length : (filteredAssignedDrafts.length + filteredRequestedDrafts.length);
+  const currentCount = activeTab === "Cases" ? filteredCases.length : activeTab === "Transactions" ? filteredTxs.length : activeTab === "Letters" ? filteredLtrs.length : activeTab === "Drafts" ? (filteredAssignedDrafts.length + filteredRequestedDrafts.length) : (filteredAssignedFilings.length + filteredRequestedFilings.length);
 
   const inp = "w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition shadow-sm";
 
@@ -194,7 +209,56 @@ export default function LawyerDashboard() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 -mt-12 space-y-10">
+      <div className="max-w-7xl mx-auto px-6 -mt-12 space-y-8">
+
+        {/* GLASSMORPHISM FEATURE ANNOUNCEMENT OVERLAY */}
+        {showRegistryBanner && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-500">
+            <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[48px] p-10 md:p-14 text-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] max-w-2xl w-full text-center relative overflow-hidden group">
+              {/* Decorative elements */}
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-400/30 transition-colors" />
+              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-400/30 transition-colors" />
+              
+              <div className="relative z-10">
+                <div className="w-24 h-24 bg-white/10 rounded-[32px] flex items-center justify-center text-5xl mb-8 mx-auto border border-white/10 shadow-inner">
+                  ⚖️
+                </div>
+                
+                <span className="bg-blue-400/20 text-blue-200 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-6 inline-block border border-blue-400/20">
+                  New Feature Release
+                </span>
+                
+                <h2 style={serif} className="text-4xl md:text-5xl font-bold mb-6 tracking-tight leading-tight">
+                  Registry Filing <br />
+                  <span className="text-blue-300">is Now Live</span>
+                </h2>
+                
+                <p className="text-blue-100/80 text-lg leading-relaxed mb-10 font-medium max-w-lg mx-auto">
+                  Seamlessly request and track court document filings directly from your matter files. 
+                  Real-time status updates and ECCMIS reference tracking are now at your fingertips.
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                  <button 
+                    onClick={() => {
+                      setActiveTab("Registry");
+                      dismissBanner();
+                    }}
+                    className="w-full sm:w-auto bg-white text-blue-900 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-50 transition-all hover:scale-105 active:scale-95 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.3)]"
+                  >
+                    Open Registry Portal 🚀
+                  </button>
+                  <button 
+                    onClick={dismissBanner}
+                    className="w-full sm:w-auto bg-white/5 border border-white/10 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
+                  >
+                    Maybe Later
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* URGENT ALERT */}
         {myData.urgentReminders.length > 0 && (
@@ -257,8 +321,13 @@ export default function LawyerDashboard() {
                           ⚖️ {deadline.caseFileName}
                         </button>
                       </td>
-                      <td className="py-4 pr-4 font-medium text-slate-600 whitespace-nowrap">
-                        {new Date(deadline.dueDate).toLocaleDateString()}
+                      <td className="py-4 pr-4 font-medium whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="text-slate-600">{new Date(deadline.dueDate).toLocaleDateString()}</span>
+                          <span className={`mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border w-fit ${getUrgencyStyles(getDeadlineUrgency(deadline.dueDate))}`}>
+                            {getDeadlineUrgency(deadline.dueDate)}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-4 pr-4">
                         <span className="px-2.5 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 uppercase">
@@ -319,7 +388,7 @@ export default function LawyerDashboard() {
         <div>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div className="flex gap-8 border-b border-slate-200">
-              {(["Cases", "Transactions", "Letters", "Drafts"] as const).map(tab => (
+              {(["Cases", "Transactions", "Letters", "Drafts", "Registry"] as const).map(tab => (
                 <button key={tab} onClick={() => { setActiveTab(tab); setSearchQuery(""); }}
                   className={`pb-3 text-xs font-semibold uppercase tracking-wider transition border-b-2 -mb-px flex items-center gap-2 ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"}`}>
                   {tab}
@@ -406,6 +475,86 @@ export default function LawyerDashboard() {
                   <div className="text-center py-16">
                     <p className="text-4xl mb-4">📝</p>
                     <p className="text-sm italic text-slate-300">No draft requests found.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {activeTab === "Registry" && (
+              <div className="col-span-3 space-y-8">
+                {/* Filings Requested by Me */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">My Outgoing Filing Requests ({filteredRequestedFilings.length})</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredRequestedFilings.map(filing => (
+                      <div key={filing.id} className="bg-white p-6 rounded-[32px] border border-blue-100 shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="space-y-1 pr-4">
+                            <h4 className="text-sm font-semibold text-slate-900">{filing.documentName}</h4>
+                            <p className="text-[10px] font-bold text-blue-500 uppercase">⚖️ {filing.caseFileName}</p>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${filing.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-600 text-white animate-pulse'}`}>{filing.status}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-4 line-clamp-2">{filing.description || "No specific instructions provided."}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-black text-slate-400 uppercase">
+                          <span>👤 To Registry: {filing.assignedToName}</span>
+                          {filing.status === 'Completed' && filing.eccmisReference && (
+                            <span className="text-emerald-600">Ref: {filing.eccmisReference}</span>
+                          )}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-slate-50">
+                          <button onClick={() => navigate(`/lawyer/cases/${filing.caseId}`)} className="text-[10px] font-black text-blue-600 uppercase hover:underline">View Matter Details</button>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredRequestedFilings.length === 0 && (
+                      <p className="col-span-3 text-center text-sm italic text-slate-300 py-10">No outgoing filings found.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filings Assigned to me (In case registry staff use this dashboard) */}
+                {filteredAssignedFilings.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Registry Filings Assigned to Me ({filteredAssignedFilings.length})</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredAssignedFilings.map(filing => (
+                        <div key={filing.id} className={`bg-white p-6 rounded-[32px] border transition-all ${filing.status === 'Completed' ? 'border-emerald-100' : 'border-blue-200 shadow-md ring-2 ring-blue-500/10'}`}>
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-semibold text-slate-900">{filing.documentName}</h4>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase">⚖️ {filing.caseFileName}</p>
+                            </div>
+                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${filing.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>{filing.status}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-4 text-[10px] font-black text-slate-400 uppercase mb-4">
+                            <span>📦 From {filing.requestedByName}</span>
+                            <span>📅 {new Date(filing.dateCreated).toLocaleDateString()}</span>
+                          </div>
+                          <div className="space-y-2">
+                            {filing.status === 'Pending' && (
+                              <button 
+                                onClick={() => {
+                                  const ref = prompt("Enter ECCMIS Reference Number:");
+                                  if (ref) {
+                                    updateFilingRequest(filing.id, { 
+                                      status: 'Completed', 
+                                      eccmisReference: ref,
+                                      dateCompleted: new Date().toISOString()
+                                    });
+                                  }
+                                }}
+                                className="w-full bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition shadow-lg shadow-emerald-900/10"
+                              >
+                                ✓ Mark as Filed
+                              </button>
+                            )}
+                            <button onClick={() => navigate(`/lawyer/cases/${filing.caseId}`)} className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-blue-600 transition">
+                              Open Matter Details
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
