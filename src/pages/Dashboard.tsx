@@ -29,6 +29,20 @@ export default function Dashboard() {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [showOnlyStagnant, setShowOnlyStagnant] = useState(false);
   const [sortTasksBy, setSortTasksBy] = useState("newest");
+  const [showAnnouncement, setShowAnnouncement] = useState(false);
+
+  useEffect(() => {
+    const hasSeen = localStorage.getItem('hasSeenFeedbackUpdateV1');
+    if (!hasSeen) {
+      const timer = setTimeout(() => setShowAnnouncement(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const dismissAnnouncement = () => {
+    localStorage.setItem('hasSeenFeedbackUpdateV1', 'true');
+    setShowAnnouncement(false);
+  };
 
   const isStagnant = (item: any) => {
     let lastNoteDate: Date;
@@ -464,6 +478,71 @@ export default function Dashboard() {
                   🗑 Delete Task
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* FEATURE ANNOUNCEMENT MODAL */}
+      {showAnnouncement && (
+        <div style={styles.modalOverlay} onClick={dismissAnnouncement}>
+          <div 
+            style={{ 
+              ...styles.modalContent, 
+              padding: 0, 
+              overflow: 'hidden', 
+              maxWidth: '450px',
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              boxShadow: '0 40px 100px rgba(11, 31, 58, 0.3)'
+            }} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ backgroundColor: '#0B1F3A', padding: '40px 30px', textAlign: 'center', color: 'white' }}>
+              <div style={{ fontSize: '48px', marginBottom: '15px' }}>🚀</div>
+              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '900', letterSpacing: '-0.5px' }}>High-Priority Update</h2>
+              <p style={{ margin: '10px 0 0 0', opacity: 0.8, fontSize: '14px', fontWeight: '500' }}>Version 1.4.0 — Now Live</p>
+            </div>
+            
+            <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '25px' }}>
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ fontSize: '24px' }}>📲</div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0B1F3A' }}>Manual Client Feedback</h4>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#666', lineHeight: '1.5' }}>
+                    Log phone calls and verbal updates as official feedback by checking the **"Log as Client Feedback"** box in case details.
+                  </p>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ fontSize: '24px' }}>⚡</div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0B1F3A' }}>Smart Stagnancy Alerts</h4>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#666', lineHeight: '1.5' }}>
+                    Improved alert accuracy—newly assigned files no longer trigger "stagnant" warnings prematurely.
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={dismissAnnouncement}
+                style={{ 
+                  backgroundColor: '#0B1F3A', 
+                  color: 'white', 
+                  border: 'none', 
+                  padding: '16px', 
+                  borderRadius: '12px', 
+                  fontWeight: 'bold', 
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  marginTop: '10px',
+                  boxShadow: '0 10px 20px rgba(11, 31, 58, 0.2)',
+                  transition: 'transform 0.2s ease'
+                }}
+              >
+                Got it, thanks!
+              </button>
             </div>
           </div>
         </div>
