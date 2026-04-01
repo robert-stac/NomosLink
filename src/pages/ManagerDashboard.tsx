@@ -18,11 +18,35 @@ export default function ManagerDashboard() {
   const [fileSearch, setFileSearch] = useState("");
 
   const isStagnant = (item: any) => {
-    if (!item.progressNotes || item.progressNotes.length === 0) return true;
-    const lastNoteDate = new Date(item.progressNotes[item.progressNotes.length - 1].date);
+    let lastNoteDate: Date;
+    if (!item.progressNotes || item.progressNotes.length === 0) {
+      lastNoteDate = new Date(item.date || item.createdAt || new Date());
+    } else {
+      const lastNote = item.progressNotes[item.progressNotes.length - 1];
+      // Robust parsing for legacy DD/MM/YYYY and new ISO formats
+      if (lastNote.date.includes('/')) {
+        const [d, m, y] = lastNote.date.split('/');
+        lastNoteDate = new Date(`${y}-${m}-${d}`);
+      } else {
+        lastNoteDate = new Date(lastNote.date);
+      }
+    }
+
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     return lastNoteDate < thirtyDaysAgo;
+  };
+
+  const needsFeedback = (item: any) => {
+    if (item.archived || item.status === 'Completed') return false;
+    
+    const lastFeedback = item.lastClientFeedbackDate 
+      ? new Date(item.lastClientFeedbackDate)
+      : new Date(item.date || item.createdAt || new Date());
+    
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    return lastFeedback < fourteenDaysAgo;
   };
 
   const legalStaff = users.filter(u => u.role === "lawyer" || u.role === "manager" || u.role === "clerk");
@@ -54,6 +78,17 @@ export default function ManagerDashboard() {
     activeTransactions.filter(baseFilter).filter(isStagnant).length +
     activeCases.filter(baseFilter).filter(isStagnant).length +
     activeLetters.filter(baseFilter).filter(isStagnant).length;
+
+  const feedbackOverdueCount =
+    activeTransactions.filter(baseFilter).filter(needsFeedback).length +
+    activeCases.filter(baseFilter).filter(needsFeedback).length +
+    activeLetters.filter(baseFilter).filter(needsFeedback).length;
+
+  const feedbackOverdueFiles = [
+    ...activeTransactions.filter(baseFilter).filter(needsFeedback),
+    ...activeCases.filter(baseFilter).filter(needsFeedback),
+    ...activeLetters.filter(baseFilter).filter(needsFeedback)
+  ];
 
   const totalFiles =
     activeTransactions.filter(baseFilter).length +
@@ -359,9 +394,15 @@ export default function ManagerDashboard() {
           </div>
           <p className="text-2xl font-black text-red-700">{stagnantCount}</p>
         </div>
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <p className="text-xs font-bold text-blue-500 uppercase">Current View</p>
-          <p className="text-2xl font-black text-blue-800">{showOnlyStagnant ? "At Risk" : "Standard"}</p>
+        <div 
+          onClick={() => {/* could filter by feedback overdue if desired */}}
+          className={`p-4 rounded-lg border shadow-sm cursor-pointer transition-all border-l-4 ${feedbackOverdueCount > 0 ? 'bg-orange-50 border-orange-500 ring-2 ring-orange-200' : 'bg-white border-l-orange-500 hover:bg-orange-50'}`}
+        >
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold text-orange-600 uppercase">Feedback Overdue (14+ Days)</p>
+            {feedbackOverdueCount > 0 && <span className="text-[10px] bg-orange-500 text-white px-2 py-0.5 rounded-full animate-bounce">URGENT</span>}
+          </div>
+          <p className="text-2xl font-black text-orange-700">{feedbackOverdueCount}</p>
         </div>
       </div>
 
@@ -397,6 +438,47 @@ export default function ManagerDashboard() {
           <p className="text-center text-gray-500 italic py-6">No upcoming hearings scheduled in the next 14 days.</p>
         )}
       </div>
+
+      {/* FEEDBACK OVERDUE SECTION */}
+      {feedbackOverdueCount > 0 && (
+        <div className="bg-white p-6 rounded-lg shadow-sm border mt-6 border-l-8 border-l-orange-500">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-bold text-slate-700">📞 Client Feedback Required</h3>
+            <span className="bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Team Action Needed</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {feedbackOverdueFiles.slice(0, 9).map((file: any) => {
+              const assignedLawyer = users.find(u => u.id === file.lawyerId)?.name || "Unassigned";
+              const lastFeedback = file.lastClientFeedbackDate 
+                ? new Date(file.lastClientFeedbackDate).toLocaleDateString('en-GB') 
+                : "Never";
+              return (
+                <div
+                  key={file.id}
+                  onClick={() => navigate(file.fileName ? (file.categories ? `/cases/${file.id}` : `/transactions/${file.id}`) : `/letters/${file.id}`)}
+                  className="p-4 border rounded-lg hover:border-orange-500 transition-colors cursor-pointer bg-orange-50/30"
+                >
+                  <div className="font-bold text-slate-800 text-sm truncate">{file.fileName || file.subject}</div>
+                  <div className="text-[10px] font-bold text-orange-700 mt-1 uppercase tracking-tight">
+                    Counsel: {assignedLawyer}
+                  </div>
+                  <div className="text-[10px] text-gray-500 font-medium">
+                    Last Contact: <span className="font-bold text-orange-600">{lastFeedback}</span>
+                  </div>
+                </div>
+              );
+            })}
+            {feedbackOverdueFiles.length > 9 && (
+              <div 
+                onClick={() => setShowOnlyStagnant(true)}
+                className="p-4 border border-dashed rounded-lg flex items-center justify-center text-gray-400 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+              >
+                + {feedbackOverdueFiles.length - 9} more files...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* PENDING DEADLINES */}
       <div className="bg-white p-6 rounded-lg shadow-sm border mt-6 mb-6">

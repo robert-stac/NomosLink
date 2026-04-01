@@ -22,6 +22,7 @@ export default function TransactionDetails() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editMessage, setEditMessage] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isFeedback, setIsFeedback] = useState(false);
 
   // 🔒 Safety checks
   if (!currentUser) return <div className="p-10 text-center font-bold">Not logged in.</div>;
@@ -44,8 +45,9 @@ export default function TransactionDetails() {
 
   const handleAddNote = () => {
     if (!note.trim()) return;
-    addTransactionProgress(transaction.id, note.trim());
+    addTransactionProgress(transaction.id, note.trim(), isFeedback);
     setNote("");
+    setIsFeedback(false);
   };
 
   const handleFileUpload = async (file: File) => {
@@ -130,6 +132,14 @@ export default function TransactionDetails() {
               <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Commencement Date</p>
               <p className="text-slate-700 font-bold">{transaction.date ? new Date(transaction.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : "Not set"}</p>
             </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Last Client Feedback</p>
+              <p className={`${transaction.lastClientFeedbackDate ? 'text-slate-700' : 'text-orange-500'} font-bold`}>
+                {transaction.lastClientFeedbackDate 
+                  ? new Date(transaction.lastClientFeedbackDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) 
+                  : "No feedback recorded"}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -203,6 +213,19 @@ export default function TransactionDetails() {
                   className="w-full bg-slate-50 border-0 rounded-2xl p-4 mb-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none transition"
                   placeholder="Summarize the status of this transaction..."
                 />
+                <div className="flex items-center gap-3 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <input
+                    type="checkbox"
+                    id="isFeedback"
+                    checked={isFeedback}
+                    onChange={(e) => setIsFeedback(e.target.checked)}
+                    className="w-5 h-5 rounded-lg border-2 border-slate-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
+                  />
+                  <label htmlFor="isFeedback" className="text-xs font-black text-slate-500 uppercase tracking-widest cursor-pointer select-none">
+                    Log as Client Feedback (Verbal/Phone)
+                  </label>
+                </div>
+
                 <button onClick={handleAddNote} className="bg-[#0B1F3A] text-white px-8 py-3 rounded-2xl font-bold text-xs shadow-lg shadow-blue-900/20 hover:bg-blue-900 transition">
                   Commit Note
                 </button>

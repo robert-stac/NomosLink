@@ -15,6 +15,7 @@ export default function LawyerLetterDetails() {
   } = useAppContext();
   
   const [newNote, setNewNote] = useState("");
+  const [isFeedback, setIsFeedback] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]); 
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,7 +90,12 @@ export default function LawyerLetterDetails() {
           .from('letter-docs')
           .getPublicUrl(filePath);
 
-        updatedDocs.push({ id: crypto.randomUUID(), name: file.name, url: publicUrl });
+        updatedDocs.push({ 
+          id: crypto.randomUUID(), 
+          name: file.name, 
+          url: publicUrl, 
+          date: new Date().toISOString() 
+        });
         attachmentNames.push(file.name);
       }
 
@@ -101,11 +107,12 @@ export default function LawyerLetterDetails() {
       // 3. Update Letter state (documents and progress)
       // We update docs first, then add progress to trigger the re-render chain
       await updateLetter(letter.id, { documents: updatedDocs });
-      await addLetterProgress(letter.id, combinedMessage);
+      await addLetterProgress(letter.id, combinedMessage, isFeedback);
 
       // 4. Cleanup UI state
       setNewNote("");
       setSelectedFiles([]);
+      setIsFeedback(false);
     } catch (error) {
       console.error("Submission error:", error);
       alert("Submission failed. Check console for details.");
@@ -116,13 +123,13 @@ export default function LawyerLetterDetails() {
 
   const handleDeleteNote = async (noteId: string) => {
     if (!window.confirm("Delete this update?")) return;
-    const updated = letter.progressNotes.filter((n: any) => n.id !== noteId);
+    const updated = (letter.progressNotes || []).filter((n: any) => n.id !== noteId);
     await updateLetter(letter.id, { progressNotes: updated });
   };
 
   const handleDeleteDocument = async (docId: string) => {
     if (!window.confirm("Permanently remove this PDF from the repository?")) return;
-    const updated = letter.documents?.filter((d: any) => d.id !== docId);
+    const updated = (letter.documents || []).filter((d: any) => d.id !== docId);
     await updateLetter(letter.id, { documents: updated });
   };
 
@@ -179,7 +186,14 @@ export default function LawyerLetterDetails() {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-sm border border-slate-100">
               <h1 className="text-3xl font-black text-slate-900 mb-4">{letter.subject}</h1>
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-8">Dated: {letter.date || "N/A"}</p>
+              <div className="flex gap-4 items-center mb-8">
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Dated: {letter.date || "N/A"}</p>
+                <div className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${letter.lastClientFeedbackDate ? 'bg-white text-slate-600 border-slate-200' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
+                  Last Feedback: {letter.lastClientFeedbackDate 
+                    ? new Date(letter.lastClientFeedbackDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) 
+                    : "None Recorded"}
+                </div>
+              </div>
               <div className="prose prose-slate max-w-none">
                 <p className="text-slate-600 leading-relaxed font-medium">
                   {letter.type === 'Incoming' ? "Correspondence received. Details logged below." : "Outgoing correspondence drafted and dispatched."}
@@ -230,6 +244,19 @@ export default function LawyerLetterDetails() {
                     ))}
                   </div>
                 )}
+                
+                <div className="flex items-center gap-3 mb-6 bg-white p-4 rounded-2xl border border-slate-100">
+                  <input
+                    type="checkbox"
+                    id="isFeedback"
+                    checked={isFeedback}
+                    onChange={(e) => setIsFeedback(e.target.checked)}
+                    className="w-5 h-5 rounded-lg border-2 border-slate-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
+                  />
+                  <label htmlFor="isFeedback" className="text-[10px] font-black text-slate-500 uppercase tracking-widest cursor-pointer select-none">
+                    Log as Client Feedback (Verbal/Phone)
+                  </label>
+                </div>
                 
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between pt-4 border-t border-slate-200">
                   <div className="relative">

@@ -104,6 +104,14 @@ export interface FilingRequest {
   dateCompleted?: string;
 }
 
+export interface CourtDeadline {
+  id: string;
+  title: string;
+  dueDate: string;
+  status: 'Pending' | 'Completed';
+  category?: 'Directive' | 'Submission' | 'Filing' | 'Other';
+}
+
 export interface Transaction {
   id: string;
   fileName: string;
@@ -118,14 +126,7 @@ export interface Transaction {
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
   scannedInvoiceUrl?: string;
-}
-
-export interface CourtDeadline {
-  id: string;
-  title: string;
-  dueDate: string;
-  status: 'Pending' | 'Completed';
-  category?: 'Directive' | 'Submission' | 'Filing' | 'Other';
+  lastClientFeedbackDate?: string;
 }
 
 export interface CourtCase {
@@ -147,6 +148,7 @@ export interface CourtCase {
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
   scannedInvoiceUrl?: string;
+  lastClientFeedbackDate?: string;
 }
 
 export interface Letter {
@@ -164,6 +166,7 @@ export interface Letter {
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
   scannedInvoiceUrl?: string;
+  lastClientFeedbackDate?: string;
 }
 
 export interface Invoice {
@@ -258,7 +261,7 @@ interface AppContextType {
   editTransaction: (id: string, data: Partial<Transaction>) => void;
   updateTransaction: (id: string, data: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
-  addTransactionProgress: (id: string, message: string) => void;
+  addTransactionProgress: (id: string, message: string, logAsFeedback?: boolean) => void;
   editTransactionProgress: (txId: string, noteId: string, message: string) => void;
   deleteTransactionProgress: (txId: string, noteId: string) => void;
   uploadTransactionDocument: (id: string, file: File) => Promise<void>;
@@ -269,7 +272,7 @@ interface AppContextType {
   editCourtCase: (id: string, data: Partial<CourtCase>) => void;
   updateCourtCase: (id: string, data: Partial<CourtCase>) => void;
   deleteCourtCase: (id: string) => void;
-  addCourtCaseProgress: (id: string, message: string) => void;
+  addCourtCaseProgress: (id: string, message: string, logAsFeedback?: boolean) => void;
   deleteCourtCaseProgress: (caseId: string, noteId: string) => void;
   uploadCourtCaseDocument: (caseId: string, file: File) => Promise<void>;
   deleteCourtCaseDocument: (caseId: string, docId: string) => Promise<void>;
@@ -282,7 +285,7 @@ interface AppContextType {
   editLetter: (id: string, data: Partial<Letter>) => void;
   updateLetter: (id: string, data: Partial<Letter>) => void;
   deleteLetter: (id: string) => void;
-  addLetterProgress: (id: string, message: string) => void;
+  addLetterProgress: (id: string, message: string, logAsFeedback?: boolean) => void;
   uploadLetterDocument: (letterId: string, file: File) => Promise<void>;
   deleteLetterDocument: (letterId: string, docId: string) => Promise<void>;
 
@@ -1054,7 +1057,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const scalarUpdate: Record<string, any> = {};
       const safeFields = [
         'fileName', 'type', 'lawyerId', 'billedAmount', 'paidAmount',
-        'balance', 'date', 'clientId', 'archived',
+        'balance', 'date', 'clientId', 'archived', 'lastClientFeedbackDate'
       ];
       safeFields.forEach(field => {
         if ((final as any)[field] !== undefined) {
@@ -1079,10 +1082,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('transactions').delete().eq('id', id).then();
   };
 
-  const addTransactionProgress = (id: string, message: string) => {
+  const recordClientFeedback = (fileId: string, fileType: 'case' | 'transaction' | 'letter', note: string, clientId?: string) => {
+    if (!currentUser || !clientId) return;
+    const now = new Date().toISOString();
+    
+    // Add to Communication Logs
+    const newLog: CommunicationLog = {
+      id: crypto.randomUUID(),
+      clientId,
+      note: `[File Update] ${note}`,
+      authorName: currentUser.name,
+      date: now
+    };
+    setCommLogs(prev => [...prev, newLog]);
+    supabase.from('comm_logs').insert([newLog]).then();
+
+    // Update the file's feedback date
+    if (fileType === 'case') {
+      setCourtCases(prev => prev.map(c => c.id === fileId ? { ...c, lastClientFeedbackDate: now } : c));
+      supabase.from('court_cases').update({ lastClientFeedbackDate: now }).eq('id', fileId).then();
+    } else if (fileType === 'transaction') {
+      setTransactions(prev => prev.map(t => t.id === fileId ? { ...t, lastClientFeedbackDate: now } : t));
+      supabase.from('transactions').update({ lastClientFeedbackDate: now }).eq('id', fileId).then();
+    } else if (fileType === 'letter') {
+      setLetters(prev => prev.map(l => l.id === fileId ? { ...l, lastClientFeedbackDate: now } : l));
+      supabase.from('letters').update({ lastClientFeedbackDate: now }).eq('id', fileId).then();
+    }
+  };
+
+  const addTransactionProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
     if (!currentUser) return;
     setTransactions(prev => prev.map(t => {
       if (t.id !== id) return t;
+      if (logAsFeedback) recordClientFeedback(t.id, 'transaction', message, t.clientId);
       const updated = {
         ...t,
         progressNotes: [...(t.progressNotes || []), {
@@ -1091,7 +1123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           authorId: currentUser.id,
           authorName: currentUser.name,
           authorRole: currentUser.role,
-          date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+          date: new Date().toISOString(),
         }],
       };
       supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
@@ -1172,15 +1204,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...data };
-      const {
-        progressNotes, documents, deadlines,
-        ...rawDbSafe
-      } = updated as any;
       const scalarUpdate: Record<string, any> = {};
       const safeFields = [
         'fileName', 'details', 'billed', 'paid', 'balance', 'status',
         'nextCourtDate', 'completedDate', 'lawyerId', 'clientId',
-        'categories', 'sittingType', 'archived',
+        'categories', 'sittingType', 'archived', 'lastClientFeedbackDate'
       ];
       safeFields.forEach(field => {
         if (data[field as keyof CourtCase] !== undefined) {
@@ -1205,17 +1233,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('court_cases').delete().eq('id', id).then();
   };
 
-  const addCourtCaseProgress = (id: string, message: string) => {
+  const addCourtCaseProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
     if (!currentUser) return;
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
+      if (logAsFeedback) recordClientFeedback(c.id, 'case', message, c.clientId);
       const newNote: ProgressNote = {
         id: crypto.randomUUID(),
         message,
         authorId: currentUser.id,
         authorName: currentUser.name,
         authorRole: currentUser.role,
-        date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+        date: new Date().toISOString(),
       };
       const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
       supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
@@ -1321,7 +1350,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const scalarUpdate: Record<string, any> = {};
       const safeFields = [
         'subject', 'type', 'recipient', 'lawyerId', 'clientId',
-        'status', 'archived', 'date', 'billed', 'paid',
+        'status', 'archived', 'date', 'billed', 'paid', 'lastClientFeedbackDate'
       ];
       safeFields.forEach(field => {
         if ((data as any)[field] !== undefined) {
@@ -1346,17 +1375,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
   };
 
-  const addLetterProgress = (id: string, message: string) => {
+  const addLetterProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
     if (!currentUser) return;
     setLetters(prev => prev.map(l => {
       if (l.id !== id) return l;
+      if (logAsFeedback) recordClientFeedback(l.id, 'letter', message, l.clientId);
       const newNote: ProgressNote = {
         id: crypto.randomUUID(),
         message,
         authorId: currentUser.id,
         authorName: currentUser.name,
         authorRole: currentUser.role,
-        date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+        date: new Date().toISOString(),
       };
       const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
       supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
@@ -1511,7 +1541,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const appendTaskNote = (id: string, note: string) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
-    const newNote: TaskProgressNote = { date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`, note };
+    const newNote: TaskProgressNote = { date: new Date().toISOString(), note };
     updateTask(id, { progressNotes: [...(task.progressNotes || []), newNote] });
     sendNotification(task.assignedById, 'Task Update from ' + task.assignedToName + ': "' + task.title + '"  -  "' + note + '"', 'task', task.id, 'task');
   };

@@ -31,11 +31,35 @@ export default function Dashboard() {
   const [sortTasksBy, setSortTasksBy] = useState("newest");
 
   const isStagnant = (item: any) => {
-    if (!item.progressNotes || item.progressNotes.length === 0) return true;
-    const lastNoteDate = new Date(item.progressNotes[item.progressNotes.length - 1].date);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return lastNoteDate < thirtyDaysAgo;
+    let lastNoteDate: Date;
+    if (!item.progressNotes || item.progressNotes.length === 0) {
+      lastNoteDate = new Date(item.date || item.createdAt || new Date());
+    } else {
+      const lastNote = item.progressNotes[item.progressNotes.length - 1];
+      // Robust parsing for legacy DD/MM/YYYY and new ISO formats
+      if (lastNote.date.includes('/')) {
+        const [d, m, y] = lastNote.date.split('/');
+        lastNoteDate = new Date(`${y}-${m}-${d}`);
+      } else {
+        lastNoteDate = new Date(lastNote.date);
+      }
+    }
+
+    const twentyOneDaysAgo = new Date();
+    twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
+    return lastNoteDate < twentyOneDaysAgo;
+  };
+
+  const needsFeedback = (item: any) => {
+    if (item.archived || item.status === 'Completed') return false;
+    
+    const lastFeedback = item.lastClientFeedbackDate 
+      ? new Date(item.lastClientFeedbackDate)
+      : new Date(item.date || item.createdAt || new Date());
+    
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    return lastFeedback < fourteenDaysAgo;
   };
 
   const getDaysRemaining = (dateString: string) => {
@@ -64,6 +88,11 @@ export default function Dashboard() {
     const stTransactions = (transactions || []).filter(isStagnant).length;
     const stCases = (courtCases || []).filter(isStagnant).length;
     const stLetters = (letters || []).filter(isStagnant).length;
+    
+    const fbTransactions = (transactions || []).filter(needsFeedback);
+    const fbCases = (courtCases || []).filter(needsFeedback);
+    const fbLetters = (letters || []).filter(needsFeedback);
+    const totalNeedsFeedback = fbTransactions.length + fbCases.length + fbLetters.length;
     const summary = allItems.reduce((acc, item) => {
       acc.totalBilled += item.billed;
       acc.totalPaid += item.paid;
@@ -85,15 +114,19 @@ export default function Dashboard() {
        return diffDays > 90;
     });
 
+    // totalNeedsFeedback already calculated at line 91
+    
     return { 
       ...summary, 
       totalExpenses: totalActualExpenses, 
       stTransactions, stCases, stLetters, 
       totalStagnant: stTransactions + stCases + stLetters,
       inCustodyCount: inCustodyTitles.length,
-      overdueCount: overdueTitles.length
+      overdueCount: overdueTitles.length,
+      totalNeedsFeedback,
+      needsFeedbackFiles: [...fbTransactions, ...fbCases, ...fbLetters]
     };
-  }, [transactions, courtCases, letters, expenses, landTitles]);
+  }, [transactions, courtCases, letters, expenses, landTitles, needsFeedback]);
 
   const upcomingCourts = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -204,12 +237,45 @@ export default function Dashboard() {
             <p style={{ margin: 0, fontSize: 18, fontWeight: "900", color: "#E74C3C" }}>{stats.totalStagnant}</p>
           </div>
         </div>
+        <div
+          style={{ ...styles.summaryBox, border: stats.totalNeedsFeedback > 0 ? '2px solid #E67E22' : '1px solid #EEE', backgroundColor: stats.totalNeedsFeedback > 0 ? '#FFF8F1' : 'white' }}
+        >
+          <span style={{ fontSize: 24 }}>📞</span>
+          <div>
+            <p style={{ margin: 0, fontSize: 14, color: stats.totalNeedsFeedback > 0 ? "#E67E22" : "#666", fontWeight: 'bold' }}>Feedback Overdue</p>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: "900", color: "#E67E22" }}>{stats.totalNeedsFeedback}</p>
+          </div>
+        </div>
         <SummaryBox label="Open Clerk Tasks" count={tasks?.filter(t => t.status === "Pending" && !t.deleted).length || 0} icon="📋" />
       </div>
 
       <div style={styles.mainGrid}>
         {/* LEFT COLUMN */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 25 }}>
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>📞 Clients Needing Feedback</h3>
+            <div style={styles.listContainer}>
+              {stats.needsFeedbackFiles.length > 0 ? (
+                <ul style={styles.list}>
+                  {stats.needsFeedbackFiles.map((file: any) => (
+                    <li key={file.id} style={styles.listItem} onClick={() => navigate(file.fileName ? (file.categories ? `/cases/${file.id}` : `/transactions/${file.id}`) : `/letters/${file.id}`)}>
+                      <div>
+                        <div style={{ fontWeight: "700", color: "#1A1A1A" }}>{file.fileName || file.subject}</div>
+                        <div style={{ fontSize: "11px", color: "#E67E22", fontWeight: "bold" }}>
+                          Last contact: {file.lastClientFeedbackDate ? new Date(file.lastClientFeedbackDate).toLocaleDateString() : "Never"}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: "12px", color: "#E67E22", fontWeight: "bold" }}>Overdue</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#999', fontSize: '13px' }}>
+                  ✅ All clients have been updated within the last 14 days.
+                </div>
+              )}
+            </div>
+          </section>
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Upcoming Court Dates (14 Days)</h3>
             <div style={styles.listContainer}>

@@ -46,7 +46,7 @@ export default function LawyerPerformanceDashboard() {
   const stats = useMemo(() => {
     if (!selectedLawyerId) return null;
     const now = new Date();
-    const tenDaysAgo = new Date(); tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    const twentyOneDaysAgo = new Date(); twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
     const sid = String(selectedLawyerId);
 
     const myCases = sid === "ALL" ? activeCases : activeCases.filter(c => String(c.lawyerId) === sid);
@@ -88,12 +88,28 @@ export default function LawyerPerformanceDashboard() {
     const stagnant = allFiles.filter(file => {
       if ((file as any).status === "Completed") return false;
       const notes = (file as any).progressNotes || [];
-      let lastDate = notes.length === 0
-        ? new Date((file as any).date || (file as any).createdAt || now)
-        : new Date([...notes].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date);
+      
+      let lastDate: Date;
+      if (notes.length === 0) {
+        lastDate = new Date((file as any).date || (file as any).createdAt || now);
+      } else {
+        // Get latest note with robust date comparison
+        const latestNote = [...notes].sort((a: any, b: any) => {
+          const parse = (d: string) => d.includes('/') ? new Date(d.split('/').reverse().join('-')).getTime() : new Date(d).getTime();
+          return parse(b.date) - parse(a.date);
+        })[0];
+        
+        if (latestNote.date.includes('/')) {
+          const [d, m, y] = latestNote.date.split('/');
+          lastDate = new Date(`${y}-${m}-${d}`);
+        } else {
+          lastDate = new Date(latestNote.date);
+        }
+      }
+
       const diffTime = Math.abs(now.getTime() - lastDate.getTime());
       (file as any).daysStagnant = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      return !isNaN(lastDate.getTime()) && lastDate < tenDaysAgo;
+      return !isNaN(lastDate.getTime()) && lastDate < twentyOneDaysAgo;
     });
 
     return {
@@ -113,9 +129,23 @@ export default function LawyerPerformanceDashboard() {
         all: myFilings, completed: completedFilings, pending: pendingFilings,
         totalHours: totalFilingHours,
         completionRate: myFilings.length ? Math.round((completedFilings.length / myFilings.length) * 100) : 0
+      },
+      feedback: {
+        overdueCount: allFiles.filter((f: any) => {
+          if (f.status === 'Completed' || (f as any).archived) return false;
+          
+          const lastFeedback = f.lastClientFeedbackDate 
+            ? new Date(f.lastClientFeedbackDate)
+            : new Date(f.date || f.createdAt || new Date());
+          
+          const fourteenDaysAgo = new Date();
+          fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+          return lastFeedback < fourteenDaysAgo;
+        }).length,
+        totalActive: allFiles.filter((f: any) => f.status !== 'Completed' && !f.archived).length
       }
     };
-  }, [selectedLawyerId, activeCases, activeTransactions, activeLetters, draftRequests, tasks]);
+  }, [selectedLawyerId, activeCases, activeTransactions, activeLetters, draftRequests, tasks, users]);
 
   const filteredData = useMemo(() => {
     if (!stats) return null;
@@ -276,11 +306,17 @@ export default function LawyerPerformanceDashboard() {
           <div className="space-y-10">
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
               <KPI label="Collections" value={`UGX ${stats.financials.collected.toLocaleString()}`} sub="Total Revenue" color="bg-slate-900 text-white" />
               <KPI label="Active Files" value={stats.totalFiles} sub="Assignments" color="bg-white text-slate-900 border" />
               <KPI label="Realization" value={`${stats.realizationRate}%`} sub="Billed vs Paid" color={stats.realizationRate > 80 ? "bg-emerald-600 text-white" : "bg-orange-500 text-white"} />
               <KPI label="Stagnant" value={stats.stagnant.length} sub="Needs Attention" color={stats.stagnant.length > 0 ? "bg-red-50 text-red-600 border border-red-200" : "bg-emerald-50 text-emerald-600"} />
+              <KPI 
+                label="Feedback Rate" 
+                value={`${stats.feedback.totalActive > 0 ? Math.round(((stats.feedback.totalActive - stats.feedback.overdueCount) / stats.feedback.totalActive) * 100) : 100}%`} 
+                sub="Client Engagement" 
+                color={stats.feedback.overdueCount > 0 ? "bg-orange-600 text-white" : "bg-blue-600 text-white"} 
+              />
             </div>
 
             {/* DRAFTS & TASKS */}
@@ -426,7 +462,7 @@ export default function LawyerPerformanceDashboard() {
               <div className="bg-red-50 rounded-[32px] border border-red-200 overflow-hidden shadow-sm">
                 <div className="p-6 bg-red-100/50 flex items-center gap-3">
                   <span className="text-xl">⚠️</span>
-                  <h3 className="font-black text-red-800 uppercase tracking-tight">Critical: Files Inactive for 10+ Days</h3>
+                  <h3 className="font-black text-red-800 uppercase tracking-tight">Critical: Files Inactive for 21+ Days</h3>
                 </div>
                 <table className="w-full text-sm text-left">
                   <tbody className="divide-y divide-red-200">

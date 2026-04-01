@@ -18,6 +18,7 @@ export default function CourtCaseDetails() {
 
   const [activeTab, setActiveTab] = useState<"timeline" | "drafts" | "deadlines" | "registry">("timeline");
   const [newNote, setNewNote] = useState("");
+  const [isFeedback, setIsFeedback] = useState(false);
   const [isCaseUploading, setIsCaseUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,8 +77,9 @@ export default function CourtCaseDetails() {
 
   const handleAddNote = () => {
     if (!newNote.trim()) return;
-    addCourtCaseProgress(courtCase.id, newNote.trim());
+    addCourtCaseProgress(courtCase.id, newNote.trim(), isFeedback);
     setNewNote("");
+    setIsFeedback(false);
   };
 
   const handleDeleteNote = (noteId: string) => {
@@ -290,7 +292,7 @@ export default function CourtCaseDetails() {
               )}
             </div>
             <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight leading-none">{courtCase.fileName}</h1>
-            <div className="flex gap-2 items-center mb-6">
+            <div className="flex gap-2 items-center mb-6 flex-wrap">
               <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isLeadCounsel ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                 {isLeadCounsel ? 'Lead Counsel' : 'Assisting Counsel'}
               </span>
@@ -303,6 +305,11 @@ export default function CourtCaseDetails() {
                   Client: {associatedClient.name}
                 </button>
               )}
+              <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${courtCase.lastClientFeedbackDate ? 'bg-white text-slate-600 border-slate-200' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
+                Last Contact: {courtCase.lastClientFeedbackDate 
+                  ? new Date(courtCase.lastClientFeedbackDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) 
+                  : "No Feedback Recorded"}
+              </span>
             </div>
             <p className="text-slate-500 max-w-2xl font-medium leading-relaxed">{courtCase.details || "No matter details provided for this litigation case."}</p>
           </div>
@@ -512,6 +519,19 @@ export default function CourtCaseDetails() {
                     rows={4}
                     className="w-full bg-slate-50 border-0 rounded-[24px] p-6 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none mb-4"
                   />
+
+                  <div className="flex items-center gap-3 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <input
+                      type="checkbox"
+                      id="isFeedback"
+                      checked={isFeedback}
+                      onChange={(e) => setIsFeedback(e.target.checked)}
+                      className="w-5 h-5 rounded-lg border-2 border-slate-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
+                    />
+                    <label htmlFor="isFeedback" className="text-xs font-black text-slate-500 uppercase tracking-widest cursor-pointer select-none">
+                      Log as Client Feedback (Verbal/Phone)
+                    </label>
+                  </div>
                   <div className="flex flex-wrap gap-3 mt-4">
                     <button
                       onClick={handleAddNote}
