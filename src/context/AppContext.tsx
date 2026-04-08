@@ -1082,15 +1082,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('transactions').delete().eq('id', id).then();
   };
 
-  const recordClientFeedback = (note: string, clientId?: string) => {
+  const recordClientFeedback = (_note: string, clientId?: string) => {
     if (!currentUser || !clientId) return;
-    const now = new Date().toISOString();
+    const now = new Date().toLocaleString('en-GB', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
     
     // Add to Communication Logs
     const newLog: CommunicationLog = {
       id: crypto.randomUUID(),
       clientId,
-      note: `[File Update] ${note}`,
+      note: `Client was updated`,
       authorName: currentUser.name,
       date: now
     };
@@ -1100,51 +1106,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addTransactionProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
     if (!currentUser) return;
-    setTransactions(prev => prev.map(t => {
-      if (t.id !== id) return t;
-      
-      const now = new Date().toISOString();
-      if (logAsFeedback) recordClientFeedback(message, t.clientId);
-      
-      const updatedNotes = [...(t.progressNotes || []), {
-        id: crypto.randomUUID(),
-        message,
-        authorId: currentUser.id,
-        authorName: currentUser.name,
-        authorRole: currentUser.role,
-        date: now,
-      }];
+    const t = transactions.find(target => target.id === id);
+    if (!t) return;
 
-      const updated = {
-        ...t,
-        progressNotes: updatedNotes,
-        lastClientFeedbackDate: logAsFeedback ? now : t.lastClientFeedbackDate
-      };
-      
-      const updatePayload: any = { progressNotes: updated.progressNotes };
-      if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
-      
-      supabase.from('transactions').update(updatePayload).eq('id', id).then();
-      
-      const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-      if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
-        sendNotification(t.lawyerId, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
-        const assignedUser = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
-        if (assignedUser?.email) {
-          if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
-            sendEmail(assignedUser.email, 'File Update: ' + t.fileName, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message));
-          }
+    const now = new Date().toISOString();
+    const updatedNotes = [...(t.progressNotes || []), {
+      id: crypto.randomUUID(),
+      message,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
+      authorRole: currentUser.role,
+      date: now,
+    }];
+
+    const newFeedbackDate = logAsFeedback ? now : t.lastClientFeedbackDate;
+
+    // 1. Update UI State
+    setTransactions(prev => prev.map(item => item.id === id ? { 
+      ...item, 
+      progressNotes: updatedNotes, 
+      lastClientFeedbackDate: newFeedbackDate 
+    } : item));
+
+    // 2. Side Effects
+    if (logAsFeedback) recordClientFeedback(message, t.clientId);
+    
+    const updatePayload: any = { progressNotes: updatedNotes };
+    if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+    supabase.from('transactions').update(updatePayload).eq('id', id).then();
+
+    const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+    if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
+      sendNotification(t.lawyerId, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
+      const assignedUser = usersRef.current.find(u => String(u.id) === String(t.lawyerId));
+      if (assignedUser?.email) {
+        if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
+          sendEmail(assignedUser.email, 'File Update: ' + t.fileName, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, t.fileName, 'Transaction', message));
         }
       }
-      const managersToNotify = getManagersToNotify(t.lawyerId, t.progressNotes || [], currentUser.id);
-      if (t.lawyerId) managersToNotify.delete(String(t.lawyerId));
-      managersToNotify.forEach(mid => sendNotification(mid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction'));
-      getAdminIds().forEach(aid => {
-        if (String(aid) !== String(currentUser.id))
-          sendNotification(aid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
-      });
-      return updated;
-    }));
+    }
+
+    const managersToNotify = getManagersToNotify(t.lawyerId, updatedNotes, currentUser.id);
+    if (t.lawyerId) managersToNotify.delete(String(t.lawyerId));
+    managersToNotify.forEach(mid => sendNotification(mid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction'));
+    
+    getAdminIds().forEach(aid => {
+      if (String(aid) !== String(currentUser.id))
+        sendNotification(aid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
+    });
   };
 
   const editTransactionProgress = (txId: string, noteId: string, message: string) => {
@@ -1234,56 +1243,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addCourtCaseProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
     if (!currentUser) return;
-    setCourtCases(prev => prev.map(c => {
-      if (c.id !== id) return c;
-      
-      const now = new Date().toISOString();
-      if (logAsFeedback) recordClientFeedback(message, c.clientId);
-      
-      const newNote: ProgressNote = {
-        id: crypto.randomUUID(),
-        message,
-        authorId: currentUser.id,
-        authorName: currentUser.name,
-        authorRole: currentUser.role,
-        date: now,
-      };
-      
-      const updated = { 
-        ...c, 
-        progressNotes: [...(c.progressNotes || []), newNote],
-        lastClientFeedbackDate: logAsFeedback ? now : c.lastClientFeedbackDate
-      };
-      
-      const updatePayload: any = { progressNotes: updated.progressNotes };
-      if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
-      
-      supabase.from('court_cases').update(updatePayload).eq('id', id).then();
-      
-      const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-      if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
-        sendNotification(c.lawyerId, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
-        const assignedUser = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
-        if (assignedUser?.email) {
-          if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
-            sendEmail(assignedUser.email, 'File Update: ' + c.fileName, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message));
-          }
+    const c = courtCases.find(target => target.id === id);
+    if (!c) return;
+
+    const now = new Date().toISOString();
+    const newNote: ProgressNote = {
+      id: crypto.randomUUID(),
+      message,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
+      authorRole: currentUser.role,
+      date: now,
+    };
+
+    const updatedNotes = [...(c.progressNotes || []), newNote];
+    const newFeedbackDate = logAsFeedback ? now : c.lastClientFeedbackDate;
+
+    // 1. Update UI State
+    setCourtCases(prev => prev.map(item => item.id === id ? { 
+      ...item, 
+      progressNotes: updatedNotes, 
+      lastClientFeedbackDate: newFeedbackDate 
+    } : item));
+
+    // 2. Side Effects
+    if (logAsFeedback) recordClientFeedback(message, c.clientId);
+    
+    const updatePayload: any = { progressNotes: updatedNotes };
+    if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+    supabase.from('court_cases').update(updatePayload).eq('id', id).then();
+    
+    const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+    if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
+      sendNotification(c.lawyerId, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
+      const assignedUser = usersRef.current.find(u => String(u.id) === String(c.lawyerId));
+      if (assignedUser?.email) {
+        if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
+          sendEmail(assignedUser.email, 'File Update: ' + c.fileName, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, c.fileName, 'Court Case', message));
         }
       }
-      const managersToNotify = getManagersToNotify(c.lawyerId, c.progressNotes || [], currentUser.id);
-      if (c.lawyerId) managersToNotify.delete(String(c.lawyerId));
-      managersToNotify.forEach(mid => sendNotification(mid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case'));
-      getAdminIds().forEach(aid => {
-        if (String(aid) !== String(currentUser.id))
-          sendNotification(aid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
-      });
-      const assistantIds = new Set(draftRequests.filter(d => d.caseId === c.id).map(d => d.assignedToId));
-      assistantIds.forEach(aid => {
-        if (String(aid) !== String(currentUser.id) && String(aid) !== String(c.lawyerId))
-          sendNotification(aid, 'Case Update (Assisting): ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
-      });
-      return updated;
-    }));
+    }
+
+    const managersToNotify = getManagersToNotify(c.lawyerId, updatedNotes, currentUser.id);
+    if (c.lawyerId) managersToNotify.delete(String(c.lawyerId));
+    managersToNotify.forEach(mid => sendNotification(mid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case'));
+    
+    getAdminIds().forEach(aid => {
+      if (String(aid) !== String(currentUser.id))
+        sendNotification(aid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
+    });
+
+    const assistantIds = new Set(draftRequests.filter(d => d.caseId === c.id).map(d => d.assignedToId));
+    assistantIds.forEach(aid => {
+      if (String(aid) !== String(currentUser.id) && String(aid) !== String(c.lawyerId))
+        sendNotification(aid, 'Case Update (Assisting): ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
+    });
   };
 
   const deleteCourtCaseProgress = (caseId: string, noteId: string) => {
@@ -1389,51 +1403,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addLetterProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
     if (!currentUser) return;
-    setLetters(prev => prev.map(l => {
-      if (l.id !== id) return l;
-      
-      const now = new Date().toISOString();
-      if (logAsFeedback) recordClientFeedback(message, l.clientId);
-      
-      const newNote: ProgressNote = {
-        id: crypto.randomUUID(),
-        message,
-        authorId: currentUser.id,
-        authorName: currentUser.name,
-        authorRole: currentUser.role,
-        date: now,
-      };
-      
-      const updated = { 
-        ...l, 
-        progressNotes: [...(l.progressNotes || []), newNote],
-        lastClientFeedbackDate: logAsFeedback ? now : l.lastClientFeedbackDate
-      };
-      
-      const updatePayload: any = { progressNotes: updated.progressNotes };
-      if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
-      
-      supabase.from('letters').update(updatePayload).eq('id', id).then();
-      
-      const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
-      if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
-        sendNotification(l.lawyerId, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
-        const assignedUser = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
-        if (assignedUser?.email) {
-          if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
-            sendEmail(assignedUser.email, 'File Update: ' + l.subject, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, l.subject, 'Letter', message));
-          }
+    const l = letters.find(target => target.id === id);
+    if (!l) return;
+
+    const now = new Date().toISOString();
+    const newNote: ProgressNote = {
+      id: crypto.randomUUID(),
+      message,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
+      authorRole: currentUser.role,
+      date: now,
+    };
+
+    const updatedNotes = [...(l.progressNotes || []), newNote];
+    const newFeedbackDate = logAsFeedback ? now : l.lastClientFeedbackDate;
+
+    // 1. Update UI State
+    setLetters(prev => prev.map(item => item.id === id ? { 
+      ...item, 
+      progressNotes: updatedNotes, 
+      lastClientFeedbackDate: newFeedbackDate 
+    } : item));
+
+    // 2. Side Effects
+    if (logAsFeedback) recordClientFeedback(message, l.clientId);
+    
+    const updatePayload: any = { progressNotes: updatedNotes };
+    if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+    supabase.from('letters').update(updatePayload).eq('id', id).then();
+    
+    const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+    if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
+      sendNotification(l.lawyerId, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
+      const assignedUser = usersRef.current.find(u => String(u.id) === String(l.lawyerId));
+      if (assignedUser?.email) {
+        if ((assignedUser.role === 'lawyer' && isAuthorManagerOrAdmin) || assignedUser.role === 'manager') {
+          sendEmail(assignedUser.email, 'File Update: ' + l.subject, buildProgressEmail(assignedUser.name, currentUser.name, currentUser.role, l.subject, 'Letter', message));
         }
       }
-      const managersToNotify = getManagersToNotify(l.lawyerId, l.progressNotes || [], currentUser.id);
-      if (l.lawyerId) managersToNotify.delete(String(l.lawyerId));
-      managersToNotify.forEach(mid => sendNotification(mid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter'));
-      getAdminIds().forEach(aid => {
-        if (String(aid) !== String(currentUser.id))
-          sendNotification(aid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
-      });
-      return updated;
-    }));
+    }
+
+    const managersToNotify = getManagersToNotify(l.lawyerId, updatedNotes, currentUser.id);
+    if (l.lawyerId) managersToNotify.delete(String(l.lawyerId));
+    managersToNotify.forEach(mid => sendNotification(mid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter'));
+    
+    getAdminIds().forEach(aid => {
+      if (String(aid) !== String(currentUser.id))
+        sendNotification(aid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
+    });
   };
 
   const uploadLetterDocument = async (letterId: string, file: File) => {

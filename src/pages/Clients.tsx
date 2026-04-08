@@ -167,8 +167,14 @@ const Clients: React.FC = () => {
       id: Date.now().toString(),
       clientId: selectedClient.id,
       note: commNote,
-      date: new Date().toLocaleString(),
-      authorName: currentUser?.name || "Admin",
+      date: new Date().toLocaleString('en-GB', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      authorName: currentUser?.name || "Support Staff",
     });
     setCommNote("");
   };
