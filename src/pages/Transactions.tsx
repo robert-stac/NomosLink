@@ -23,6 +23,21 @@ export default function Transactions() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
   
+  // --- CLIENT DROPDOWN LOGIC ---
+  const [clientSearch, setClientSearch] = useState("");
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+
+  const recentClients = useMemo(() => {
+    return [...(clients || [])]
+      .sort((a,b) => new Date(b.dateAdded || 0).getTime() - new Date(a.dateAdded || 0).getTime())
+      .slice(0, 5);
+  }, [clients]);
+
+  const filteredClientsForDropdown = useMemo(() => {
+    if (!clientSearch) return recentClients;
+    return (clients || []).filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).slice(0, 50);
+  }, [clients, clientSearch, recentClients]);
+  
   const [form, setForm] = useState({
     fileName: "", 
     type: "",
@@ -34,6 +49,7 @@ export default function Transactions() {
   });
 
   const activeTransaction = transactions.find(t => t.id === noteViewId);
+  const selectedClient = (clients || []).find(c => c.id === form.clientId);
 
   const visibleTransactions = useMemo(() => {
     let data = transactions.filter((t) => t.type !== "Court Case" && !t.archived);
@@ -127,6 +143,7 @@ export default function Transactions() {
 
   const resetForm = () => {
     setEditingId(null);
+    setClientSearch("");
     setForm({
       fileName: "",
       type: "",
@@ -216,12 +233,50 @@ export default function Transactions() {
               {lawyers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 relative">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Client Selection</label>
-            <select name="clientId" value={form.clientId} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
-              <option value="">Select client (Optional)</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <input 
+              type="text"
+              value={isClientDropdownOpen ? clientSearch : (selectedClient ? selectedClient.name : "")}
+              onChange={e => setClientSearch(e.target.value)}
+              onFocus={() => { setIsClientDropdownOpen(true); setClientSearch(""); }}
+              onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
+              placeholder="Search or select client..."
+              className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 w-full"
+            />
+            <span className="absolute right-3 top-[34px] text-gray-400 pointer-events-none text-xs">▼</span>
+            
+            {isClientDropdownOpen && (
+              <div className="absolute z-10 w-full mt-1 top-[60px] bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                {!clientSearch && <div className="px-3 py-1.5 text-[10px] text-slate-400 bg-slate-50 font-bold uppercase tracking-widest sticky top-0">Recent Clients</div>}
+                
+                <div 
+                  className="px-4 py-3 text-sm hover:bg-red-50 text-slate-500 cursor-pointer border-b border-gray-100 transition flex items-center justify-between"
+                  onMouseDown={(e) => { e.preventDefault(); setForm({ ...form, clientId: "" }); setIsClientDropdownOpen(false); }}
+                >
+                  <span className="italic">-- Clear selection (Optional) --</span>
+                  {form.clientId === "" && <span className="text-emerald-500">✓</span>}
+                </div>
+
+                {filteredClientsForDropdown.map(c => (
+                  <div 
+                    key={c.id} 
+                    className={`px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer transition flex justify-between items-center ${form.clientId === c.id ? 'bg-blue-50/50' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); setForm({ ...form, clientId: c.id }); setIsClientDropdownOpen(false); }}
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-800">{c.name}</div>
+                      {c.email && <div className="text-[10px] text-slate-400 font-medium">{c.email}</div>}
+                    </div>
+                    {form.clientId === c.id && <span className="text-emerald-500 font-bold">✓</span>}
+                  </div>
+                ))}
+                
+                {filteredClientsForDropdown.length === 0 && (
+                  <div className="px-4 py-8 text-sm text-slate-400 text-center italic">No clients found matching "{clientSearch}"</div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Billed (UGX)</label>

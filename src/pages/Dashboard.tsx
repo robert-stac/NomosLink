@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Pie, Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -66,11 +66,11 @@ export default function Dashboard() {
 
   const needsFeedback = (item: any) => {
     if (item.archived || item.status === 'Completed') return false;
-    
-    const lastFeedback = item.lastClientFeedbackDate 
+
+    const lastFeedback = item.lastClientFeedbackDate
       ? new Date(item.lastClientFeedbackDate)
       : new Date(item.date || item.createdAt || new Date());
-    
+
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     return lastFeedback < fourteenDaysAgo;
@@ -102,7 +102,7 @@ export default function Dashboard() {
     const stTransactions = (transactions || []).filter(isStagnant).length;
     const stCases = (courtCases || []).filter(isStagnant).length;
     const stLetters = (letters || []).filter(isStagnant).length;
-    
+
     const fbTransactions = (transactions || []).filter(needsFeedback);
     const fbCases = (courtCases || []).filter(needsFeedback);
     const fbLetters = (letters || []).filter(needsFeedback);
@@ -118,22 +118,22 @@ export default function Dashboard() {
     }, { totalBilled: 0, totalPaid: 0, pendingCount: 0, completedCount: 0 });
 
     const totalActualExpenses = (expenses || []).reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-    
+
     // Land Title Stats
     const inCustodyTitles = (landTitles || []).filter(t => t.status === 'In Custody' || t.status === 'Under Transaction' || t.status === 'Taken');
     const today = new Date();
     const overdueTitles = inCustodyTitles.filter(t => {
-       const receivedDate = new Date(t.date_received);
-       const diffDays = Math.ceil(Math.abs(today.getTime() - receivedDate.getTime()) / (1000 * 60 * 60 * 24));
-       return diffDays > 90;
+      const receivedDate = new Date(t.date_received);
+      const diffDays = Math.ceil(Math.abs(today.getTime() - receivedDate.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays > 90;
     });
 
     // totalNeedsFeedback already calculated at line 91
-    
-    return { 
-      ...summary, 
-      totalExpenses: totalActualExpenses, 
-      stTransactions, stCases, stLetters, 
+
+    return {
+      ...summary,
+      totalExpenses: totalActualExpenses,
+      stTransactions, stCases, stLetters,
       totalStagnant: stTransactions + stCases + stLetters,
       inCustodyCount: inCustodyTitles.length,
       overdueCount: overdueTitles.length,
@@ -194,7 +194,7 @@ export default function Dashboard() {
             notifications={notifications}
             markAsRead={() => currentUser && markNotificationsAsRead(currentUser.id)}
           />
-          <button onClick={() => navigate("/login")} style={styles.logoutBtn}>Logout</button>
+
         </div>
       </header>
 
@@ -223,44 +223,46 @@ export default function Dashboard() {
       )}
 
       {/* STATS GRID */}
-      <div style={styles.grid}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '10px' }}>
         <StatCard label="Total Billed" value={formatCurrency(stats.totalBilled)} color="#0B1F3A" />
         <StatCard label="Total Paid" value={formatCurrency(stats.totalPaid)} color="#27AE60" />
         <StatCard label="Balance Due" value={formatCurrency(Math.max(0, stats.totalBilled - stats.totalPaid))} color="#E67E22" />
       </div>
 
-      <div style={{ ...styles.grid, marginTop: 20 }}>
-        <SummaryBox label="Transactions" count={showOnlyStagnant ? stats.stTransactions : (transactions?.length || 0)} icon="💳" />
-        <SummaryBox label="Court Cases" count={showOnlyStagnant ? stats.stCases : (courtCases?.length || 0)} icon="⚖️" />
-        <SummaryBox label="Letters" count={showOnlyStagnant ? stats.stLetters : (letters?.length || 0)} icon="✉️" />
-        <SummaryBox label="Titles in Custody" count={stats.inCustodyCount} icon="📜" />
-        <SummaryBox 
-          label="Overdue Titles" 
-          count={stats.overdueCount} 
-          icon="🚨" 
-          color={stats.overdueCount > 0 ? '#ef4444' : '#666'}
-          bgColor={stats.overdueCount > 0 ? '#FFF5F5' : 'white'}
-        />
-        <div
-          onClick={() => setShowOnlyStagnant(!showOnlyStagnant)}
-          style={{ ...styles.summaryBox, cursor: 'pointer', border: showOnlyStagnant ? '2px solid #E74C3C' : '1px solid #EEE', backgroundColor: showOnlyStagnant ? '#FFF5F5' : 'white', transition: 'all 0.2s ease' }}
-        >
-          <span style={{ fontSize: 24 }}>🛑</span>
-          <div>
-            <p style={{ margin: 0, fontSize: 14, color: showOnlyStagnant ? "#E74C3C" : "#666", fontWeight: 'bold' }}>Stagnant Files</p>
-            <p style={{ margin: 0, fontSize: 18, fontWeight: "900", color: "#E74C3C" }}>{stats.totalStagnant}</p>
+      <div style={{ ...styles.section, marginTop: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+          <SummaryBox label="Transactions" count={showOnlyStagnant ? stats.stTransactions : (transactions?.length || 0)} icon="💳" />
+          <SummaryBox label="Court Cases" count={showOnlyStagnant ? stats.stCases : (courtCases?.length || 0)} icon="⚖️" />
+          <SummaryBox label="Letters" count={showOnlyStagnant ? stats.stLetters : (letters?.length || 0)} icon="✉️" />
+          <SummaryBox label="Titles in Custody" count={stats.inCustodyCount} icon="📜" />
+          <SummaryBox
+            label="Overdue Titles"
+            count={stats.overdueCount}
+            icon="🚨"
+            color={stats.overdueCount > 0 ? '#ef4444' : '#666'}
+            bgColor={stats.overdueCount > 0 ? '#FFF5F5' : 'transparent'}
+          />
+          <div
+            onClick={() => setShowOnlyStagnant(!showOnlyStagnant)}
+            style={{ ...styles.summaryBox, cursor: 'pointer', backgroundColor: showOnlyStagnant ? '#FFF5F5' : 'transparent', borderRadius: 8, transition: 'all 0.2s ease', padding: '10px' }}
+          >
+            <span style={{ fontSize: 24 }}>🛑</span>
+            <div>
+              <p style={{ margin: 0, fontSize: 14, color: showOnlyStagnant ? "#E74C3C" : "#666", fontWeight: 'bold' }}>Stagnant Files</p>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: "900", color: "#E74C3C" }}>{stats.totalStagnant}</p>
+            </div>
           </div>
-        </div>
-        <div
-          style={{ ...styles.summaryBox, border: stats.totalNeedsFeedback > 0 ? '2px solid #E67E22' : '1px solid #EEE', backgroundColor: stats.totalNeedsFeedback > 0 ? '#FFF8F1' : 'white' }}
-        >
-          <span style={{ fontSize: 24 }}>📞</span>
-          <div>
-            <p style={{ margin: 0, fontSize: 14, color: stats.totalNeedsFeedback > 0 ? "#E67E22" : "#666", fontWeight: 'bold' }}>Feedback Overdue</p>
-            <p style={{ margin: 0, fontSize: 18, fontWeight: "900", color: "#E67E22" }}>{stats.totalNeedsFeedback}</p>
+          <div
+            style={{ ...styles.summaryBox, backgroundColor: stats.totalNeedsFeedback > 0 ? '#FFF8F1' : 'transparent', borderRadius: 8, padding: '10px' }}
+          >
+            <span style={{ fontSize: 24 }}>📞</span>
+            <div>
+              <p style={{ margin: 0, fontSize: 14, color: stats.totalNeedsFeedback > 0 ? "#E67E22" : "#666", fontWeight: 'bold' }}>Feedback Overdue</p>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: "900", color: "#E67E22" }}>{stats.totalNeedsFeedback}</p>
+            </div>
           </div>
+          <SummaryBox label="Open Clerk Tasks" count={tasks?.filter(t => t.status === "Pending" && !t.deleted).length || 0} icon="📋" />
         </div>
-        <SummaryBox label="Open Clerk Tasks" count={tasks?.filter(t => t.status === "Pending" && !t.deleted).length || 0} icon="📋" />
       </div>
 
       <div style={styles.mainGrid}>
@@ -330,10 +332,10 @@ export default function Dashboard() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
                 <h3 style={{ ...styles.sectionTitle, marginBottom: 0 }}>Lawyer-Clerk Task Feed</h3>
-                <select 
-                  value={sortTasksBy} 
+                <select
+                  value={sortTasksBy}
                   onChange={(e) => setSortTasksBy(e.target.value)}
-                  style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid #EEE', outline: 'none' }}
+                  style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: 'none', background: '#F8F9FA', outline: 'none' }}
                 >
                   <option value="status">Sort by Status</option>
                   <option value="newest">Newest First</option>
@@ -485,17 +487,17 @@ export default function Dashboard() {
       {/* FEATURE ANNOUNCEMENT MODAL */}
       {showAnnouncement && (
         <div style={styles.modalOverlay} onClick={dismissAnnouncement}>
-          <div 
-            style={{ 
-              ...styles.modalContent, 
-              padding: 0, 
-              overflow: 'hidden', 
+          <div
+            style={{
+              ...styles.modalContent,
+              padding: 0,
+              overflow: 'hidden',
               maxWidth: '450px',
               background: 'rgba(255, 255, 255, 0.9)',
               backdropFilter: 'blur(20px)',
               border: '1px solid rgba(255, 255, 255, 0.3)',
               boxShadow: '0 40px 100px rgba(11, 31, 58, 0.3)'
-            }} 
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ backgroundColor: '#0B1F3A', padding: '40px 30px', textAlign: 'center', color: 'white' }}>
@@ -503,7 +505,7 @@ export default function Dashboard() {
               <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '900', letterSpacing: '-0.5px' }}>High-Priority Update</h2>
               <p style={{ margin: '10px 0 0 0', opacity: 0.8, fontSize: '14px', fontWeight: '500' }}>Version 1.4.0 — Now Live</p>
             </div>
-            
+
             <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '25px' }}>
               <div style={{ display: 'flex', gap: '15px' }}>
                 <div style={{ fontSize: '24px' }}>📲</div>
@@ -514,7 +516,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              
+
               <div style={{ display: 'flex', gap: '15px' }}>
                 <div style={{ fontSize: '24px' }}>⚡</div>
                 <div>
@@ -525,15 +527,15 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={dismissAnnouncement}
-                style={{ 
-                  backgroundColor: '#0B1F3A', 
-                  color: 'white', 
-                  border: 'none', 
-                  padding: '16px', 
-                  borderRadius: '12px', 
-                  fontWeight: 'bold', 
+                style={{
+                  backgroundColor: '#0B1F3A',
+                  color: 'white',
+                  border: 'none',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  fontWeight: 'bold',
                   fontSize: '14px',
                   cursor: 'pointer',
                   marginTop: '10px',
@@ -552,18 +554,18 @@ export default function Dashboard() {
 }
 
 const StatCard = ({ label, value, color }: any) => (
-  <div style={{ ...styles.card, backgroundColor: color }}>
-    <p style={styles.cardLabel}>{label}</p>
-    <p style={styles.cardValue}>{value}</p>
+  <div style={{ padding: "10px 0" }}>
+    <p style={{ margin: "10px 0 0 20px", fontSize: "13px", textTransform: "uppercase", letterSpacing: "1px", color: "#888", fontWeight: "600" }}>{label}</p>
+    <p style={{ margin: "10px 0 0 20px", fontSize: "18px", fontWeight: "900", letterSpacing: "-1px", color: color }}>{value}</p>
   </div>
 );
 
-const SummaryBox = ({ label, count, icon, color = "#666", bgColor = "white" }: any) => (
-  <div style={{ ...styles.summaryBox, backgroundColor: bgColor, borderColor: color === '#666' ? '#EEE' : color }}>
-    <span style={{ fontSize: 24 }}>{icon}</span>
-    <div>
-      <p style={{ margin: 0, fontSize: 14, color: color }}>{label}</p>
-      <p style={{ margin: 0, fontSize: 18, fontWeight: "bold", color: color }}>{count}</p>
+const SummaryBox = ({ label, count, icon, color = "#666", bgColor = "transparent" }: any) => (
+  <div style={{ ...styles.summaryBox, backgroundColor: bgColor, borderRadius: 8, padding: '10px' }}>
+    <span style={{ fontSize: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <p style={{ margin: 0, fontSize: 13, color: color, opacity: 0.8, fontWeight: 500 }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 18, fontWeight: "900", letterSpacing: "-0.5px", color: color }}>{count}</p>
     </div>
   </div>
 );
@@ -579,9 +581,9 @@ const styles: any = {
   card: { padding: "25px", borderRadius: "12px", color: "white", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" },
   cardLabel: { margin: 0, fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px", opacity: 0.9 },
   cardValue: { margin: "10px 0 0 0", fontSize: "22px", fontWeight: "bold" },
-  summaryBox: { display: "flex", alignItems: "center", gap: "15px", backgroundColor: "white", padding: "20px", borderRadius: "12px", border: "1px solid #EEE" },
+  summaryBox: { display: "flex", alignItems: "center", gap: "15px" },
   mainGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "25px", marginTop: "25px" },
-  section: { backgroundColor: "white", padding: "20px", borderRadius: "12px", border: "1px solid #EEE", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" },
+  section: { backgroundColor: "white", padding: "20px", borderRadius: "12px", boxShadow: "0 4px 15px rgba(0,0,0,0.05)" },
   sectionTitle: { fontSize: "16px", fontWeight: "bold", marginBottom: "20px", color: "#333" },
   listContainer: { maxHeight: "320px", overflowY: "auto" },
   list: { listStyle: "none", padding: 0, margin: 0 },

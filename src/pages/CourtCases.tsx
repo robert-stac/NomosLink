@@ -61,6 +61,24 @@ export default function CourtCases() {
     });
   }, [courtCases, searchTerm, sortType]);
 
+  // --- CLIENT DROPDOWN LOGIC ---
+  const { clients } = useAppContext();
+  const [clientSearch, setClientSearch] = useState("");
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+
+  const recentClients = useMemo(() => {
+    return [...(clients || [])]
+      .sort((a,b) => new Date(b.dateAdded || 0).getTime() - new Date(a.dateAdded || 0).getTime())
+      .slice(0, 5);
+  }, [clients]);
+
+  const filteredClientsForDropdown = useMemo(() => {
+    if (!clientSearch) return recentClients;
+    return (clients || []).filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).slice(0, 50);
+  }, [clients, clientSearch, recentClients]);
+
+  const selectedClient = (clients || []).find(c => c.id === clientId);
+
   // --- FORM FUNCTIONS ---
   const resetForm = () => {
     setFileName("");
@@ -73,6 +91,7 @@ export default function CourtCases() {
     setSittingType("");
     setCustomSittingType("");
     setClientId("");
+    setClientSearch("");
     setEditingId(null);
   };
 
@@ -248,12 +267,50 @@ export default function CourtCases() {
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Next Court Date</label>
             <input type="date" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
           </div>
-          <div>
+          <div className="relative">
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Client Selection</label>
-            <select className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={clientId} onChange={(e) => setClientId(e.target.value)}>
-              <option value="">Select client (Optional)</option>
-              {useAppContext().clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <input 
+              type="text"
+              value={isClientDropdownOpen ? clientSearch : (selectedClient ? selectedClient.name : "")}
+              onChange={e => setClientSearch(e.target.value)}
+              onFocus={() => { setIsClientDropdownOpen(true); setClientSearch(""); }}
+              onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
+              placeholder="Search or select client..."
+              className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition"
+            />
+            <span className="absolute right-3 top-[34px] text-gray-400 pointer-events-none text-xs">▼</span>
+            
+            {isClientDropdownOpen && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto w-full">
+                {!clientSearch && <div className="px-3 py-1.5 text-[10px] text-slate-400 bg-slate-50 font-bold uppercase tracking-widest sticky top-0">Recent Clients</div>}
+                
+                <div 
+                  className="px-4 py-3 text-sm hover:bg-red-50 text-slate-500 cursor-pointer border-b border-gray-100 transition flex items-center justify-between"
+                  onMouseDown={(e) => { e.preventDefault(); setClientId(""); setIsClientDropdownOpen(false); }}
+                >
+                  <span className="italic">-- Clear selection (Optional) --</span>
+                  {clientId === "" && <span className="text-emerald-500">✓</span>}
+                </div>
+
+                {filteredClientsForDropdown.map(c => (
+                  <div 
+                    key={c.id} 
+                    className={`px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer transition flex justify-between items-center ${clientId === c.id ? 'bg-blue-50/50' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); setClientId(c.id); setIsClientDropdownOpen(false); }}
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-800">{c.name}</div>
+                      {c.email && <div className="text-[10px] text-slate-400 font-medium">{c.email}</div>}
+                    </div>
+                    {clientId === c.id && <span className="text-emerald-500 font-bold">✓</span>}
+                  </div>
+                ))}
+                
+                {filteredClientsForDropdown.length === 0 && (
+                  <div className="px-4 py-8 text-sm text-slate-400 text-center italic">No clients found matching "{clientSearch}"</div>
+                )}
+              </div>
+            )}
           </div>
           <div className="md:col-span-2">
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Categories (Multiple)</label>

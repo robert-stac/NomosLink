@@ -98,7 +98,13 @@ export default function ManagerDashboard() {
   const selectedLawyerName = users.find(u => u.id === selectedLawyerId)?.name || "All Staff";
 
   const downloadGlobalReport = () => {
-    const headers = ["Category", "File Name", "Status", "Assigned Counsel", "Latest Progress Note", "Last Updated", "Stagnant"];
+    const headers = [
+      "Category", "File Name", "Status", "Assigned Counsel", 
+      "Latest Progress Note", "Last Updated", "Stagnant",
+      "Billed Amount", "Paid Amount", "Balance Owed",
+      "Created Date", "Last Feedback Date", "Next Court Date"
+    ];
+    
     const getLastNote = (item: any) => {
       if (!item.progressNotes || item.progressNotes.length === 0) return ["No updates", "N/A"];
       const last = item.progressNotes[item.progressNotes.length - 1];
@@ -111,7 +117,32 @@ export default function ManagerDashboard() {
       const name = (item as any).fileName || (item as any).subject;
       const lawyer = users.find(u => u.id === item.lawyerId)?.name || "Unassigned";
       const [note, date] = getLastNote(item);
-      dataRows.push([type, `"${name}"`, (item as any).status || "Active", `"${lawyer}"`, `"${note}"`, date, isStagnant(item) ? "YES" : "NO"]);
+      const _isStagnant = isStagnant(item) ? "YES" : "NO";
+      
+      const billed = (item as any).billed || (item as any).billedAmount || 0;
+      const paid = (item as any).paid || (item as any).paidAmount || 0;
+      const balance = billed - paid;
+      
+      const createdStr = (item as any).date || (item as any).createdAt || (item as any).dateCreated || new Date().toISOString();
+      const createdDate = new Date(createdStr).toLocaleDateString();
+      const lastFeedback = (item as any).lastClientFeedbackDate ? new Date((item as any).lastClientFeedbackDate).toLocaleDateString() : "Never";
+      const nextCourtDate = (item as any).nextCourtDate ? new Date((item as any).nextCourtDate).toLocaleDateString() : "N/A";
+      
+      dataRows.push([
+        type, 
+        `"${name}"`, 
+        (item as any).status || "Active", 
+        `"${lawyer}"`, 
+        `"${note}"`, 
+        date, 
+        _isStagnant,
+        billed.toString(),
+        paid.toString(),
+        balance.toString(),
+        createdDate,
+        lastFeedback,
+        nextCourtDate
+      ]);
     });
 
     const csvContent = [headers, ...dataRows].map(e => e.join(",")).join("\n");

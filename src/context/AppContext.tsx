@@ -1082,7 +1082,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (navigator.onLine) supabase.from('transactions').delete().eq('id', id).then();
   };
 
-  const recordClientFeedback = (fileId: string, fileType: 'case' | 'transaction' | 'letter', note: string, clientId?: string) => {
+  const recordClientFeedback = (note: string, clientId?: string) => {
     if (!currentUser || !clientId) return;
     const now = new Date().toISOString();
     
@@ -1096,37 +1096,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setCommLogs(prev => [...prev, newLog]);
     supabase.from('comm_logs').insert([newLog]).then();
-
-    // Update the file's feedback date
-    if (fileType === 'case') {
-      setCourtCases(prev => prev.map(c => c.id === fileId ? { ...c, lastClientFeedbackDate: now } : c));
-      supabase.from('court_cases').update({ lastClientFeedbackDate: now }).eq('id', fileId).then();
-    } else if (fileType === 'transaction') {
-      setTransactions(prev => prev.map(t => t.id === fileId ? { ...t, lastClientFeedbackDate: now } : t));
-      supabase.from('transactions').update({ lastClientFeedbackDate: now }).eq('id', fileId).then();
-    } else if (fileType === 'letter') {
-      setLetters(prev => prev.map(l => l.id === fileId ? { ...l, lastClientFeedbackDate: now } : l));
-      supabase.from('letters').update({ lastClientFeedbackDate: now }).eq('id', fileId).then();
-    }
   };
 
   const addTransactionProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
     if (!currentUser) return;
     setTransactions(prev => prev.map(t => {
       if (t.id !== id) return t;
-      if (logAsFeedback) recordClientFeedback(t.id, 'transaction', message, t.clientId);
+      
+      const now = new Date().toISOString();
+      if (logAsFeedback) recordClientFeedback(message, t.clientId);
+      
+      const updatedNotes = [...(t.progressNotes || []), {
+        id: crypto.randomUUID(),
+        message,
+        authorId: currentUser.id,
+        authorName: currentUser.name,
+        authorRole: currentUser.role,
+        date: now,
+      }];
+
       const updated = {
         ...t,
-        progressNotes: [...(t.progressNotes || []), {
-          id: crypto.randomUUID(),
-          message,
-          authorId: currentUser.id,
-          authorName: currentUser.name,
-          authorRole: currentUser.role,
-          date: new Date().toISOString(),
-        }],
+        progressNotes: updatedNotes,
+        lastClientFeedbackDate: logAsFeedback ? now : t.lastClientFeedbackDate
       };
-      supabase.from('transactions').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+      
+      const updatePayload: any = { progressNotes: updated.progressNotes };
+      if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+      
+      supabase.from('transactions').update(updatePayload).eq('id', id).then();
+      
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
       if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
         sendNotification(t.lawyerId, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
@@ -1237,17 +1236,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) return;
     setCourtCases(prev => prev.map(c => {
       if (c.id !== id) return c;
-      if (logAsFeedback) recordClientFeedback(c.id, 'case', message, c.clientId);
+      
+      const now = new Date().toISOString();
+      if (logAsFeedback) recordClientFeedback(message, c.clientId);
+      
       const newNote: ProgressNote = {
         id: crypto.randomUUID(),
         message,
         authorId: currentUser.id,
         authorName: currentUser.name,
         authorRole: currentUser.role,
-        date: new Date().toISOString(),
+        date: now,
       };
-      const updated = { ...c, progressNotes: [...(c.progressNotes || []), newNote] };
-      supabase.from('court_cases').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+      
+      const updated = { 
+        ...c, 
+        progressNotes: [...(c.progressNotes || []), newNote],
+        lastClientFeedbackDate: logAsFeedback ? now : c.lastClientFeedbackDate
+      };
+      
+      const updatePayload: any = { progressNotes: updated.progressNotes };
+      if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+      
+      supabase.from('court_cases').update(updatePayload).eq('id', id).then();
+      
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
       if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
         sendNotification(c.lawyerId, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
@@ -1379,17 +1391,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) return;
     setLetters(prev => prev.map(l => {
       if (l.id !== id) return l;
-      if (logAsFeedback) recordClientFeedback(l.id, 'letter', message, l.clientId);
+      
+      const now = new Date().toISOString();
+      if (logAsFeedback) recordClientFeedback(message, l.clientId);
+      
       const newNote: ProgressNote = {
         id: crypto.randomUUID(),
         message,
         authorId: currentUser.id,
         authorName: currentUser.name,
         authorRole: currentUser.role,
-        date: new Date().toISOString(),
+        date: now,
       };
-      const updated = { ...l, progressNotes: [...(l.progressNotes || []), newNote] };
-      supabase.from('letters').update({ progressNotes: updated.progressNotes }).eq('id', id).then();
+      
+      const updated = { 
+        ...l, 
+        progressNotes: [...(l.progressNotes || []), newNote],
+        lastClientFeedbackDate: logAsFeedback ? now : l.lastClientFeedbackDate
+      };
+      
+      const updatePayload: any = { progressNotes: updated.progressNotes };
+      if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+      
+      supabase.from('letters').update(updatePayload).eq('id', id).then();
+      
       const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
       if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
         sendNotification(l.lawyerId, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');

@@ -8,7 +8,7 @@ const body: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 const serif: React.CSSProperties = { fontFamily: "'Playfair Display', serif" };
 
 const FileCard = ({ title, subtitle, status, date, onView, isLead }: any) => (
-  <div className="bg-white p-6 rounded-[32px] border border-slate-100 hover:shadow-xl hover:shadow-blue-900/5 transition-all group relative overflow-hidden">
+  <div className="bg-white p-6 rounded-[32px] hover:shadow-xl hover:shadow-blue-900/5 transition-all group relative overflow-hidden shadow-sm">
     {isLead !== undefined && (
       <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-semibold ${isLead ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
         {isLead ? 'Lead' : 'Assisting'}
@@ -188,17 +188,17 @@ export default function LawyerDashboard() {
               { label: "Active Matters", value: myData.cases.length + myData.txs.length, onClick: undefined, active: false },
               { label: "Letters", value: myData.ltrs.length, onClick: undefined, active: false },
             ].map(card => (
-              <div key={card.label} className="bg-white/5 backdrop-blur-md p-6 rounded-[28px] border border-white/10">
+              <div key={card.label} className="bg-white/5 backdrop-blur-md p-6 rounded-[28px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] border-none">
                 <p className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1">{card.label}</p>
                 <p className="text-2xl font-bold text-white">{card.value}</p>
               </div>
             ))}
-            <div className={`p-6 rounded-[28px] border transition cursor-pointer ${pendingIncomingCount > 0 ? "bg-orange-500/20 border-orange-400/40" : "bg-white/5 border-white/10"}`} onClick={() => setActiveTab("Drafts")}>
+            <div className={`p-6 rounded-[28px] transition cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.05)] ${pendingIncomingCount > 0 ? "bg-orange-500/20" : "bg-white/5"}`} onClick={() => setActiveTab("Drafts")}>
               <p className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1">Incoming Drafts</p>
               <p className="text-2xl font-bold text-white">{pendingIncomingCount}</p>
             </div>
             <div onClick={() => myData.nextHearing && navigate(`/lawyer/cases/${myData.nextHearing.id}`)}
-              className={`p-6 rounded-[28px] border transition cursor-pointer ${myData.nextHearing ? "bg-blue-600 border-blue-400 shadow-lg hover:bg-blue-500" : "bg-white/5 border-white/10"}`}>
+              className={`p-6 rounded-[28px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition cursor-pointer ${myData.nextHearing ? "bg-blue-600 shadow-lg hover:bg-blue-500" : "bg-white/5"}`}>
               <div className="flex justify-between items-start">
                 <p className="text-xs font-semibold text-blue-200 uppercase tracking-wider mb-1">Next Court</p>
                 {myData.nextHearing && <span className="text-xs bg-white/20 px-2 py-0.5 rounded text-white font-semibold">Linked</span>}
@@ -262,7 +262,7 @@ export default function LawyerDashboard() {
 
         {/* URGENT ALERT */}
         {myData.urgentReminders.length > 0 && (
-          <div className="bg-red-50 border border-red-100 p-6 rounded-[32px] shadow-lg">
+          <div className="bg-red-50 p-6 rounded-[32px] shadow-lg border-none">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="bg-red-500 text-white p-3 rounded-2xl text-xl animate-bounce">⚠️</div>
@@ -284,7 +284,7 @@ export default function LawyerDashboard() {
 
         {/* PENDING DRAFTS ALERT */}
         {pendingIncomingCount > 0 && activeTab !== "Drafts" && (
-          <div className="bg-orange-50 border border-orange-100 p-6 rounded-[32px] shadow-sm cursor-pointer" onClick={() => setActiveTab("Drafts")}>
+          <div className="bg-orange-50 p-6 rounded-[32px] shadow-sm cursor-pointer border-none" onClick={() => setActiveTab("Drafts")}>
             <div className="flex items-center gap-4">
               <div className="bg-orange-500 text-white p-3 rounded-2xl text-xl">📝</div>
               <div>
@@ -297,7 +297,7 @@ export default function LawyerDashboard() {
 
         {/* UPCOMING DEADLINES */}
         {myData.pendingDeadlines.length > 0 && (
-          <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+          <div className="bg-white p-8 rounded-[40px] shadow-sm border-none">
             <h2 className="text-sm font-semibold text-slate-800 mb-6 uppercase tracking-wider">Upcoming Court Deadlines</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -351,7 +351,7 @@ export default function LawyerDashboard() {
         )}
 
         {/* TASKS TABLE */}
-        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border-none">
           <h2 className="text-sm font-semibold text-slate-800 mb-6 uppercase tracking-wider">Instructions to Clerks</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -427,7 +427,7 @@ export default function LawyerDashboard() {
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Drafts assigned to me ({filteredAssignedDrafts.length})</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredAssignedDrafts.map(draft => (
-                      <div key={draft.id} className={`bg-white p-6 rounded-[32px] border transition-all ${draft.status === 'Completed' ? 'border-emerald-100' : 'border-orange-100 shadow-sm'}`}>
+                      <div key={draft.id} className={`bg-white p-6 rounded-[32px] transition-all shadow-sm`}>
                         <div className="flex justify-between items-start mb-3">
                           <div className="space-y-1 pr-4">
                             <h4 className="text-sm font-semibold text-slate-900">{draft.title}</h4>
@@ -454,7 +454,7 @@ export default function LawyerDashboard() {
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Drafts I've delegated ({filteredRequestedDrafts.length})</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredRequestedDrafts.map(draft => (
-                        <div key={draft.id} className="bg-slate-50 p-6 rounded-[32px] border border-slate-200">
+                        <div key={draft.id} className="bg-slate-50 p-6 rounded-[32px] shadow-sm">
                           <div className="flex justify-between items-start mb-3">
                             <div className="space-y-1 pr-4">
                               <h4 className="text-sm font-semibold text-slate-700">{draft.title}</h4>
@@ -486,7 +486,7 @@ export default function LawyerDashboard() {
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">My Outgoing Filing Requests ({filteredRequestedFilings.length})</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredRequestedFilings.map(filing => (
-                      <div key={filing.id} className="bg-white p-6 rounded-[32px] border border-blue-100 shadow-sm">
+                      <div key={filing.id} className="bg-white p-6 rounded-[32px] shadow-sm border-none">
                         <div className="flex justify-between items-start mb-3">
                           <div className="space-y-1 pr-4">
                             <h4 className="text-sm font-semibold text-slate-900">{filing.documentName}</h4>
@@ -518,7 +518,7 @@ export default function LawyerDashboard() {
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Registry Filings Assigned to Me ({filteredAssignedFilings.length})</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredAssignedFilings.map(filing => (
-                        <div key={filing.id} className={`bg-white p-6 rounded-[32px] border transition-all ${filing.status === 'Completed' ? 'border-emerald-100' : 'border-blue-200 shadow-md ring-2 ring-blue-500/10'}`}>
+                        <div key={filing.id} className={`bg-white p-6 rounded-[32px] transition-all shadow-md`}>
                           <div className="flex justify-between items-start mb-3">
                             <div className="space-y-1">
                               <h4 className="text-sm font-semibold text-slate-900">{filing.documentName}</h4>

@@ -11,7 +11,7 @@ import { useAppContext } from "../context/AppContext";
 const Clients: React.FC = () => {
   const {
     clients, courtCases, transactions, letters, invoices, landTitles,
-    addClient, deleteClient, addCommLog, commLogs, currentUser
+    addClient, updateClient, deleteClient, addCommLog, commLogs, currentUser
   } = useAppContext();
   const navigate = useNavigate();
 
@@ -21,10 +21,32 @@ const Clients: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [commNote, setCommNote] = useState("");
 
+  // Add-client form
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [type, setType] = useState<"Individual" | "Corporate">("Individual");
+
+  // Edit-client modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+
+  const openEditModal = (client: any) => {
+    setEditName(client.name);
+    setEditEmail(client.email || "");
+    setEditPhone(client.phone || "");
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editName.trim() || !selectedClient) return;
+    const updated = { ...selectedClient, name: editName.trim(), email: editEmail.trim(), phone: editPhone.trim() };
+    updateClient(updated);
+    setSelectedClient(updated);
+    setShowEditModal(false);
+  };
 
   const filteredClients = useMemo(() => {
     const result = (clients || [])
@@ -265,9 +287,17 @@ const Clients: React.FC = () => {
             </button>
 
             <div className="bg-[#0B1F3A] px-10 pt-12 pb-10 text-white">
-              <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest mb-2">
-                {selectedClient.type} Client
-              </p>
+              <div className="flex items-start justify-between mb-2">
+                <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest">
+                  {selectedClient.type} Client
+                </p>
+                <button
+                  onClick={() => openEditModal(selectedClient)}
+                  className="text-xs font-semibold text-blue-300 hover:text-white border border-blue-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
+                >
+                  ✏️ Edit
+                </button>
+              </div>
               <h2 style={serif} className="text-3xl font-bold leading-tight mb-3">
                 {selectedClient.name}
               </h2>
@@ -385,6 +415,67 @@ const Clients: React.FC = () => {
                 Permanently Delete Client Record
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CLIENT MODAL */}
+      {showEditModal && selectedClient && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#0B1F3A]/60 backdrop-blur-sm" onClick={() => setShowEditModal(false)} />
+          <div
+            style={body}
+            className="relative bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl space-y-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowEditModal(false)}
+              className="absolute top-6 right-6 w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 font-bold transition-colors"
+            >
+              x
+            </button>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Edit Client</p>
+              <h2 style={serif} className="text-2xl font-bold text-[#0B1F3A]">Update Client Details</h2>
+            </div>
+            <div>
+              <label className={lbl}>Full Name / Company</label>
+              <input
+                required
+                className={inp}
+                placeholder="e.g. Nakato Sarah"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={lbl}>Phone Number</label>
+                <input
+                  className={inp}
+                  placeholder="+256 700 000000"
+                  value={editPhone}
+                  onChange={e => setEditPhone(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={lbl}>Email Address</label>
+                <input
+                  type="email"
+                  className={inp}
+                  placeholder="client@example.com"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleSaveEdit}
+              disabled={!editName.trim()}
+              className="w-full bg-[#0B1F3A] text-white text-sm font-semibold py-4 rounded-2xl shadow-lg hover:bg-blue-900 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+            >
+              Save Changes
+            </button>
           </div>
         </div>
       )}

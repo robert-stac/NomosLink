@@ -8,7 +8,7 @@ type SortField = "date" | "billed" | "fileName" | "refNumber" | null;
 type SortOrder = "asc" | "desc";
 
 export default function Letters() {
-  const { letters = [], lawyers = [], addLetter: addLetterToContext, editLetter, deleteLetter } = useAppContext();
+  const { letters = [], lawyers = [], clients = [], addLetter: addLetterToContext, editLetter, deleteLetter } = useAppContext();
 
   // --- PRESERVED STATE ---
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -17,8 +17,26 @@ export default function Letters() {
   const [subject, setSubject] = useState("");
   
   // --- NEW FIELDS ---
+  const [clientId, setClientId] = useState("");
   const [fileName, setFileName] = useState(""); 
   const [refNumber, setRefNumber] = useState(""); 
+  
+  // --- CLIENT DROPDOWN LOGIC ---
+  const [clientSearch, setClientSearch] = useState("");
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+
+  const recentClients = useMemo(() => {
+    return [...(clients || [])]
+      .sort((a,b) => new Date(b.dateAdded || 0).getTime() - new Date(a.dateAdded || 0).getTime())
+      .slice(0, 5);
+  }, [clients]);
+
+  const filteredClientsForDropdown = useMemo(() => {
+    if (!clientSearch) return recentClients;
+    return (clients || []).filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).slice(0, 50);
+  }, [clients, clientSearch, recentClients]);
+
+  const selectedClient = (clients || []).find(c => c.id === clientId);
 
   const [date, setDate] = useState("");
   const [status, setStatus] = useState("Pending");
@@ -40,6 +58,8 @@ export default function Letters() {
     setType("Incoming");
     setLawyerId("");
     setSubject("");
+    setClientId("");
+    setClientSearch("");
     setFileName(""); 
     setRefNumber(""); 
     setDate("");
@@ -62,13 +82,15 @@ export default function Letters() {
     // We send lawyerId as a string to match the DB column
     const newLetter = {
       id: editingId || Date.now().toString(),
-      type,
+      type: type as "Incoming" | "Outgoing",
       lawyerId, // Fixed: Sending ID string, not the full object
+      clientId,
+      recipient: "N/A", // Required by Letter Interface
       subject,
       fileName, 
       refNumber, 
       date,
-      status,
+      status: status as "Pending" | "Completed",
       billed: billedNum,
       paid: paidNum,
     };
@@ -85,6 +107,7 @@ export default function Letters() {
     setEditingId(l.id);
     setType(l.type);
     setLawyerId(l.lawyerId || ""); // Fixed: loading ID string
+    setClientId(l.clientId || "");
     setSubject(l.subject);
     setFileName(l.fileName || ""); 
     setRefNumber(l.refNumber || ""); 
@@ -216,6 +239,52 @@ export default function Letters() {
                 onChange={(e) => setRefNumber(e.target.value)} 
                 className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500" 
               />
+            </div>
+            
+            <div className="relative">
+              <label className="block text-xs font-black uppercase text-slate-400 mb-2">Client</label>
+              <input 
+                type="text"
+                value={isClientDropdownOpen ? clientSearch : (selectedClient ? selectedClient.name : "")}
+                onChange={e => setClientSearch(e.target.value)}
+                onFocus={() => { setIsClientDropdownOpen(true); setClientSearch(""); }}
+                onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
+                placeholder="Search or select client..."
+                className="w-full bg-slate-50 border-0 rounded-2xl px-4 py-3 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="absolute right-4 top-[38px] text-gray-400 pointer-events-none text-xs">▼</span>
+              
+              {isClientDropdownOpen && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto w-full">
+                  {!clientSearch && <div className="px-3 py-1.5 text-[10px] text-slate-400 bg-slate-50 font-bold uppercase tracking-widest sticky top-0">Recent Clients</div>}
+                  
+                  <div 
+                    className="px-4 py-3 text-sm hover:bg-red-50 text-slate-500 cursor-pointer border-b border-gray-100 transition flex items-center justify-between"
+                    onMouseDown={(e) => { e.preventDefault(); setClientId(""); setIsClientDropdownOpen(false); }}
+                  >
+                    <span className="italic">-- Clear selection (Optional) --</span>
+                    {clientId === "" && <span className="text-emerald-500">✓</span>}
+                  </div>
+
+                  {filteredClientsForDropdown.map(c => (
+                    <div 
+                      key={c.id} 
+                      className={`px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer transition flex justify-between items-center ${clientId === c.id ? 'bg-blue-50/50' : ''}`}
+                      onMouseDown={(e) => { e.preventDefault(); setClientId(c.id); setIsClientDropdownOpen(false); }}
+                    >
+                      <div>
+                        <div className="font-semibold text-slate-800">{c.name}</div>
+                        {c.email && <div className="text-[10px] text-slate-400 font-medium">{c.email}</div>}
+                      </div>
+                      {clientId === c.id && <span className="text-emerald-500 font-bold">✓</span>}
+                    </div>
+                  ))}
+                  
+                  {filteredClientsForDropdown.length === 0 && (
+                    <div className="px-4 py-8 text-sm text-slate-400 text-center italic">No clients found matching "{clientSearch}"</div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
