@@ -577,12 +577,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
 
-  // Periodic sync 5 seconds after courtCases change
+  // Periodic sync 5 seconds after any core data change
   useEffect(() => {
     if (!initialDataLoaded || !navigator.onLine) return;
     const timer = setTimeout(() => { syncToCloud(); }, 5000);
     return () => clearTimeout(timer);
-  }, [courtCases, initialDataLoaded]);
+  }, [courtCases, transactions, letters, initialDataLoaded]);
 
   const getAdminIds = () => usersRef.current.filter(u => u.role === 'admin').map(u => u.id);
   const getManagerIds = () => usersRef.current.filter(u => u.role === 'manager').map(u => u.id);
@@ -962,14 +962,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'id', 'fileName', 'details', 'billed', 'paid', 'balance', 'status',
       'nextCourtDate', 'completedDate', 'lawyerId', 'clientId',
       'categories', 'sittingType', 'archived',
+      'progressNotes', 'documents', 'deadlines',
+      'lastClientFeedbackDate', 'scannedInvoiceUrl',
     ];
     const transactionScalarFields = [
       'id', 'fileName', 'type', 'lawyerId', 'billedAmount', 'paidAmount',
       'balance', 'date', 'clientId', 'archived',
+      'progressNotes', 'documents',
+      'lastClientFeedbackDate', 'scannedInvoiceUrl',
     ];
     const letterScalarFields = [
       'id', 'subject', 'type', 'recipient', 'lawyerId', 'clientId',
       'status', 'archived', 'date', 'billed', 'paid',
+      'progressNotes', 'documents',
+      'lastClientFeedbackDate', 'scannedInvoiceUrl',
     ];
 
     const pickFields = (obj: any, fields: string[]) => {
@@ -1133,7 +1139,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     const updatePayload: any = { progressNotes: updatedNotes };
     if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
-    supabase.from('transactions').update(updatePayload).eq('id', id).then();
+    supabase.from('transactions').update(updatePayload).eq('id', id)
+      .then(({ error }) => { if (error) console.error('Failed to save transaction progress note:', error); });
 
     const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
     if (t.lawyerId && String(t.lawyerId) !== String(currentUser.id)) {
@@ -1160,7 +1167,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTransactions(prev => prev.map(t => {
       if (t.id !== txId) return t;
       const updatedNotes = (t.progressNotes || []).map(n => n.id === noteId ? { ...n, message } : n);
-      supabase.from('transactions').update({ progressNotes: updatedNotes }).eq('id', txId).then();
+      supabase.from('transactions').update({ progressNotes: updatedNotes }).eq('id', txId)
+        .then(({ error }) => { if (error) console.error('Failed to edit transaction progress note:', error); });
       return { ...t, progressNotes: updatedNotes };
     }));
   };
@@ -1169,7 +1177,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTransactions(prev => prev.map(t => {
       if (t.id !== txId) return t;
       const updatedNotes = (t.progressNotes || []).filter(n => n.id !== noteId);
-      supabase.from('transactions').update({ progressNotes: updatedNotes }).eq('id', txId).then();
+      supabase.from('transactions').update({ progressNotes: updatedNotes }).eq('id', txId)
+        .then(({ error }) => { if (error) console.error('Failed to delete transaction progress note:', error); });
       return { ...t, progressNotes: updatedNotes };
     }));
   };
@@ -1271,7 +1280,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     const updatePayload: any = { progressNotes: updatedNotes };
     if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
-    supabase.from('court_cases').update(updatePayload).eq('id', id).then();
+    supabase.from('court_cases').update(updatePayload).eq('id', id)
+      .then(({ error }) => { if (error) console.error('Failed to save court case progress note:', error); });
     
     const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
     if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
@@ -1304,7 +1314,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourtCases(prev => prev.map(c => {
       if (c.id !== caseId) return c;
       const updatedNotes = (c.progressNotes || []).filter(n => n.id !== noteId);
-      supabase.from('court_cases').update({ progressNotes: updatedNotes }).eq('id', caseId).then();
+      supabase.from('court_cases').update({ progressNotes: updatedNotes }).eq('id', caseId)
+        .then(({ error }) => { if (error) console.error('Failed to delete court case progress note:', error); });
       return { ...c, progressNotes: updatedNotes };
     }));
   };
@@ -1431,7 +1442,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     const updatePayload: any = { progressNotes: updatedNotes };
     if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
-    supabase.from('letters').update(updatePayload).eq('id', id).then();
+    supabase.from('letters').update(updatePayload).eq('id', id)
+      .then(({ error }) => { if (error) console.error('Failed to save letter progress note:', error); });
     
     const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
     if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
