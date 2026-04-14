@@ -580,7 +580,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Periodic sync 5 seconds after any core data change
   useEffect(() => {
     if (!initialDataLoaded || !navigator.onLine) return;
-    const timer = setTimeout(() => { syncToCloud(); }, 5000);
+    // Initial sync after boot happens faster (1s), subsequent debounced syncs stay at 5s
+    const delay = transactions.length === 0 && courtCases.length === 0 ? 1000 : 5000;
+    const timer = setTimeout(() => { syncToCloud(); }, delay);
     return () => clearTimeout(timer);
   }, [courtCases, transactions, letters, initialDataLoaded]);
 
@@ -724,13 +726,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
           if (!cloud || !Array.isArray(cloud)) return prev || [];
           const cloudIds = new Set(cloud.map((item: any) => item.id));
-          const onlyLocalNew = prev.filter((item: any) => {
-            if (cloudIds.has(item.id)) return false;
-            const created = item.dateCreated || item.dateAdded || item.created_at || null;
-            if (!created) return false;
-            const age = Date.now() - new Date(created).getTime();
-            return age < 60000;
-          });
+          
+          // Keep ALL local items that haven't reached the cloud yet.
+          // Previously this had a 60s timeout which caused data loss if sync failed or was delayed.
+          const onlyLocalNew = (prev || []).filter((item: any) => !cloudIds.has(item.id));
+          
           return [...cloud, ...onlyLocalNew];
         };
 
@@ -989,24 +989,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const lettersForDb = letters.map(l => pickFields(l, letterScalarFields));
 
     try {
-      await Promise.all([
-        supabase.from('expenses').upsert(expenses, { onConflict: 'id' }),
-        supabase.from('clients').upsert(clientsForDb, { onConflict: 'id' }),
-        supabase.from('letters').upsert(lettersForDb, { onConflict: 'id' }),
-        supabase.from('invoices').upsert(invoices, { onConflict: 'id' }),
-        supabase.from('transactions').upsert(transactionsForDb, { onConflict: 'id' }),
-        supabase.from('court_cases').upsert(courtCasesForDb, { onConflict: 'id' }),
-        supabase.from('users').upsert(users, { onConflict: 'id' }),
-        supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }),
-        supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }),
-        supabase.from('land_titles').upsert(
-          landTitles.map(({ notes_history, ...rest }) => rest),
-          { onConflict: 'id' }
-        ),
-      ]);
-      console.log("Full sync successful.");
+      const syncTasks = [
+        { name: 'expenses', task: supabase.from('expenses').upsert(expenses, { onConflict: 'id' }) },
+        { name: 'clients', task: supabase.from('clients').upsert(clientsForDb, { onConflict: 'id' }) },
+        { name: 'letters', task: supabase.from('letters').upsert(lettersForDb, { onConflict: 'id' }) },
+        { name: 'invoices', task: supabase.from('invoices').upsert(invoices, { onConflict: 'id' }) },
+        { name: 'transactions', task: supabase.from('transactions').upsert(transactionsForDb, { onConflict: 'id' }) },
+        { name: 'court_cases', task: supabase.from('court_cases').upsert(courtCasesForDb, { onConflict: 'id' }) },
+        { name: 'users', task: supabase.from('users').upsert(users, { onConflict: 'id' }) },
+        { name: 'tasks', task: supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }) },
+        { name: 'draft_requests', task: supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }) },
+        { name: 'land_titles', task: supabase.from('land_titles').upsert(
+            landTitles.map(({ notes_history, ...rest }) => rest),
+            { onConflict: 'id' }
+          ) 
+        },
+      ];
+
+      const results = await Promise.all(syncTasks.map(t => t.task));
+      results.forEach((res, i) => {
+        if (res.error) {
+          console.error(`Sync failed for ${syncTasks[i].name}:`, res.error.message);
+        }
+      });
+      console.log("Full sync process completed.");
     } catch (e) {
-      console.error("Full sync failed:", e);
+      console.error("Critical error during full sync:", e);
     }
   };
 
