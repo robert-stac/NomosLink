@@ -39,11 +39,11 @@ export default function ManagerDashboard() {
 
   const needsFeedback = (item: any) => {
     if (item.archived || item.status === 'Completed') return false;
-    
-    const lastFeedback = item.lastClientFeedbackDate 
+
+    const lastFeedback = item.lastClientFeedbackDate
       ? new Date(item.lastClientFeedbackDate)
       : new Date(item.date || item.createdAt || new Date());
-    
+
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     return lastFeedback < fourteenDaysAgo;
@@ -96,66 +96,189 @@ export default function ManagerDashboard() {
     activeLetters.filter(baseFilter).length;
 
   const selectedLawyerName = users.find(u => u.id === selectedLawyerId)?.name || "All Staff";
+  const formatCurrency = (n: number) => "UGX " + (n || 0).toLocaleString();
+
+  // --- FINANCIAL SUMMARY ---
+  const allActiveFiles = [
+    ...activeTransactions.filter(baseFilter),
+    ...activeCases.filter(baseFilter),
+    ...activeLetters.filter(baseFilter),
+  ];
+  const totalBilledAll = allActiveFiles.reduce((s, f: any) => s + Number(f.billed || f.billedAmount || 0), 0);
+  const totalPaidAll = allActiveFiles.reduce((s, f: any) => s + Number(f.paid || f.paidAmount || 0), 0);
+  const totalOutstanding = totalBilledAll - totalPaidAll;
+  const collectionRate = totalBilledAll > 0 ? Math.round((totalPaidAll / totalBilledAll) * 100) : 0;
+  const missingCourtDates = activeCases.filter(baseFilter).filter((c: any) => !c.nextCourtDate).length;
+
+  const _today = new Date();
+
+  // --- WORKLOAD PER LAWYER ---
+  const legalLawyers = users.filter(u => u.role === 'lawyer' || u.role === 'manager');
+  const workloadByLawyer = legalLawyers.map(lawyer => {
+    const lCases = activeCases.filter((c: any) => c.lawyerId === lawyer.id);
+    const lTx = activeTransactions.filter((t: any) => t.lawyerId === lawyer.id);
+    const lLetters = activeLetters.filter((l: any) => l.lawyerId === lawyer.id);
+    const all = [...lCases, ...lTx, ...lLetters];
+    const lBilled = all.reduce((s: number, f: any) => s + Number(f.billed || f.billedAmount || 0), 0);
+    const lPaid = all.reduce((s: number, f: any) => s + Number(f.paid || f.paidAmount || 0), 0);
+    const lStagnant = all.filter(isStagnant).length;
+    return { lawyer, cases: lCases.length, transactions: lTx.length, letters: lLetters.length, total: all.length, billed: lBilled, paid: lPaid, stagnant: lStagnant };
+  }).filter(w => w.total > 0).sort((a, b) => b.total - a.total);
+
+  const [showWorkload, setShowWorkload] = useState(false);
 
   const downloadGlobalReport = () => {
-    const headers = [
-      "Category", "File Name", "Status", "Assigned Counsel", 
-      "Latest Progress Note", "Last Updated", "Stagnant",
-      "Billed Amount", "Paid Amount", "Balance Owed",
-      "Created Date", "Last Feedback Date", "Next Court Date"
-    ];
-    
-    const getLastNote = (item: any) => {
-      if (!item.progressNotes || item.progressNotes.length === 0) return ["No updates", "N/A"];
-      const last = item.progressNotes[item.progressNotes.length - 1];
-      return [last.message.replace(/"/g, '""'), last.date];
+    // Wraps any value in quotes AND strips newlines/tabs so a multi-line
+    // progress note never breaks column alignment in Excel/Sheets.
+    const csvCell = (val: string | number | null | undefined): string => {
+      const s = String(val ?? "")
+        .replace(/[\r\n\t]+/g, " ") // collapse newlines to a space
+        .replace(/"/g, '""');        // escape internal quotes
+      return `"${s}"`;
     };
 
-    const dataRows: string[][] = [];
-    [...filteredCases, ...filteredTransactions, ...filteredLetters].forEach(item => {
-      const type = (item as any).subject ? "Letter" : ((item as any).nextCourtDate ? "Court Case" : "Transaction");
-      const name = (item as any).fileName || (item as any).subject;
+    // Parse DD/MM/YYYY legacy format OR any ISO/JS-parseable string → Date | null
+    const parseAnyDate = (raw: string | undefined | null): Date | null => {
+      if (!raw) return null;
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw.trim())) {
+        const [d, m, y] = raw.trim().split("/");
+        const dt = new Date(`${y}-${m}-${d}`);
+        return isNaN(dt.getTime()) ? null : dt;
+      }
+      const dt = new Date(raw);
+      return isNaN(dt.getTime()) ? null : dt;
+    };
+
+    const fmtDate = (raw: string | undefined | null): string => {
+      const dt = parseAnyDate(raw);
+      if (!dt) return "N/A";
+      return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    };
+
+    const fmtUGX = (n: number): string => "UGX " + n.toLocaleString("en-UG");
+
+    const getLastNote = (item: any): { text: string; rawDate: string } => {
+      if (!item.progressNotes || item.progressNotes.length === 0)
+        return { text: "No updates recorded", rawDate: "" };
+      const last = item.progressNotes[item.progressNotes.length - 1];
+      return { text: last.message || "", rawDate: last.date || "" };
+    };
+
+    const getDaysSinceUpdate = (item: any): number => {
+      const { rawDate } = getLastNote(item);
+      const base = parseAnyDate(rawDate) || parseAnyDate(item.date || item.createdAt);
+      if (!base) return 0;
+      return Math.max(0, Math.floor((_today.getTime() - base.getTime()) / 86400000));
+    };
+
+    // ── build data rows ─────────────────────────────────────────────────────
+    const allItems = [...filteredCases, ...filteredTransactions, ...filteredLetters];
+    let totBilled = 0, totPaid = 0;
+    let rowNum = 1;
+
+    const dataRows: string[] = allItems.map(item => {
+      const isLetter = !!(item as any).subject;
+      const isCase = (item as any).nextCourtDate !== undefined && !isLetter;
+      const category = isLetter ? "Letter" : isCase ? "Court Case" : "Transaction";
+
+      const name = (item as any).fileName || (item as any).subject || "";
       const lawyer = users.find(u => u.id === item.lawyerId)?.name || "Unassigned";
-      const [note, date] = getLastNote(item);
-      const _isStagnant = isStagnant(item) ? "YES" : "NO";
-      
-      const billed = (item as any).billed || (item as any).billedAmount || 0;
-      const paid = (item as any).paid || (item as any).paidAmount || 0;
+      const { text: noteText, rawDate: noteRawDate } = getLastNote(item);
+      const lastUpdated = fmtDate(noteRawDate);
+      const daysSince = getDaysSinceUpdate(item);
+      const stagnantFlag = isStagnant(item) ? "Yes" : "No";
+
+      const billed = Number((item as any).billed || (item as any).billedAmount || 0);
+      const paid = Number((item as any).paid || (item as any).paidAmount || 0);
       const balance = billed - paid;
-      
-      const createdStr = (item as any).date || (item as any).createdAt || (item as any).dateCreated || new Date().toISOString();
-      const createdDate = new Date(createdStr).toLocaleDateString();
-      const lastFeedback = (item as any).lastClientFeedbackDate ? new Date((item as any).lastClientFeedbackDate).toLocaleDateString() : "Never";
-      const nextCourtDate = (item as any).nextCourtDate ? new Date((item as any).nextCourtDate).toLocaleDateString() : "N/A";
-      
-      dataRows.push([
-        type, 
-        `"${name}"`, 
-        (item as any).status || "Active", 
-        `"${lawyer}"`, 
-        `"${note}"`, 
-        date, 
-        _isStagnant,
-        billed.toString(),
-        paid.toString(),
-        balance.toString(),
-        createdDate,
-        lastFeedback,
-        nextCourtDate
-      ]);
+
+      totBilled += billed;
+      totPaid += paid;
+
+      const createdDate = fmtDate((item as any).date || (item as any).createdAt || (item as any).dateCreated);
+      const lastFeedback = fmtDate((item as any).lastClientFeedbackDate);
+      const nextCourtDate = fmtDate((item as any).nextCourtDate);
+      const status = (item as any).status || "Ongoing";
+
+      return [
+        csvCell(rowNum++),
+        csvCell(category),
+        csvCell(name),
+        csvCell(status),
+        csvCell(lawyer),
+        csvCell(noteText),     // newlines stripped by csvCell
+        csvCell(lastUpdated),
+        csvCell(daysSince),
+        csvCell(stagnantFlag),
+        csvCell(fmtUGX(billed)),
+        csvCell(fmtUGX(paid)),
+        csvCell(fmtUGX(balance)),
+        csvCell(lastFeedback === "N/A" ? "Never" : lastFeedback),
+        csvCell(nextCourtDate),
+      ].join(",");
     });
 
-    const csvContent = [headers, ...dataRows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const totBalance = totBilled - totPaid;
+    const collRate = totBilled > 0 ? Math.round((totPaid / totBilled) * 100) + "%" : "N/A";
+
+    // ── column header row ───────────────────────────────────────────────────
+    const colHeaders = [
+      "#", "Category", "File / Matter Name", "Status", "Assigned Counsel",
+      "Latest Progress Note", "Last Updated", "Days Since Update", "Stagnant (30+ days)",
+      "Billed (UGX)", "Paid (UGX)", "Balance Owed (UGX)",
+      "Last Client Feedback", "Next Court Date",
+    ].map(csvCell).join(",");
+
+    // ── totals row ──────────────────────────────────────────────────────────
+    const totalsRow = [
+      csvCell(""), csvCell("TOTALS"), csvCell(""), csvCell(""), csvCell(""),
+      csvCell(""), csvCell(""), csvCell(""), csvCell(""),
+      csvCell(fmtUGX(totBilled)),
+      csvCell(fmtUGX(totPaid)),
+      csvCell(fmtUGX(totBalance)),
+      csvCell(""), csvCell(""),
+    ].join(",");
+
+    // ── professional report header ──────────────────────────────────────────
+    const now = new Date();
+    const rptDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    const rptTime = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const filterLbl = showOnlyStagnant ? "Stagnant Files Only" : "All Active Files";
+    const counselLbl = selectedLawyerName !== "All Staff" ? `Counsel: ${selectedLawyerName}` : "All Counsel";
+
+    const headerLines = [
+      `"BUWEMBO & CO. ADVOCATES — CASE MANAGEMENT REPORT"`,
+      `"Generated: ${rptDate} at ${rptTime}"`,
+      `"Filter: ${filterLbl} | ${counselLbl}"`,
+      `""`,
+      `"──────────────────────────────────────────────────"`,
+      `"FINANCIAL SUMMARY"`,
+      `"Total Billed (UGX)",${csvCell(fmtUGX(totBilled))}`,
+      `"Total Collected (UGX)",${csvCell(fmtUGX(totPaid))}`,
+      `"Outstanding Balance (UGX)",${csvCell(fmtUGX(totBalance))}`,
+      `"Collection Rate",${csvCell(collRate)}`,
+      `"Total Records",${csvCell(allItems.length)}`,
+      `""`,
+      `"──────────────────────────────────────────────────"`,
+      `"CASE RECORDS"`,
+      `""`,
+    ].join("\n");
+
+    // ── assemble & trigger download ─────────────────────────────────────────
+    const csvContent = [headerLines, colHeaders, ...dataRows, `""`, totalsRow].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
+    const safeName = selectedLawyerName.replace(/\s+/g, "_");
+    const dateStamp = now.toISOString().split("T")[0];
     link.setAttribute("href", url);
-    const fileName = `Report_${showOnlyStagnant ? "STAGNANT_" : ""}${selectedLawyerName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
-    link.setAttribute("download", fileName);
+    link.setAttribute("download", `NomosLink_Report_${showOnlyStagnant ? "Stagnant_" : ""}${safeName}_${dateStamp}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
+
 
   const getDaysRemaining = (dateString: string) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -181,7 +304,7 @@ export default function ManagerDashboard() {
       .sort((a, b) => new Date(a.nextCourtDate || 0).getTime() - new Date(b.nextCourtDate || 0).getTime());
   })();
 
-  const pendingDeadlines = filteredCases.flatMap(c => 
+  const pendingDeadlines = filteredCases.flatMap(c =>
     (c.deadlines || []).filter((d: any) => d.status === 'Pending').map((d: any) => ({
       ...d,
       caseId: c.id,
@@ -189,8 +312,8 @@ export default function ManagerDashboard() {
     }))
   ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-  const pendingFilings = filingRequests.filter(f => 
-    f.status === 'Pending' && 
+  const pendingFilings = filingRequests.filter(f =>
+    f.status === 'Pending' &&
     (!selectedLawyerId || f.assignedToId === selectedLawyerId || f.requestedById === selectedLawyerId)
   ).sort((a, b) => new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime());
 
@@ -266,27 +389,27 @@ export default function ManagerDashboard() {
             {/* Decorative elements */}
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-400/30 transition-colors" />
             <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-400/30 transition-colors" />
-            
+
             <div className="relative z-10">
               <div className="w-24 h-24 bg-white/10 rounded-[32px] flex items-center justify-center text-5xl mb-8 mx-auto border border-white/10 shadow-inner">
                 ⚖️
               </div>
-              
+
               <span className="bg-blue-400/20 text-blue-200 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-6 inline-block border border-blue-400/20">
                 New Feature Release
               </span>
-              
+
               <h1 className="text-4xl md:text-5xl font-black mb-6 tracking-tight leading-tight">
                 Registry Filing <br />
                 <span className="text-blue-300">Management</span>
               </h1>
-              
+
               <p className="text-blue-100/80 text-lg leading-relaxed mb-10 font-medium max-w-lg mx-auto">
                 Oversee the new document filing workflow. Track pending lawyer requests, assign registry tasks, and monitor ECCMIS submission performance.
               </p>
-              
+
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                <button 
+                <button
                   onClick={() => {
                     const el = document.getElementById('registry-filings-section');
                     if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -296,7 +419,7 @@ export default function ManagerDashboard() {
                 >
                   View Pending Filings 🚀
                 </button>
-                <button 
+                <button
                   onClick={dismissBanner}
                   className="w-full sm:w-auto bg-white/5 border border-white/10 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
                 >
@@ -376,19 +499,19 @@ export default function ManagerDashboard() {
                 </div>
                 <p className="text-xs text-blue-700 font-bold mb-1 uppercase tracking-tighter">⚖️ {f.caseFileName}</p>
                 {f.description && <p className="text-[11px] text-slate-500 line-clamp-2 italic mb-3">"{f.description}"</p>}
-                
+
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-100">
                   <div className="text-[10px] text-slate-400 font-black uppercase">
                     From: {f.requestedByName}
                   </div>
-                  <button 
+                  <button
                     onClick={() => {
                       const ref = prompt("Enter ECCMIS Reference Number:");
                       if (ref !== null) {
                         const note = prompt("Any notes for the lawyer? (Optional)");
-                        updateFilingRequest(f.id, { 
-                          status: 'Completed', 
-                          eccmisReference: ref, 
+                        updateFilingRequest(f.id, {
+                          status: 'Completed',
+                          eccmisReference: ref,
                           registryNote: note || undefined,
                           dateCompleted: new Date().toISOString()
                         });
@@ -425,8 +548,8 @@ export default function ManagerDashboard() {
           </div>
           <p className="text-2xl font-black text-red-700">{stagnantCount}</p>
         </div>
-        <div 
-          onClick={() => {/* could filter by feedback overdue if desired */}}
+        <div
+          onClick={() => {/* could filter by feedback overdue if desired */ }}
           className={`p-4 rounded-lg border shadow-sm cursor-pointer transition-all border-l-4 ${feedbackOverdueCount > 0 ? 'bg-orange-50 border-orange-500 ring-2 ring-orange-200' : 'bg-white border-l-orange-500 hover:bg-orange-50'}`}
         >
           <div className="flex justify-between items-start">
@@ -436,6 +559,46 @@ export default function ManagerDashboard() {
           <p className="text-2xl font-black text-orange-700">{feedbackOverdueCount}</p>
         </div>
       </div>
+
+      {/* FINANCIAL SUMMARY STRIP */}
+      <div className="bg-gradient-to-r from-[#0B1F3A] to-[#1a3a6b] rounded-xl p-5 mt-4 shadow-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-black text-sm uppercase tracking-widest">💼 Financial Overview</h3>
+          <span className="text-[10px] text-blue-300 bg-blue-900/40 px-3 py-1 rounded-full font-bold uppercase tracking-widest">Live Data</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-white/10 rounded-lg p-4">
+            <p className="text-[10px] text-blue-300 uppercase font-black tracking-widest mb-1">Total Billed</p>
+            <p className="text-lg font-black text-white">{formatCurrency(totalBilledAll)}</p>
+          </div>
+          <div className="bg-white/10 rounded-lg p-4">
+            <p className="text-[10px] text-green-300 uppercase font-black tracking-widest mb-1">Total Collected</p>
+            <p className="text-lg font-black text-green-300">{formatCurrency(totalPaidAll)}</p>
+          </div>
+          <div className="bg-white/10 rounded-lg p-4">
+            <p className="text-[10px] text-orange-300 uppercase font-black tracking-widest mb-1">Outstanding</p>
+            <p className="text-lg font-black text-orange-300">{formatCurrency(totalOutstanding)}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4">
+            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Collection Rate</p>
+            <div className="flex items-end gap-1">
+              <p className="text-lg font-black text-slate-800">{collectionRate}%</p>
+              <div className="flex-1 mb-1">
+                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${collectionRate}%`, backgroundColor: collectionRate >= 75 ? '#22c55e' : collectionRate >= 50 ? '#f59e0b' : '#ef4444' }}
+                  />
+                </div>
+              </div>
+            </div>
+            {missingCourtDates > 0 && (
+              <p className="text-[9px] text-red-500 font-black mt-1 uppercase">⚠ {missingCourtDates} cases missing court date</p>
+            )}
+          </div>
+        </div>
+      </div>
+
 
       {/* UPCOMING COURT DATES (14 Days) */}
       <div className="bg-white p-6 rounded-lg shadow-sm border mt-6">
@@ -480,8 +643,8 @@ export default function ManagerDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {feedbackOverdueFiles.slice(0, 9).map((file: any) => {
               const assignedLawyer = users.find(u => u.id === file.lawyerId)?.name || "Unassigned";
-              const lastFeedback = file.lastClientFeedbackDate 
-                ? new Date(file.lastClientFeedbackDate).toLocaleDateString('en-GB') 
+              const lastFeedback = file.lastClientFeedbackDate
+                ? new Date(file.lastClientFeedbackDate).toLocaleDateString('en-GB')
                 : "Never";
               return (
                 <div
@@ -500,7 +663,7 @@ export default function ManagerDashboard() {
               );
             })}
             {feedbackOverdueFiles.length > 9 && (
-              <div 
+              <div
                 onClick={() => setShowOnlyStagnant(true)}
                 className="p-4 border border-dashed rounded-lg flex items-center justify-center text-gray-400 text-xs font-bold hover:bg-slate-50 cursor-pointer"
               >
@@ -533,38 +696,39 @@ export default function ManagerDashboard() {
                 {pendingDeadlines.map((deadline: any) => {
                   const countdown = getDaysRemaining(deadline.dueDate);
                   return (
-                  <tr key={deadline.id} className="border-b last:border-0 hover:bg-slate-50 transition">
-                    <td className="py-3 pr-4">
-                      <p className="font-bold text-slate-800">{deadline.title}</p>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <button onClick={() => navigate(`/lawyer/cases/${deadline.caseId}`)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase transition truncate max-w-[200px] block text-left">
-                        ⚖️ {deadline.caseFileName}
-                      </button>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="font-medium text-slate-700 whitespace-nowrap">
-                        {new Date(deadline.dueDate).toLocaleDateString()}
-                      </div>
-                      <div className={`text-xs font-bold ${countdown.urgent ? "text-red-500" : "text-gray-500"}`}>
-                        {countdown.text}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <span className="px-2 py-1 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border uppercase">
-                        {deadline.category || "GENERAL"}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right">
-                      <button 
-                        onClick={() => updateCourtCaseDeadline(deadline.caseId, deadline.id, { status: 'Completed' })}
-                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-md text-xs font-bold transition whitespace-nowrap inline-flex items-center gap-2"
-                      >
-                        ✓ Mark Done
-                      </button>
-                    </td>
-                  </tr>
-                )})}
+                    <tr key={deadline.id} className="border-b last:border-0 hover:bg-slate-50 transition">
+                      <td className="py-3 pr-4">
+                        <p className="font-bold text-slate-800">{deadline.title}</p>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <button onClick={() => navigate(`/lawyer/cases/${deadline.caseId}`)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase transition truncate max-w-[200px] block text-left">
+                          ⚖️ {deadline.caseFileName}
+                        </button>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <div className="font-medium text-slate-700 whitespace-nowrap">
+                          {new Date(deadline.dueDate).toLocaleDateString()}
+                        </div>
+                        <div className={`text-xs font-bold ${countdown.urgent ? "text-red-500" : "text-gray-500"}`}>
+                          {countdown.text}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className="px-2 py-1 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border uppercase">
+                          {deadline.category || "GENERAL"}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <button
+                          onClick={() => updateCourtCaseDeadline(deadline.caseId, deadline.id, { status: 'Completed' })}
+                          className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-md text-xs font-bold transition whitespace-nowrap inline-flex items-center gap-2"
+                        >
+                          ✓ Mark Done
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -572,7 +736,7 @@ export default function ManagerDashboard() {
           <p className="text-center text-gray-500 italic py-6">No pending court deadlines.</p>
         )}
       </div>
-      
+
       {/* PENDING REGISTRY FILINGS */}
       {pendingFilings.length > 0 && (
         <div className="bg-white p-6 rounded-lg shadow-sm border mt-6">
@@ -591,19 +755,19 @@ export default function ManagerDashboard() {
                 </div>
                 <p className="text-xs text-blue-700 font-bold mb-1 uppercase tracking-tighter">⚖️ {f.caseFileName}</p>
                 {f.description && <p className="text-[11px] text-slate-500 line-clamp-2 italic mb-3">"{f.description}"</p>}
-                
+
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-100">
                   <div className="text-[10px] text-slate-400 font-black uppercase">
                     From: {f.requestedByName}
                   </div>
-                  <button 
+                  <button
                     onClick={() => {
                       const ref = prompt("Enter ECCMIS Reference Number:");
                       if (ref !== null) {
                         const note = prompt("Any notes for the lawyer? (Optional)");
-                        updateFilingRequest(f.id, { 
-                          status: 'Completed', 
-                          eccmisReference: ref, 
+                        updateFilingRequest(f.id, {
+                          status: 'Completed',
+                          eccmisReference: ref,
                           registryNote: note || undefined,
                           dateCompleted: new Date().toISOString()
                         });
@@ -617,6 +781,100 @@ export default function ManagerDashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* WORKLOAD AT A GLANCE */}
+      {workloadByLawyer.length > 0 && (
+        <div className="bg-white rounded-xl border shadow-sm mt-4">
+          <button
+            onClick={() => setShowWorkload(w => !w)}
+            className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-50 transition-colors rounded-xl"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-lg">👩‍⚖️</span>
+              <div>
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">Workload at a Glance</h3>
+                <p className="text-[10px] text-slate-400 font-medium mt-0.5">Per-lawyer case load, billing & stagnancy summary</p>
+              </div>
+            </div>
+            <span className={`text-slate-400 text-xs font-bold transition-transform duration-200 ${showWorkload ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+
+          {showWorkload && (
+            <div className="overflow-x-auto border-t border-slate-100">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    <th className="px-5 py-3 text-left">Counsel</th>
+                    <th className="px-4 py-3 text-center">Cases</th>
+                    <th className="px-4 py-3 text-center">Transactions</th>
+                    <th className="px-4 py-3 text-center">Letters</th>
+                    <th className="px-4 py-3 text-center">Total Files</th>
+                    <th className="px-4 py-3 text-right">Billed</th>
+                    <th className="px-4 py-3 text-right">Collected</th>
+                    <th className="px-4 py-3 text-right text-orange-600">Outstanding</th>
+                    <th className="px-4 py-3 text-center text-red-600">Stagnant</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {workloadByLawyer.map(w => (
+                    <tr
+                      key={w.lawyer.id}
+                      onClick={() => setSelectedLawyerId(w.lawyer.id)}
+                      className="hover:bg-blue-50/40 cursor-pointer transition-colors"
+                    >
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-[#0B1F3A] text-white text-[10px] font-black flex items-center justify-center flex-shrink-0">
+                            {w.lawyer.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800 text-xs">{w.lawyer.name}</p>
+                            <p className="text-[9px] text-slate-400 uppercase font-bold">{w.lawyer.role}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="bg-blue-100 text-blue-700 text-xs font-black px-2 py-0.5 rounded-full">{w.cases}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="bg-green-100 text-green-700 text-xs font-black px-2 py-0.5 rounded-full">{w.transactions}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="bg-amber-100 text-amber-700 text-xs font-black px-2 py-0.5 rounded-full">{w.letters}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="font-black text-slate-700 text-sm">{w.total}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs font-bold text-slate-700">{formatCurrency(w.billed)}</td>
+                      <td className="px-4 py-3 text-right text-xs font-bold text-emerald-600">{formatCurrency(w.paid)}</td>
+                      <td className="px-4 py-3 text-right text-xs font-bold text-orange-600">{formatCurrency(w.billed - w.paid)}</td>
+                      <td className="px-4 py-3 text-center">
+                        {w.stagnant > 0
+                          ? <span className="bg-red-100 text-red-600 text-xs font-black px-2 py-0.5 rounded-full animate-pulse">{w.stagnant}</span>
+                          : <span className="text-emerald-500 font-black text-xs">✓</span>
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                  <tr className="text-xs font-black text-slate-600">
+                    <td className="px-5 py-3 uppercase tracking-wider">Firm Total</td>
+                    <td className="px-4 py-3 text-center">{workloadByLawyer.reduce((s, w) => s + w.cases, 0)}</td>
+                    <td className="px-4 py-3 text-center">{workloadByLawyer.reduce((s, w) => s + w.transactions, 0)}</td>
+                    <td className="px-4 py-3 text-center">{workloadByLawyer.reduce((s, w) => s + w.letters, 0)}</td>
+                    <td className="px-4 py-3 text-center">{workloadByLawyer.reduce((s, w) => s + w.total, 0)}</td>
+                    <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(workloadByLawyer.reduce((s, w) => s + w.billed, 0))}</td>
+                    <td className="px-4 py-3 text-right text-emerald-600">{formatCurrency(workloadByLawyer.reduce((s, w) => s + w.paid, 0))}</td>
+                    <td className="px-4 py-3 text-right text-orange-600">{formatCurrency(workloadByLawyer.reduce((s, w) => s + w.billed - w.paid, 0))}</td>
+                    <td className="px-4 py-3 text-center text-red-600">{workloadByLawyer.reduce((s, w) => s + w.stagnant, 0)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -637,10 +895,10 @@ export default function ManagerDashboard() {
       </div>
 
       <div className={`grid gap-6 ${selectedLawyerId
-          ? users.find(u => u.id === selectedLawyerId)?.role === 'clerk'
-            ? 'grid-cols-1 max-w-2xl mx-auto'
-            : 'grid-cols-1 lg:grid-cols-3'
-          : 'grid-cols-1 lg:grid-cols-4'
+        ? users.find(u => u.id === selectedLawyerId)?.role === 'clerk'
+          ? 'grid-cols-1 max-w-2xl mx-auto'
+          : 'grid-cols-1 lg:grid-cols-3'
+        : 'grid-cols-1 lg:grid-cols-4'
         }`}>
         {/* TASKS (Clerk specific) */}
         {(!selectedLawyerId || users.find(u => u.id === selectedLawyerId)?.role === 'clerk') && (

@@ -136,7 +136,7 @@ export interface CourtCase {
   billed?: number;
   paid?: number;
   balance?: number;
-  status: "Ongoing" | "Completed";
+  status: "Ongoing" | "Completed" | "On Hold" | "Pending";
   nextCourtDate?: string;
   completedDate?: string;
   lawyerId?: string;
@@ -742,7 +742,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (letterData) setLetters(prev => mergeIfChanged(prev, letterData));
         if (userData) setUsers(prev => mergeIfChanged(prev, userData));
         if (taskData) setTasks(prev => mergeIfChanged(prev, taskData).map(normalizeTask));
-        if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData));
+        const normalizeInvoice = (row: any): Invoice => ({
+          id: row.id,
+          fileName: row.filename ?? row.fileName ?? '',
+          relatedFile: row.relatedfile ?? row.relatedFile ?? '',
+          amountBilled: Number(row.amountbilled ?? row.amountBilled ?? 0),
+          amountPaid: Number(row.amountpaid ?? row.amountPaid ?? 0),
+          balance: Number(row.balance ?? 0),
+          isPaid: Boolean(row.ispaid ?? row.isPaid ?? false),
+          dateCreated: row.datecreated ?? row.dateCreated ?? '',
+          dueDate: row.duedate ?? row.dueDate ?? undefined,
+          scannedInvoiceUrl: row.scannedInvoiceUrl ?? undefined,
+        });
+        if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData.map(normalizeInvoice)));
         if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData));
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
         if (results[10]?.data) setFilingRequests(prev => mergeIfChanged(prev, results[10].data));
@@ -977,6 +989,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'progressNotes', 'documents',
       'lastClientFeedbackDate', 'scannedInvoiceUrl',
     ];
+    const expenseScalarFields = [
+      'id', 'type', 'date', 'category', 'description', 'purpose', 'amount',
+      'staffId', 'staffName', 'relatedFileId', 'relatedFileType', 'relatedFileName'
+    ];
+    const invoiceScalarFields = [
+      'id', 'fileName', 'relatedFile', 'amountBilled', 'amountPaid', 'balance', 'isPaid', 'dateCreated', 'dueDate', 'scannedInvoiceUrl'
+    ];
 
     const pickFields = (obj: any, fields: string[]) => {
       const result: Record<string, any> = {};
@@ -987,13 +1006,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const courtCasesForDb = courtCases.map(c => pickFields(c, courtCaseScalarFields));
     const transactionsForDb = transactions.map(t => pickFields(t, transactionScalarFields));
     const lettersForDb = letters.map(l => pickFields(l, letterScalarFields));
+    const expensesForDb = expenses.map(e => pickFields(e, expenseScalarFields));
+    const invoicesForDb = invoices.map(inv => ({
+      id: inv.id,
+      filename: inv.fileName,
+      relatedfile: inv.relatedFile,
+      amountbilled: inv.amountBilled,
+      amountpaid: inv.amountPaid,
+      balance: inv.balance,
+      ispaid: inv.isPaid,
+      datecreated: inv.dateCreated,
+      duedate: inv.dueDate,
+      scannedInvoiceUrl: inv.scannedInvoiceUrl,
+    }));
 
     try {
       const syncTasks = [
-        { name: 'expenses', task: supabase.from('expenses').upsert(expenses, { onConflict: 'id' }) },
+        { name: 'expenses', task: supabase.from('expenses').upsert(expensesForDb, { onConflict: 'id' }) },
         { name: 'clients', task: supabase.from('clients').upsert(clientsForDb, { onConflict: 'id' }) },
         { name: 'letters', task: supabase.from('letters').upsert(lettersForDb, { onConflict: 'id' }) },
-        { name: 'invoices', task: supabase.from('invoices').upsert(invoices, { onConflict: 'id' }) },
+        { name: 'invoices', task: supabase.from('invoices').upsert(invoicesForDb, { onConflict: 'id' }) },
         { name: 'transactions', task: supabase.from('transactions').upsert(transactionsForDb, { onConflict: 'id' }) },
         { name: 'court_cases', task: supabase.from('court_cases').upsert(courtCasesForDb, { onConflict: 'id' }) },
         { name: 'users', task: supabase.from('users').upsert(users, { onConflict: 'id' }) },
@@ -1502,8 +1534,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /* =======================
       INVOICES
   ======================= */
-  const addInvoice = (inv: Invoice) => { setInvoices(prev => [...prev, inv]); instantSave('invoices', inv); };
-  const updateInvoice = (inv: Invoice) => { setInvoices(prev => prev.map(i => i.id === inv.id ? inv : i)); instantSave('invoices', inv); };
+  // Map camelCase app fields → lowercase DB column names
+  const invoiceToDb = (inv: Invoice) => ({
+    id: inv.id,
+    filename: inv.fileName,
+    relatedfile: inv.relatedFile,
+    amountbilled: inv.amountBilled,
+    amountpaid: inv.amountPaid,
+    balance: inv.balance,
+    ispaid: inv.isPaid,
+    datecreated: inv.dateCreated,
+    duedate: inv.dueDate,
+    scannedInvoiceUrl: inv.scannedInvoiceUrl,
+  });
+
+  const addInvoice = async (inv: Invoice) => {
+    setInvoices(prev => [...prev, inv]);
+    if (navigator.onLine) {
+      const { error } = await supabase.from('invoices').upsert(invoiceToDb(inv), { onConflict: 'id' });
+      if (error) console.error('addInvoice failed:', error.message, '| Details:', error.details);
+    }
+  };
+  const updateInvoice = async (inv: Invoice) => {
+    setInvoices(prev => prev.map(i => i.id === inv.id ? inv : i));
+    if (navigator.onLine) {
+      const { error } = await supabase.from('invoices').upsert(invoiceToDb(inv), { onConflict: 'id' });
+      if (error) console.error('updateInvoice failed:', error.message, '| Details:', error.details);
+    }
+  };
   const deleteInvoice = (id: string) => {
     setInvoices(prev => {
       const updated = prev.filter(i => i.id !== id);

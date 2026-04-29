@@ -164,27 +164,42 @@ export default function Expenses() {
     setShowModal(true);
   };
 
-  const handleSaveExpense = (e: React.FormEvent) => {
+  const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    const expenseData = {
+    const baseData: Record<string, any> = {
       type: formData.type,
       date: formData.date,
       category: formData.type === 'in' ? "Petty Cash Replenishment" : "Expense",
       description: formData.purpose,
       purpose: formData.purpose,
-      amount: Number(formData.amount),
-      staffId: formData.type === 'out' ? formData.staffId : undefined,
-      staffName: formData.type === 'out' ? formData.staffName : undefined,
-      relatedFileId: formData.type === 'out' ? formData.relatedFileId : undefined,
-      relatedFileType: formData.type === 'out' ? formData.relatedFileType : undefined,
-      relatedFileName: formData.type === 'out' ? formData.relatedFileName : undefined,
+      amount: Math.round(Number(formData.amount)),
     };
 
-    if (editingId) {
-      setExpenses(expenses.map((exp: any) => exp.id === editingId ? { ...exp, ...expenseData } : exp));
-    } else {
-      setExpenses([...(expenses || []), { id: Date.now().toString(), ...expenseData }]);
+    if (formData.type === 'out') {
+      if (formData.staffId) baseData.staffId = formData.staffId;
+      if (formData.staffName) baseData.staffName = formData.staffName;
+      if (formData.relatedFileId) baseData.relatedFileId = formData.relatedFileId;
+      if (formData.relatedFileType) baseData.relatedFileType = formData.relatedFileType;
+      if (formData.relatedFileName) baseData.relatedFileName = formData.relatedFileName;
     }
+
+    let newExpense: Record<string, any>;
+    if (editingId) {
+      newExpense = { id: editingId, ...baseData };
+      setExpenses(expenses.map((exp: any) => exp.id === editingId ? { ...exp, ...baseData } : exp));
+    } else {
+      newExpense = { id: crypto.randomUUID(), ...baseData };
+      setExpenses([...(expenses || []), newExpense]);
+    }
+
+    if (navigator.onLine) {
+      const { error } = await supabase.from('expenses').upsert([newExpense], { onConflict: 'id' });
+      if (error) {
+        console.error('Failed to save expense to Supabase:', error.message, error.details, error.hint);
+        alert('Expense saved locally but failed to sync: ' + error.message);
+      }
+    }
+
     setShowModal(false);
   };
 
@@ -406,8 +421,11 @@ export default function Expenses() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
           <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col md:max-h-[90vh]">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center flex-shrink-0">
+              <button onClick={() => setShowModal(false)} className="flex items-center gap-1.5 text-slate-400 hover:text-blue-600 font-bold text-xs uppercase tracking-widest transition-colors">
+                ← Back
+              </button>
               <h3 className="text-xl font-black text-slate-800">{editingId ? "Edit Transaction" : "Record Transaction"}</h3>
-              <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition font-bold">✕</button>
+              <div className="w-16" />
             </div>
             
             <form onSubmit={handleSaveExpense} className="p-6 overflow-y-auto space-y-6">

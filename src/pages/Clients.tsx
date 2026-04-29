@@ -11,7 +11,7 @@ import { useAppContext } from "../context/AppContext";
 const Clients: React.FC = () => {
   const {
     clients, courtCases, transactions, letters, invoices, landTitles,
-    addClient, updateClient, deleteClient, addCommLog, commLogs, currentUser
+    addClient, updateClient, deleteClient, addCommLog, commLogs, currentUser, expenses
   } = useAppContext();
   const navigate = useNavigate();
 
@@ -20,6 +20,7 @@ const Clients: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [commNote, setCommNote] = useState("");
+  const [activeDrawerTab, setActiveDrawerTab] = useState<"Overview" | "Expenses">("Overview");
 
   // Add-client form
   const [name, setName] = useState("");
@@ -87,7 +88,14 @@ const Clients: React.FC = () => {
           clientLetters.reduce((sum, l) => sum + ((l.billed || 0) - (l.paid || 0)), 0) +
           clientTitles.reduce((sum: number, t: any) => sum + ((t.total_billed || 0) - (t.total_paid || 0)), 0);
 
-        return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, totalOwed, totalFilesCount };
+        const clientExpenses = (expenses || []).filter((e: any) => 
+          clientCases.some(c => c.id === e.relatedFileId) ||
+          clientTransactions.some(t => t.id === e.relatedFileId) ||
+          clientLetters.some(l => l.id === e.relatedFileId) ||
+          clientTitles.some((t: any) => t.id === e.relatedFileId)
+        );
+
+        return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, expenses: clientExpenses, totalOwed, totalFilesCount };
       });
 
     return result.sort((a, b) => {
@@ -101,7 +109,7 @@ const Clients: React.FC = () => {
         default: return 0;
       }
     });
-  }, [clients, searchTerm, sortType, courtCases, transactions, letters, invoices, landTitles]);
+  }, [clients, searchTerm, sortType, courtCases, transactions, letters, invoices, landTitles, expenses]);
 
   const handleDownloadReport = (client: any) => {
     const logEntries = commLogs
@@ -137,6 +145,25 @@ const Clients: React.FC = () => {
     a.href = url;
     a.download = `${client.name.replace(/\s+/g, "_")}_Report.txt`;
     a.click();
+  };
+
+  const handleDownloadExpensesCSV = (client: any) => {
+    if (!client.expenses || client.expenses.length === 0) return alert("No expenses to export");
+    const headers = ["Date", "Type", "File Name", "Purpose", "Amount (UGX)"];
+    const rows = client.expenses.map((exp: any) => [
+      exp.date,
+      exp.type === "in" ? "Money In" : "Money Out",
+      (exp.relatedFileName || "").replace(/,/g, ""),
+      (exp.purpose || exp.description || "").replace(/,/g, ""),
+      exp.amount
+    ]);
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${client.name.replace(/\s+/g, "_")}_Expenses.csv`);
+    link.click();
   };
 
   const handleSubmit = () => {
@@ -239,7 +266,7 @@ const Clients: React.FC = () => {
         {filteredClients.map(client => (
           <div
             key={client.id}
-            onClick={() => setSelectedClient(client)}
+            onClick={() => { setSelectedClient(client); setActiveDrawerTab("Overview"); }}
             className="bg-white rounded-3xl p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group"
           >
             <div className="flex justify-between items-start mb-5">
@@ -285,18 +312,14 @@ const Clients: React.FC = () => {
             className="relative w-full max-w-2xl bg-white h-screen shadow-2xl overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <button
-              onClick={() => setSelectedClient(null)}
-              className="absolute top-7 right-7 w-9 h-9 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white text-base font-bold z-10 transition"
-            >
-              x
-            </button>
-
-            <div className="bg-[#0B1F3A] px-10 pt-12 pb-10 text-white">
-              <div className="flex items-start justify-between mb-2">
-                <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest">
-                  {selectedClient.type} Client
-                </p>
+            <div className="bg-[#0B1F3A] px-10 pt-10 pb-10 text-white">
+              <div className="flex items-start justify-between mb-4">
+                <button
+                  onClick={() => setSelectedClient(null)}
+                  className="flex items-center gap-1.5 text-blue-300 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors"
+                >
+                  ← Back
+                </button>
                 <button
                   onClick={() => openEditModal(selectedClient)}
                   className="text-xs font-semibold text-blue-300 hover:text-white border border-blue-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
@@ -304,6 +327,9 @@ const Clients: React.FC = () => {
                   ✏️ Edit
                 </button>
               </div>
+              <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest mb-2 mt-1">
+                {selectedClient.type} Client
+              </p>
               <h2 style={serif} className="text-3xl font-bold leading-tight mb-3">
                 {selectedClient.name}
               </h2>
@@ -315,111 +341,341 @@ const Clients: React.FC = () => {
 
             <div className="px-10 py-8">
 
-              <div className="grid grid-cols-3 gap-4 mb-8">
-                <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Files</p>
-                  <p className="text-xl font-bold text-[#0B1F3A]">{selectedClient.totalFilesCount}</p>
+              {currentUser?.role === 'accountant' && (
+                <div className="flex gap-2 p-1 bg-slate-200/60 rounded-xl w-fit mb-8">
+                  <button 
+                    onClick={() => setActiveDrawerTab("Overview")}
+                    className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeDrawerTab === "Overview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    Client Overview
+                  </button>
+                  <button 
+                    onClick={() => setActiveDrawerTab("Expenses")}
+                    className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeDrawerTab === "Expenses" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    Expense Record
+                  </button>
                 </div>
-                <div className="bg-red-50 rounded-2xl p-4 text-center">
-                  <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1">Outstanding</p>
-                  <p className={`text-lg font-bold ${selectedClient.totalOwed > 0 ? "text-red-500" : "text-emerald-600"}`}>
-                    {fmt(selectedClient.totalOwed)}
-                  </p>
-                </div>
-                <div className="bg-emerald-50 rounded-2xl p-4 text-center">
-                  <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Status</p>
-                  <p className="text-lg font-bold text-emerald-600">Active</p>
-                </div>
-              </div>
+              )}
 
-              <button
-                onClick={() => handleDownloadReport(selectedClient)}
-                className="w-full mb-8 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
-              >
-                📥 Export Client Report
-              </button>
+              {activeDrawerTab === "Overview" ? (
+                <>
+                  <div className="grid grid-cols-3 gap-4 mb-8">
+                    <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Files</p>
+                      <p className="text-xl font-bold text-[#0B1F3A]">{selectedClient.totalFilesCount}</p>
+                    </div>
+                    <div className="bg-red-50 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1">Outstanding</p>
+                      <p className={`text-lg font-bold ${selectedClient.totalOwed > 0 ? "text-red-500" : "text-emerald-600"}`}>
+                        {fmt(selectedClient.totalOwed)}
+                      </p>
+                    </div>
+                    <div className="bg-emerald-50 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Status</p>
+                      <p className="text-lg font-bold text-emerald-600">Active</p>
+                    </div>
+                  </div>
 
-              <div className="mb-8 bg-blue-50 rounded-2xl border border-blue-100 p-6">
-                <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
-                  Internal Notes & Communication Log
-                </h4>
-                <textarea
-                  className="w-full bg-white border border-blue-100 rounded-xl p-4 text-sm text-slate-700 placeholder-slate-300 outline-none focus:ring-2 focus:ring-blue-400 resize-none mb-3"
-                  placeholder="e.g. Called client regarding overdue payment..."
-                  rows={3}
-                  value={commNote}
-                  onChange={e => setCommNote(e.target.value)}
-                />
-                <button
-                  onClick={handleSaveLog}
-                  className="bg-[#0B1F3A] text-white text-xs font-semibold px-5 py-2.5 rounded-xl hover:bg-blue-900 transition-colors"
-                >
-                  Save Log Entry
-                </button>
-                <div className="mt-5 space-y-3 max-h-48 overflow-y-auto pr-1">
-                  {commLogs
-                    ?.filter((l: any) => l.clientId === selectedClient.id)
-                    .map((log: any) => (
-                      <div key={log.id} className="bg-white p-4 rounded-xl border border-blue-100">
-                        <div className="flex justify-between text-xs font-semibold text-slate-400 mb-1.5">
-                          <span>{log.authorName || log.author}</span>
-                          <span>{log.date}</span>
-                        </div>
-                        <p className="text-sm text-slate-700 leading-relaxed">{log.note}</p>
-                      </div>
+                  <button
+                    onClick={() => handleDownloadReport(selectedClient)}
+                    className="w-full mb-8 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
+                  >
+                    📥 Export Client Report
+                  </button>
+
+                  <div className="mb-8 bg-blue-50 rounded-2xl border border-blue-100 p-6">
+                    <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
+                      Internal Notes & Communication Log
+                    </h4>
+                    <textarea
+                      className="w-full bg-white border border-blue-100 rounded-xl p-4 text-sm text-slate-700 placeholder-slate-300 outline-none focus:ring-2 focus:ring-blue-400 resize-none mb-3"
+                      placeholder="e.g. Called client regarding overdue payment..."
+                      rows={3}
+                      value={commNote}
+                      onChange={e => setCommNote(e.target.value)}
+                    />
+                    <button
+                      onClick={handleSaveLog}
+                      className="bg-[#0B1F3A] text-white text-xs font-semibold px-5 py-2.5 rounded-xl hover:bg-blue-900 transition-colors"
+                    >
+                      Save Log Entry
+                    </button>
+                    <div className="mt-5 space-y-3 max-h-48 overflow-y-auto pr-1">
+                      {commLogs
+                        ?.filter((l: any) => l.clientId === selectedClient.id)
+                        .map((log: any) => (
+                          <div key={log.id} className="bg-white p-4 rounded-xl border border-blue-100">
+                            <div className="flex justify-between text-xs font-semibold text-slate-400 mb-1.5">
+                              <span>{log.authorName || log.author}</span>
+                              <span>{log.date}</span>
+                            </div>
+                            <p className="text-sm text-slate-700 leading-relaxed">{log.note}</p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
+                    Linked Matter History
+                  </h4>
+                  <div className="space-y-2.5 mb-10">
+                    {selectedClient.cases.map((c: any) => (
+                      <MatterRow key={c.id} title={c.fileName} badge="Court Case"
+                        badgeColor="text-blue-600 bg-blue-50" sub={c.status}
+                        onOpen={() => navigate(`/lawyer/cases/${c.id}`)} />
                     ))}
+                    {selectedClient.transactions.map((t: any) => (
+                      <MatterRow key={t.id} title={t.fileName} badge="Transaction"
+                        badgeColor="text-purple-600 bg-purple-50" sub={t.status}
+                        onOpen={() => navigate(`/performance?file=${encodeURIComponent(t.fileName)}&openDetails=true`)} />
+                    ))}
+                    {selectedClient.letters.map((l: any) => (
+                      <MatterRow key={l.id} title={l.subject} badge="Letter"
+                        badgeColor="text-orange-600 bg-orange-50" sub={l.status}
+                        onOpen={() => navigate(`/performance?file=${encodeURIComponent(l.subject)}&openDetails=true`)} />
+                    ))}
+                    {selectedClient.titles?.map((t: any) => (
+                      <MatterRow
+                        key={t.id}
+                        title={`Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ""}`}
+                        badge="Land Title"
+                        badgeColor="text-emerald-600 bg-emerald-50"
+                        sub={
+                          t.owner_name?.toLowerCase() !== selectedClient.name.toLowerCase()
+                            ? `${t.status} · Owner: ${t.owner_name}`
+                            : t.status
+                        }
+                        onOpen={() => navigate(`/land-titles/${t.id}`)}
+                      />
+                    ))}
+                    {selectedClient.totalFilesCount === 0 && (
+                      <p className="text-slate-300 text-sm italic py-6 text-center">No matters linked to this client.</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Permanently delete this client record?")) {
+                        deleteClient(selectedClient.id);
+                        setSelectedClient(null);
+                      }
+                    }}
+                    className="text-red-300 hover:text-red-500 text-xs font-semibold uppercase tracking-widest transition-colors"
+                  >
+                    Permanently Delete Client Record
+                  </button>
+                </>
+              ) : (
+                <div className="mb-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest">
+                      Expense Record
+                    </h4>
+                    <button
+                      onClick={() => handleDownloadExpensesCSV(selectedClient)}
+                      className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-lg font-bold text-xs transition-colors border border-emerald-200"
+                    >
+                      📥 Export Expenses CSV
+                    </button>
+                  </div>
+
+                  {/* Account Balance Summary - Always visible */}
+                  {(() => {
+                    // Calculate total account balance
+                    const allFilesForBalance = [
+                      ...selectedClient.cases.map((c: any) => ({ paid: c.paid || 0 })),
+                      ...selectedClient.transactions.map((t: any) => ({ paid: t.paidAmount || 0 })),
+                      ...selectedClient.letters.map((l: any) => ({ paid: l.paid || 0 })),
+                      ...selectedClient.titles.map((t: any) => ({ paid: t.total_paid || 0 }))
+                    ];
+
+                    const expenseTotal = selectedClient.expenses?.reduce((sum: number, exp: any) => {
+                      return exp.type === 'out' ? sum + (exp.amount || 0) : sum;
+                    }, 0) || 0;
+
+                    const moneyReceived = allFilesForBalance.reduce((sum, f) => sum + (f.paid || 0), 0);
+                    const moneySpent = expenseTotal;
+                    const accountBalance = moneyReceived - moneySpent;
+
+                    return (
+                      <div className="mb-8 bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-lg">
+                        <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-widest mb-4">Client Account Balance</h5>
+                        <div className="grid grid-cols-3 gap-6">
+                          <div>
+                            <p className="text-xs text-slate-400 mb-2">Money Received</p>
+                            <p className="text-2xl font-bold">{fmt(moneyReceived)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-400 mb-2">Money Spent</p>
+                            <p className="text-2xl font-bold text-orange-300">{fmt(moneySpent)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-400 mb-2">Balance on Account</p>
+                            <p className={`text-2xl font-bold ${accountBalance > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {fmt(accountBalance)}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-4 italic">
+                          {accountBalance > 0 
+                            ? `Account has surplus of ${fmt(accountBalance)}` 
+                            : `Account has deficit of ${fmt(Math.abs(accountBalance))}`}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Calculate file totals */}
+                  {(() => {
+                    // Aggregate all files with their financial data
+                    const allFiles = [
+                      ...selectedClient.cases.map((c: any) => ({ id: c.id, name: c.fileName, type: 'case', billed: c.billed || 0, paid: c.paid || 0 })),
+                      ...selectedClient.transactions.map((t: any) => ({ id: t.id, name: t.fileName, type: 'transaction', billed: t.billedAmount || 0, paid: t.paidAmount || 0 })),
+                      ...selectedClient.letters.map((l: any) => ({ id: l.id, name: l.subject, type: 'letter', billed: l.billed || 0, paid: l.paid || 0 })),
+                      ...selectedClient.titles.map((t: any) => ({ id: t.id, name: `Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ''}`, type: 'title', billed: t.total_billed || 0, paid: t.total_paid || 0 }))
+                    ];
+
+                    // Build expense map by file name
+                    const expensesByFile = new Map<string, number>();
+                    selectedClient.expenses?.forEach((exp: any) => {
+                      if (exp.relatedFileName) {
+                        const current = expensesByFile.get(exp.relatedFileName) || 0;
+                        // Only add "OUT" expenses to the spent amount
+                        if (exp.type === 'out') {
+                          expensesByFile.set(exp.relatedFileName, current + (exp.amount || 0));
+                        }
+                      }
+                    });
+
+                    // Group by file name (to handle duplicates from different sources)
+                    const fileMap = new Map<string, any>();
+                    allFiles.forEach(file => {
+                      if (fileMap.has(file.name)) {
+                        const existing = fileMap.get(file.name);
+                        existing.billed += file.billed;
+                        existing.paid += file.paid;
+                        existing.balance = existing.billed - existing.paid;
+                      } else {
+                        fileMap.set(file.name, { ...file, balance: (file.billed || 0) - (file.paid || 0) });
+                      }
+                    });
+
+                    // Add expenses to the paid/spent amount
+                    expensesByFile.forEach((expenseAmount, fileName) => {
+                      if (fileMap.has(fileName)) {
+                        const file = fileMap.get(fileName);
+                        file.paid += expenseAmount;
+                        file.balance = file.billed - file.paid;
+                      }
+                    });
+
+                    const uniqueFiles = Array.from(fileMap.values());
+                    const totalBilled = uniqueFiles.reduce((sum, f) => sum + (f.billed || 0), 0);
+                    const totalPaid = uniqueFiles.reduce((sum, f) => sum + (f.paid || 0), 0);
+                    const totalBalance = totalBilled - totalPaid;
+
+                    return (
+                      <>
+                        {/* Show total summary ONLY if client has more than one file */}
+                        {uniqueFiles.length > 1 && (
+                          <div className="mb-6 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-4">
+                            <h5 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-3">Total Across All Files</h5>
+                            <div className="grid grid-cols-3 gap-4">
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Total Billed</p>
+                                <p className="text-lg font-bold text-[#0B1F3A]">{fmt(totalBilled)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Total Spent</p>
+                                <p className="text-lg font-bold text-orange-600">{fmt(totalPaid)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Total Balance</p>
+                                <p className={`text-lg font-bold ${totalBalance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                  {fmt(totalBalance)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Per-file breakdown */}
+                        {uniqueFiles.length > 0 ? (
+                          <div className="space-y-4">
+                            <h5 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest">
+                              {uniqueFiles.length > 1 ? 'Breakdown by File' : 'File Details'}
+                            </h5>
+                            {uniqueFiles.map((file: any) => (
+                              <div key={file.name} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                                <p className="text-sm font-semibold text-[#0B1F3A] mb-3 truncate">{file.name}</p>
+                                <div className="grid grid-cols-3 gap-4">
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">Billed</p>
+                                    <p className="text-base font-bold text-[#0B1F3A]">{fmt(file.billed)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">Spent</p>
+                                    <p className="text-base font-bold text-orange-600">{fmt(file.paid)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">Balance</p>
+                                    <p className={`text-base font-bold ${(file.billed - file.paid) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                      {fmt(file.billed - file.paid)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-slate-400 text-sm italic mb-4">No files or financial records for this client.</p>
+                        )}
+
+                        {/* Expense detail table if expenses exist */}
+                        {selectedClient.expenses?.length > 0 && (
+                          <>
+                            <h5 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mt-8 mb-3">Expense Transactions</h5>
+                            <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-sm">
+                                  <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-widest">
+                                      <th className="p-3">Date</th>
+                                      <th className="p-3">Type</th>
+                                      <th className="p-3">File</th>
+                                      <th className="p-3">Purpose</th>
+                                      <th className="p-3 text-right">Amount</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectedClient.expenses.map((exp: any) => (
+                                      <tr key={exp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                                        <td className="p-3 whitespace-nowrap text-slate-600">{exp.date}</td>
+                                        <td className="p-3">
+                                          {exp.type === 'in' 
+                                            ? <span className="text-emerald-600 font-bold text-[10px] bg-emerald-50 px-2 py-1 rounded">IN (+)</span>
+                                            : <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-1 rounded">OUT (-)</span>
+                                          }
+                                        </td>
+                                        <td className="p-3 text-slate-700 max-w-[150px] truncate" title={exp.relatedFileName}>{exp.relatedFileName || '-'}</td>
+                                        <td className="p-3 text-slate-700">{exp.purpose || exp.description}</td>
+                                        <td className={`p-3 text-right font-bold whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-600' : 'text-red-500'}`}>
+                                          {exp.type === 'in' ? '+' : '-'} UGX {Number(exp.amount).toLocaleString()}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
-              </div>
-
-              <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
-                Linked Matter History
-              </h4>
-              <div className="space-y-2.5 mb-10">
-                {selectedClient.cases.map((c: any) => (
-                  <MatterRow key={c.id} title={c.fileName} badge="Court Case"
-                    badgeColor="text-blue-600 bg-blue-50" sub={c.status}
-                    onOpen={() => navigate(`/lawyer/cases/${c.id}`)} />
-                ))}
-                {selectedClient.transactions.map((t: any) => (
-                  <MatterRow key={t.id} title={t.fileName} badge="Transaction"
-                    badgeColor="text-purple-600 bg-purple-50" sub={t.status}
-                    onOpen={() => navigate(`/performance?file=${encodeURIComponent(t.fileName)}&openDetails=true`)} />
-                ))}
-                {selectedClient.letters.map((l: any) => (
-                  <MatterRow key={l.id} title={l.subject} badge="Letter"
-                    badgeColor="text-orange-600 bg-orange-50" sub={l.status}
-                    onOpen={() => navigate(`/performance?file=${encodeURIComponent(l.subject)}&openDetails=true`)} />
-                ))}
-                {selectedClient.titles?.map((t: any) => (
-                  <MatterRow
-                    key={t.id}
-                    title={`Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ""}`}
-                    badge="Land Title"
-                    badgeColor="text-emerald-600 bg-emerald-50"
-                    sub={
-                      t.owner_name?.toLowerCase() !== selectedClient.name.toLowerCase()
-                        ? `${t.status} · Owner: ${t.owner_name}`
-                        : t.status
-                    }
-                    onOpen={() => navigate(`/land-titles/${t.id}`)}
-                  />
-                ))}
-                {selectedClient.totalFilesCount === 0 && (
-                  <p className="text-slate-300 text-sm italic py-6 text-center">No matters linked to this client.</p>
-                )}
-              </div>
-
-              <button
-                onClick={() => {
-                  if (window.confirm("Permanently delete this client record?")) {
-                    deleteClient(selectedClient.id);
-                    setSelectedClient(null);
-                  }
-                }}
-                className="text-red-300 hover:text-red-500 text-xs font-semibold uppercase tracking-widest transition-colors"
-              >
-                Permanently Delete Client Record
-              </button>
+              )}
             </div>
           </div>
         </div>

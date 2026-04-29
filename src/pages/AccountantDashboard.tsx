@@ -92,6 +92,39 @@ export default function AccountantDashboard() {
   const netProfit = financeTotals.totalPaid - financeTotals.totalExpenses;
   const collectionRate = financeTotals.totalBilled > 0 ? ((financeTotals.totalPaid / financeTotals.totalBilled) * 100).toFixed(1) : 0;
 
+  // --- AGING ANALYSIS ---
+  const agingData = useMemo(() => {
+    const today = new Date();
+    const buckets = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
+    const amounts = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
+
+    const allRevenueItems = [
+      ...(transactions || []),
+      ...(courtCases || []),
+      ...(letters || [])
+    ];
+
+    allRevenueItems.forEach(item => {
+      // Don't filter by timeFilter for aging since aging is about ALL outstanding debt
+      const billed = Number(("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0);
+      const paid = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
+      const balance = billed - paid;
+      
+      if (balance <= 0) return;
+      
+      const dStr = ("date" in item ? (item as any).date : "") || ("createdAt" in item ? (item as any).createdAt : "") || ("dateCreated" in item ? (item as any).dateCreated : "");
+      const d = new Date(dStr || new Date());
+      const days = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (days <= 30)      { buckets['0-30']++;  amounts['0-30']  += balance; }
+      else if (days <= 60) { buckets['31-60']++; amounts['31-60'] += balance; }
+      else if (days <= 90) { buckets['61-90']++; amounts['61-90'] += balance; }
+      else                 { buckets['90+']++;   amounts['90+']   += balance; }
+    });
+
+    return { buckets, amounts };
+  }, [transactions, courtCases, letters]);
+
   const sourceData = {
     labels: ["Transactions", "Court Cases", "Letters"],
     datasets: [{
@@ -163,6 +196,41 @@ export default function AccountantDashboard() {
           <div className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-300">
             <span>{netProfit >= 0 ? "📈 Profitable" : "⚠️ Deficit"}</span>
           </div>
+        </div>
+      </div>
+
+      {/* AGING ANALYSIS */}
+      <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6 mb-8">
+        <h3 className="text-lg font-black text-slate-900 mb-6">📅 Outstanding Balance Aging</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {([
+            { label: '0 – 30 Days', key: '0-30',  color: 'emerald', urgent: false },
+            { label: '31 – 60 Days', key: '31-60', color: 'yellow',  urgent: false },
+            { label: '61 – 90 Days', key: '61-90', color: 'orange',  urgent: true  },
+            { label: '90+ Days',     key: '90+',   color: 'red',     urgent: true  },
+          ] as const).map(bucket => (
+            <div key={bucket.key} className={`rounded-xl p-5 border-l-4 shadow-sm ${
+              bucket.color === 'emerald' ? 'bg-emerald-50/50 border-emerald-500' :
+              bucket.color === 'yellow'  ? 'bg-yellow-50/50  border-yellow-500'  :
+              bucket.color === 'orange'  ? 'bg-orange-50/50  border-orange-500'  :
+                                           'bg-red-50/50     border-red-600'
+            }`}>
+              <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                bucket.color === 'emerald' ? 'text-emerald-700' :
+                bucket.color === 'yellow'  ? 'text-yellow-700'  :
+                bucket.color === 'orange'  ? 'text-orange-700'  : 'text-red-700'
+              }`}>{bucket.label}</p>
+              <p className="text-2xl font-black text-slate-800">{agingData.buckets[bucket.key]}<span className="text-xs font-medium text-slate-500 ml-1">files</span></p>
+              <p className={`text-sm font-black mt-1 ${
+                bucket.color === 'emerald' ? 'text-emerald-600' :
+                bucket.color === 'yellow'  ? 'text-yellow-600'  :
+                bucket.color === 'orange'  ? 'text-orange-600'  : 'text-red-600'
+              }`}>{formatUGX(agingData.amounts[bucket.key])}</p>
+              {bucket.urgent && agingData.buckets[bucket.key] > 0 && (
+                <span className="text-[9px] bg-red-100 text-red-600 font-black px-2 py-1 rounded mt-2 inline-block uppercase">Action Needed</span>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 

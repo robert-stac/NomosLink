@@ -32,6 +32,20 @@ const Invoices: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [minBalance, setMinBalance] = useState(0);
+  const [matterSearchTerm, setMatterSearchTerm] = useState("");
+  const [showMatterDropdown, setShowMatterDropdown] = useState(false);
+
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-matter-search]')) {
+        setShowMatterDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   /* =======================
       BUSINESS LOGIC
@@ -44,6 +58,15 @@ const Invoices: React.FC = () => {
     const lets = (letters || []).map((l) => ({ label: `✉️ Letter: ${l.subject}`, value: l.subject }));
     return [...cases, ...trans, ...lets].filter(item => item.value);
   }, [courtCases, transactions, letters]);
+
+  // Filter matters based on search term
+  const filteredMatters = useMemo(() => {
+    if (!matterSearchTerm.trim()) return allFiles;
+    const term = matterSearchTerm.toLowerCase();
+    return allFiles.filter(f => 
+      f.label.toLowerCase().includes(term) || f.value.toLowerCase().includes(term)
+    );
+  }, [allFiles, matterSearchTerm]);
 
   const calculateFinancials = (billed: number) => {
     const net = includeVAT ? billed / (1 + VAT_RATE) : billed;
@@ -136,6 +159,8 @@ const Invoices: React.FC = () => {
     setIsEditing(false); 
     setEditingId(null);
     setScannedFile(null);
+    setMatterSearchTerm("");
+    setShowMatterDropdown(false);
   };
 
   const formatCurrency = (n: number) => "UGX " + Math.round(n).toLocaleString();
@@ -179,12 +204,56 @@ const Invoices: React.FC = () => {
                 <input className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-[#0B1F3A]" value={fileName} onChange={e => setFileName(e.target.value)} placeholder="e.g. BCA/2026/042" required />
               </div>
 
-              <div>
+              <div data-matter-search>
                 <label className="block text-xs font-black text-gray-400 uppercase mb-1">Link to Matter</label>
-                <select className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-[#0B1F3A]" value={relatedFile} onChange={e => setRelatedFile(e.target.value)} required>
-                  <option value="">Select Case/Letter...</option>
-                  {allFiles.map((f, i) => <option key={i} value={f.value}>{f.label}</option>)}
-                </select>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Search or select case/letter..."
+                    className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-[#0B1F3A] outline-none"
+                    value={relatedFile || matterSearchTerm}
+                    onChange={(e) => {
+                      setMatterSearchTerm(e.target.value);
+                      setShowMatterDropdown(true);
+                    }}
+                    onFocus={() => setShowMatterDropdown(true)}
+                    required
+                  />
+                  {showMatterDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
+                      {filteredMatters.length > 0 ? (
+                        filteredMatters.map((f, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              setRelatedFile(f.value);
+                              setMatterSearchTerm("");
+                              setShowMatterDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-50 last:border-0 transition-colors"
+                          >
+                            <div className="text-sm font-semibold text-[#0B1F3A]">{f.label}</div>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-sm text-gray-400 italic">No matters found</div>
+                      )}
+                    </div>
+                  )}
+                  {relatedFile && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRelatedFile("");
+                        setMatterSearchTerm("");
+                      }}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="bg-[#0B1F3A] bg-opacity-5 p-4 rounded-xl border border-[#0B1F3A] border-opacity-10">

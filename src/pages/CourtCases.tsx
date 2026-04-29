@@ -9,6 +9,7 @@ export default function CourtCases() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
   const [lawyerId, setLawyerId] = useState("");
+  const [status, setStatus] = useState<"Ongoing" | "Completed" | "On Hold" | "Pending">("Ongoing");
   const [billed, setBilled] = useState("");
   const [paid, setPaid] = useState("");
   const [nextDate, setNextDate] = useState("");
@@ -83,6 +84,7 @@ export default function CourtCases() {
   const resetForm = () => {
     setFileName("");
     setLawyerId("");
+    setStatus("Ongoing");
     setBilled("");
     setPaid("");
     setNextDate("");
@@ -119,7 +121,7 @@ export default function CourtCases() {
         billed: billedNum,
         paid: paidNum,
         balance,
-        status: "Ongoing" as const,
+        status,
         nextCourtDate: nextDate,
         categories,
         sittingType: finalSittingType,
@@ -134,7 +136,7 @@ export default function CourtCases() {
         billed: billedNum,
         paid: paidNum,
         balance,
-        status: "Ongoing" as const,
+        status,
         nextCourtDate: nextDate,
         categories,
         sittingType: finalSittingType,
@@ -150,6 +152,7 @@ export default function CourtCases() {
     setEditingId(c.id);
     setFileName(c.fileName);
     setLawyerId(c.lawyerId || "");
+    setStatus(c.status || "Ongoing");
     setBilled(c.billed?.toString() || "");
     setPaid(c.paid?.toString() || "");
     setNextDate(c.nextCourtDate || "");
@@ -266,6 +269,19 @@ export default function CourtCases() {
           <div>
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Next Court Date</label>
             <input type="date" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Case Status</label>
+            <select
+              className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as any)}
+            >
+              <option value="Ongoing">🔵 Ongoing</option>
+              <option value="Pending">🟣 Pending</option>
+              <option value="On Hold">🟡 On Hold</option>
+              <option value="Completed">🟢 Completed</option>
+            </select>
           </div>
           <div className="relative">
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Client Selection</label>
@@ -396,8 +412,13 @@ export default function CourtCases() {
                 <td className="p-4 font-semibold text-blue-900">{c.fileName}</td>
                 <td className="p-4 font-medium text-slate-600">{lawyers.find((l: any) => l.id === c.lawyerId)?.name || "Unassigned"}</td>
                 <td className="p-4">
-                  <span className="px-3 py-1 rounded-lg text-xs font-semibold uppercase bg-blue-100 text-blue-700">
-                    {c.status}
+                  <span className={`px-3 py-1 rounded-lg text-xs font-semibold uppercase ${
+                    c.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                    c.status === 'On Hold'   ? 'bg-amber-100   text-amber-700'   :
+                    c.status === 'Pending'   ? 'bg-purple-100  text-purple-700'  :
+                                              'bg-blue-100    text-blue-700'
+                  }`}>
+                    {c.status || 'Ongoing'}
                   </span>
                 </td>
                 <td className="p-4 font-medium">{formatCurrency(c.billed)}</td>
