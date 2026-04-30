@@ -3,6 +3,8 @@ import { useState } from "react";
 export const NotificationBell = ({ currentUser, notifications, markAsRead }: any) => {
     const [isOpen, setIsOpen] = useState(false);
 
+    if (!currentUser) return null;
+
     const myNotifications = (notifications || [])
         .filter((n: any) => String(n.recipientId) === String(currentUser.id))
         .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -11,13 +13,14 @@ export const NotificationBell = ({ currentUser, notifications, markAsRead }: any
 
     return (
         <div style={{ position: 'relative' }}>
-            <div
-                onClick={() => { setIsOpen(!isOpen); if (!isOpen) markAsRead(); }}
+            <button
+                onClick={(e) => { e.stopPropagation(); setIsOpen(prev => !prev); }}
                 style={{
                     cursor: 'pointer', position: 'relative', marginRight: '15px',
                     padding: '8px', borderRadius: '50%',
-                    backgroundColor: isOpen ? '#E2E8F0' : 'transparent', transition: '0.2s'
+                    backgroundColor: isOpen ? '#E2E8F0' : 'transparent', transition: '0.2s', border: 'none'
                 }}
+                aria-label="Toggle notifications"
             >
                 <span style={{ fontSize: '20px' }}>🔔</span>
                 {unreadCount > 0 && (
@@ -30,7 +33,7 @@ export const NotificationBell = ({ currentUser, notifications, markAsRead }: any
                         {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                 )}
-            </div>
+            </button>
 
             {isOpen && (
                 <div style={{
@@ -39,12 +42,22 @@ export const NotificationBell = ({ currentUser, notifications, markAsRead }: any
                     borderRadius: '16px', zIndex: 1000, border: '1px solid #E2E8F0', overflow: 'hidden'
                 }}>
                     <div style={{ padding: '15px', borderBottom: '1px solid #F7FAFC', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                        <h4 style={{ margin: 0, fontSize: '14px', color: '#2D3748', fontWeight: 'bold' }}>
-                            Notifications {unreadCount > 0 && <span style={{ backgroundColor: '#E53E3E', color: 'white', borderRadius: '10px', padding: '1px 7px', fontSize: '10px', marginLeft: 6 }}>{unreadCount}</span>}
-                        </h4>
-                        <span style={{ fontSize: '11px', color: '#718096', cursor: 'pointer', fontWeight: 'bold' }} onClick={markAsRead}>
-                            Mark all read
-                        </span>
+                        <div>
+                            <h4 style={{ margin: 0, fontSize: '14px', color: '#2D3748', fontWeight: 'bold' }}>
+                                Notifications
+                            </h4>
+                            <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: unreadCount > 0 ? '#E53E3E' : '#718096', fontWeight: '700' }}>
+                                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                            </p>
+                        </div>
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); markAsRead(); }}
+                                style={{ fontSize: '11px', color: '#3182CE', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                            >
+                                Mark all read
+                            </button>
+                        )}
                     </div>
                     <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                         {myNotifications.length > 0 ? (
@@ -63,7 +76,6 @@ export const NotificationBell = ({ currentUser, notifications, markAsRead }: any
                                             </p>
                                             <p style={{ margin: 0, fontSize: '10px', color: '#A0AEC0' }}>{n.date}</p>
                                         </div>
-                                        {!n.read && <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#3182CE', marginTop: 4, flexShrink: 0 }} />}
                                     </div>
                                 </div>
                             ))

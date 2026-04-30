@@ -351,6 +351,7 @@ export default function AccountantDashboard() {
               const days = getDaysUntil(c.nextCourtDate!);
               const style = urgencyStyle(days);
               const lawyer = users.find(u => u.id === c.lawyerId);
+              const clientName = clients.find(cl => cl.id === c.clientId)?.name || "Unknown Client";
               return (
                 <div
                   key={c.id}
@@ -369,11 +370,12 @@ export default function AccountantDashboard() {
                       {style.label}
                     </span>
                   </div>
-                  <p className="text-xs font-bold text-slate-500 mb-3">
+                  <p className="text-xs font-bold text-slate-500 mb-2">
                     {new Date(c.nextCourtDate!).toLocaleDateString("en-GB", {
                       weekday: "short", day: "numeric", month: "short", year: "numeric"
                     })}
                   </p>
+                  <p className="text-xs text-slate-500 mb-3">Client: {clientName}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {c.sittingType && (
                       <span className="bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide">

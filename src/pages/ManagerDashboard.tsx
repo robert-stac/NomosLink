@@ -4,7 +4,7 @@ import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest } = useAppContext();
+  const { users, clients, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -628,20 +628,22 @@ export default function ManagerDashboard() {
             {upcomingCourts.map((c: any) => {
               const countdown = getDaysRemaining(c.nextCourtDate);
               const assignedLawyer = users.find(u => u.id === c.lawyerId)?.name || "Unassigned";
+              const clientName = clients.find(cl => cl.id === c.clientId)?.name || "Unknown Client";
               return (
                 <div
                   key={c.id}
                   onClick={() => navigate(`/lawyer/cases/${c.id}`)}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:border-blue-500 transition-colors cursor-pointer bg-slate-50"
+                  className="flex flex-col justify-between p-4 border rounded-lg hover:border-blue-500 transition-colors cursor-pointer bg-slate-50"
                   title={`Assigned to: ${assignedLawyer}`}
                 >
                   <div>
                     <div className="font-bold text-slate-800 text-sm">{c.fileName}</div>
-                    <div className={`text-xs font-bold mt-1 ${countdown.urgent ? "text-red-500" : "text-blue-600"}`}>
+                    <div className="text-xs text-slate-500 mt-1">Client: {clientName}</div>
+                    <div className={`text-xs font-bold mt-2 ${countdown.urgent ? "text-red-500" : "text-blue-600"}`}>
                       {countdown.text} • <span className="font-normal text-gray-500">{assignedLawyer}</span>
                     </div>
                   </div>
-                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+                  <span className="mt-4 self-start bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">
                     {new Date(c.nextCourtDate).toLocaleDateString('en-GB')}
                   </span>
                 </div>
