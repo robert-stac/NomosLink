@@ -1,15 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppContext } from "../context/AppContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
   const { users, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest } = useAppContext();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(null);
+  const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(searchParams.get("lawyerId") || null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyStagnant, setShowOnlyStagnant] = useState(false);
+
+  useEffect(() => {
+    const queryLawyerId = searchParams.get("lawyerId");
+    if (queryLawyerId !== selectedLawyerId) {
+      setSelectedLawyerId(queryLawyerId);
+    }
+  }, [searchParams]);
+
+  const selectLawyer = (lawyerId: string | null) => {
+    setSelectedLawyerId(lawyerId);
+    const nextParams = new URLSearchParams(searchParams);
+    if (lawyerId) {
+      nextParams.set("lawyerId", lawyerId);
+    } else {
+      nextParams.delete("lawyerId");
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -880,10 +900,20 @@ export default function ManagerDashboard() {
 
       {/* STAFF FILTER PILLS */}
       <div className="flex gap-3 overflow-x-auto pb-2">
+        <button
+          key="all-lawyers"
+          onClick={() => selectLawyer(null)}
+          className={`flex-shrink-0 px-4 py-2 rounded-full border text-sm font-medium transition-all ${!selectedLawyerId
+            ? "bg-blue-600 text-white border-blue-600 shadow-md"
+            : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
+            }`}
+        >
+          All Staff
+        </button>
         {legalStaff.map(staff => (
           <button
             key={staff.id}
-            onClick={() => setSelectedLawyerId(staff.id)}
+            onClick={() => selectLawyer(staff.id)}
             className={`flex-shrink-0 px-4 py-2 rounded-full border text-sm font-medium transition-all ${selectedLawyerId === staff.id
               ? "bg-blue-600 text-white border-blue-600 shadow-md"
               : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
@@ -946,7 +976,7 @@ export default function ManagerDashboard() {
               </h2>
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                 {filteredTransactions.map(tx => (
-                  <div key={tx.id} onClick={() => navigate(`/lawyer/transactions/${tx.id}`)} className="p-3 border rounded-md hover:border-blue-500 cursor-pointer bg-slate-50 relative">
+                  <div key={tx.id} onClick={() => navigate(`/lawyer/transactions/${tx.id}`, { state: { from: location.pathname + location.search } })} className="p-3 border rounded-md hover:border-blue-500 cursor-pointer bg-slate-50 relative">
                     {isStagnant(tx) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
                     <p className="font-semibold text-sm text-blue-900">{tx.fileName}</p>
                     <p className="text-[11px] text-gray-500 line-clamp-1 italic mt-1">{tx.progressNotes?.slice(-1)[0]?.message || "No updates"}</p>
@@ -964,7 +994,7 @@ export default function ManagerDashboard() {
               </h2>
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                 {filteredCases.map(c => (
-                  <div key={c.id} onClick={() => navigate(`/lawyer/cases/${c.id}`)} className="p-3 border rounded-md hover:border-red-500 cursor-pointer bg-slate-50 relative">
+                  <div key={c.id} onClick={() => navigate(`/lawyer/cases/${c.id}`, { state: { from: location.pathname + location.search } })} className="p-3 border rounded-md hover:border-red-500 cursor-pointer bg-slate-50 relative">
                     {isStagnant(c) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
                     <p className="font-semibold text-sm text-red-900">{c.fileName}</p>
                     <div className="flex justify-between mt-1"><span className="text-[10px] bg-white border px-1 rounded text-gray-600">Next: {c.nextCourtDate || "None"}</span></div>
@@ -982,7 +1012,7 @@ export default function ManagerDashboard() {
               </h2>
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                 {filteredLetters.map(l => (
-                  <div key={l.id} onClick={() => navigate(`/lawyer/letters/${l.id}`)} className="p-3 border rounded-md hover:border-amber-500 cursor-pointer bg-slate-50 relative">
+                  <div key={l.id} onClick={() => navigate(`/lawyer/letters/${l.id}`, { state: { from: location.pathname + location.search } })} className="p-3 border rounded-md hover:border-amber-500 cursor-pointer bg-slate-50 relative">
                     {isStagnant(l) && <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="Stagnant"></span>}
                     <p className="font-semibold text-sm text-amber-900">{l.subject}</p>
                     <p className="text-[11px] text-gray-600 mt-1 uppercase font-bold">{l.type}</p>

@@ -6,16 +6,59 @@ import { useAppContext } from "../context/AppContext";
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 export default function AccountantDashboard() {
-  const { transactions, courtCases, letters, expenses, invoices, users } = useAppContext();
+  const { transactions, courtCases, letters, expenses, invoices, users, clients } = useAppContext();
 
   const [timeFilter, setTimeFilter] = useState("All Time");
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceTarget, setInvoiceTarget] = useState<any>(null);
   const [viewScanUrl, setViewScanUrl] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [clientLookupQuery, setClientLookupQuery] = useState("");
   const [selectedCaseForProgress, setSelectedCaseForProgress] = useState<any>(null);
 
   const formatUGX = (val: number) => "UGX " + val.toLocaleString();
+
+  const getHandlerName = (item: any) => {
+    const lawyer = users.find(u => String(u.id) === String(item.lawyerId));
+    return lawyer ? lawyer.name : "Unassigned";
+  };
+
+  const clientLookupResults = useMemo(() => {
+    const q = clientLookupQuery.trim().toLowerCase();
+    if (!q) return [];
+    const matches = clients.filter(c => c.name.toLowerCase().includes(q));
+    const allFiles = [
+      ...transactions,
+      ...courtCases,
+      ...letters,
+    ];
+
+    const fileMatches = allFiles.filter(item => {
+      const name = String(("fileName" in item ? item.fileName : "") || ("subject" in item ? item.subject : "") || "").toLowerCase();
+      return name.includes(q);
+    });
+
+    if (matches.length > 0) {
+      const files = matches.flatMap(client => {
+        return allFiles
+          .filter(item => item.clientId === client.id)
+          .map(item => ({ item, client }));
+      });
+      return matches.map(client => ({ client, files: files.filter(f => f.client.id === client.id) }));
+    }
+
+    if (fileMatches.length > 0) {
+      return [{
+        client: null,
+        files: fileMatches.map(item => ({ item, client: null }))
+      }];
+    }
+
+    return [];
+  }, [clientLookupQuery, clients, transactions, courtCases, letters]);
+
+  const isClientNew = clientLookupQuery.trim() !== "" && clientLookupResults.length === 0;
 
   // ── UPCOMING COURT DATES (next 14 days) ──────────────────────────────────
   const upcomingHearings = useMemo(() => {
@@ -199,6 +242,57 @@ export default function AccountantDashboard() {
         </div>
       </div>
 
+      {/* CLIENT LOOKUP */}
+      <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6 mb-8">
+        <div className="flex flex-col gap-4">
+          <div>
+            <h3 className="text-lg font-black text-slate-900">Client Lookup</h3>
+            <p className="text-xs text-slate-500 mt-1">Type the client name to see if they are returning and which lawyer is handling their active files.</p>
+          </div>
+          <input
+            type="text"
+            value={clientLookupQuery}
+            onChange={(e) => setClientLookupQuery(e.target.value)}
+            placeholder="Enter client name"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+          />
+          {clientLookupQuery.trim() ? (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              {isClientNew ? (
+                <p className="font-black text-slate-900">No existing client found.</p>
+              ) : (
+                <>
+                  <p className="font-black text-slate-900">Returning client detected.</p>
+                  {clientLookupResults.some(result => result.client) && (
+                    <p className="mt-2 text-slate-600">Matched client name{clientLookupResults.length > 1 ? "s" : ""}: {clientLookupResults.map(result => result.client?.name).filter(Boolean).join(", ")}</p>
+                  )}
+                  {clientLookupResults.flatMap(result => result.files).length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {clientLookupResults.flatMap(result => result.files).map((match, index) => (
+                        <div key={`${match.client?.id ?? "file"}-${index}`} className="rounded-2xl bg-white border border-slate-200 p-3">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                            <div>
+                              <p className="text-sm font-black text-slate-900">{String((match.item as any).fileName || (match.item as any).subject || "Untitled record")}</p>
+                              <p className="text-xs text-slate-500">{match.client ? `Client: ${match.client.name}` : "Client record not found, but file matches query."}</p>
+                            </div>
+                            <div className="text-right text-xs text-slate-500">
+                              <p>{(match.item as any).type || (match.item as any).fileType || "File"}</p>
+                              <p className="font-black text-slate-800">Handler: {getHandlerName(match.item)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-slate-500">No active files are currently linked to this client.</p>
+                  )}
+                </>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
       {/* AGING ANALYSIS */}
       <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6 mb-8">
         <h3 className="text-lg font-black text-slate-900 mb-6">📅 Outstanding Balance Aging</h3>
@@ -320,11 +414,24 @@ export default function AccountantDashboard() {
 
           {/* Accounts Receivable */}
           <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-black text-slate-900">Accounts Receivable (Pending)</h3>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-3">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Accounts Receivable (Pending)</h3>
+                <p className="text-xs text-slate-500 mt-1">Quickly see which lawyer manages each unpaid file, so you can route consultation fee questions and invoices correctly.</p>
+              </div>
               <div className="bg-orange-50 text-orange-600 px-4 py-2 rounded-xl text-xs font-black shadow-sm border border-orange-100">
                 Total Uncollected: {formatUGX(financeTotals.outstanding)}
               </div>
+            </div>
+            <div className="mb-6">
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Search receivables</label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by file name or handler"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -342,6 +449,9 @@ export default function AccountantDashboard() {
                     >
                       Total Billed {sortConfig?.key === "billed" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </th>
+                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 text-left">
+                      Handler
+                    </th>
                     <th
                       onClick={() => setSortConfig(p => p?.key === "unpaid" ? { key: "unpaid", direction: p.direction === "asc" ? "desc" : "asc" } : { key: "unpaid", direction: "desc" })}
                       className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 text-right cursor-pointer hover:text-blue-600 transition-colors"
@@ -356,7 +466,12 @@ export default function AccountantDashboard() {
                     .filter(item => {
                       const billed = ("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0;
                       const paid = ("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0;
-                      return billed > paid;
+                      if (billed <= paid) return false;
+                      if (!searchQuery.trim()) return true;
+                      const query = searchQuery.toLowerCase();
+                      const name = String(("fileName" in item ? item.fileName : "") || ("subject" in item ? item.subject : "") || "").toLowerCase();
+                      const handler = getHandlerName(item).toLowerCase();
+                      return name.includes(query) || handler.includes(query);
                     })
                     .sort((a, b) => {
                       if (!sortConfig) return 0;
@@ -393,6 +508,7 @@ export default function AccountantDashboard() {
                             {name}
                           </td>
                           <td className="py-4 px-2 text-xs font-bold text-slate-500">{formatUGX(billed)}</td>
+                          <td className="py-4 px-2 text-xs font-semibold text-slate-600">{getHandlerName(item)}</td>
                           <td className="py-4 px-2 text-sm font-black text-rose-500 text-right">{formatUGX(unpaid)}</td>
                           <td className="py-4 px-2 text-center">
                             <button

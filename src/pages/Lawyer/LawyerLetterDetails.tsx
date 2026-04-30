@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import { supabase } from "../../lib/supabaseClient"; 
 
 export default function LawyerLetterDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { 
     currentUser, 
     letters, 
@@ -39,13 +40,22 @@ export default function LawyerLetterDetails() {
   const isManager = currentUser.role === "manager";
   const isAdmin = currentUser.role === "admin";
 
+  const goBack = () => {
+    const fromPath = (location.state as any)?.from;
+    if (fromPath) {
+      navigate(fromPath, { replace: true });
+    } else {
+      navigate(-1);
+    }
+  };
+
   if (!letter || (!isOwner && !isManager && !isAdmin)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
         <div className="bg-white p-10 rounded-[40px] shadow-xl text-center max-w-sm">
           <div className="text-4xl mb-4">✉️</div>
           <h2 className="text-xl font-black text-slate-900 mb-2">Letter Not Found</h2>
-          <button onClick={() => navigate(-1)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest">Return to Dashboard</button>
+          <button onClick={goBack} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest">Return to Dashboard</button>
         </div>
       </div>
     );
@@ -161,7 +171,7 @@ export default function LawyerLetterDetails() {
         
         {/* TOP NAV */}
         <div className="flex justify-between items-center">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-blue-600 transition">
+          <button onClick={goBack} className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-blue-600 transition">
             <span className="bg-white w-8 h-8 flex items-center justify-center rounded-xl shadow-sm">←</span> Back
           </button>
           

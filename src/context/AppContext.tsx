@@ -338,6 +338,9 @@ interface AppContextType {
   firmName: string;
   setFirmName: React.Dispatch<React.SetStateAction<string>>;
 
+  updateAvailable: boolean;
+  dismissUpdateNotification: () => void;
+
   syncToCloud: () => Promise<void>;
 }
 
@@ -568,7 +571,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
+  const [pendingDeletes, setPendingDeletes] = useState<{ table: string; id: string }[]>(() => JSON.parse(localStorage.getItem("pendingDeletes") || "[]"));
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
+  const [updateAvailable, setUpdateAvailable] = useState(false);
 
   const localNotifIds = useRef<Set<string>>(new Set());
   const currentUserRef = useRef<User | null>(currentUser);
@@ -634,6 +639,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser?.id]);
 
   /* =======================
+      UPDATE NOTIFICATION
+  ======================= */
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      // Listen for controller change which indicates a new SW took over
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        setUpdateAvailable(true);
+      });
+
+      // Check for updates every 60 seconds
+      const interval = setInterval(async () => {
+        try {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) {
+            await registration.update();
+          }
+        } catch (err) {
+          console.error('Error checking for updates:', err);
+        }
+      }, 60000);
+
+      return () => clearInterval(interval);
+    }
+  }, []);
+
+  /* =======================
       MANAGERS TO NOTIFY HELPER
   ======================= */
   const getManagersToNotify = (
@@ -652,6 +683,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     managers.delete(String(currentUserId));
     return managers;
   };
+
+  const queuePendingDelete = (table: string, id: string) => {
+    setPendingDeletes(prev => {
+      if (prev.some(item => item.table === table && item.id === id)) return prev;
+      return [...prev, { table, id }];
+    });
+  };
+
+  const removePendingDelete = (table: string, id: string) => {
+    setPendingDeletes(prev => prev.filter(item => !(item.table === table && item.id === id)));
+  };
+
+  const flushPendingDeletes = async () => {
+    if (!navigator.onLine || pendingDeletes.length === 0) return;
+    const remainingDeletes: { table: string; id: string }[] = [];
+
+    for (const item of pendingDeletes) {
+      try {
+        const { error } = await supabase.from(item.table).delete().eq('id', item.id);
+        if (error) {
+          console.error(`Pending delete failed for ${item.table}/${item.id}:`, error);
+          remainingDeletes.push(item);
+        }
+      } catch (err) {
+        console.error(`Pending delete exception for ${item.table}/${item.id}:`, err);
+        remainingDeletes.push(item);
+      }
+    }
+
+    if (remainingDeletes.length !== pendingDeletes.length) {
+      setPendingDeletes(remainingDeletes);
+    }
+  };
+
+  useEffect(() => {
+    if (!initialDataLoaded || pendingDeletes.length === 0) return;
+    if (navigator.onLine) {
+      flushPendingDeletes();
+    }
+  }, [initialDataLoaded, pendingDeletes]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      if (pendingDeletes.length > 0) flushPendingDeletes();
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [pendingDeletes]);
 
   /* =======================
       TASKS REALTIME
@@ -970,6 +1049,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
 
+    await flushPendingDeletes();
+
     const courtCaseScalarFields = [
       'id', 'fileName', 'details', 'billed', 'paid', 'balance', 'status',
       'nextCourtDate', 'completedDate', 'lawyerId', 'clientId',
@@ -992,9 +1073,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const expenseScalarFields = [
       'id', 'type', 'date', 'category', 'description', 'purpose', 'amount',
       'staffId', 'staffName', 'relatedFileId', 'relatedFileType', 'relatedFileName'
-    ];
-    const invoiceScalarFields = [
-      'id', 'fileName', 'relatedFile', 'amountBilled', 'amountPaid', 'balance', 'isPaid', 'dateCreated', 'dueDate', 'scannedInvoiceUrl'
     ];
 
     const pickFields = (obj: any, fields: string[]) => {
@@ -1125,7 +1203,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('transactions', JSON.stringify(updated));
       return updated;
     });
-    if (navigator.onLine) supabase.from('transactions').delete().eq('id', id).then();
+    queuePendingDelete('transactions', id);
+    if (navigator.onLine) {
+      supabase.from('transactions').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error('Failed to delete transaction from Supabase:', error);
+          return;
+        }
+        removePendingDelete('transactions', id);
+      });
+    }
   };
 
   const recordClientFeedback = (_note: string, clientId?: string) => {
@@ -1809,8 +1896,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("landTitles", JSON.stringify(landTitles));
     localStorage.setItem("commLogs", JSON.stringify(commLogs));
     localStorage.setItem("expenses", JSON.stringify(expenses));
+    localStorage.setItem("pendingDeletes", JSON.stringify(pendingDeletes));
     if (currentUser) localStorage.setItem("currentUser", JSON.stringify(currentUser));
-  }, [users, transactions, courtCases, letters, invoices, clients, tasks, draftRequests, landTitles, commLogs, expenses, currentUser]);
+  }, [users, transactions, courtCases, letters, invoices, clients, tasks, draftRequests, filingRequests, landTitles, commLogs, expenses, pendingDeletes, currentUser]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1866,6 +1954,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         expenses, setExpenses,
         firmName, setFirmName,
+        updateAvailable,
+        dismissUpdateNotification: () => setUpdateAvailable(false),
         syncToCloud,
       }}
     >

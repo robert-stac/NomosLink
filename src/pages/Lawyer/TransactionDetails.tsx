@@ -1,10 +1,20 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { useAppContext } from "../../context/AppContext";
 
 export default function TransactionDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const goBack = () => {
+    const fromPath = (location.state as any)?.from;
+    if (fromPath) {
+      navigate(fromPath, { replace: true });
+    } else {
+      navigate(-1);
+    }
+  };
 
   const {
     transactions,
@@ -84,7 +94,7 @@ export default function TransactionDetails() {
         
         {/* HEADER NAVIGATION */}
         <div className="flex justify-between items-center">
-          <button onClick={() => navigate(-1)} className="group flex items-center gap-2 text-slate-500 font-bold hover:text-blue-600 transition">
+          <button onClick={goBack} className="group flex items-center gap-2 text-slate-500 font-bold hover:text-blue-600 transition">
             <span className="bg-white p-2 rounded-xl shadow-sm group-hover:shadow-md transition">←</span>
             Back to Dashboard
           </button>

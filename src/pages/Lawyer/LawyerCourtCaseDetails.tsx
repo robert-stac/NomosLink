@@ -1,12 +1,22 @@
 import { useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import { getDeadlineUrgency } from "../../utils/dateUtils";
 
 export default function LawyerCourtCaseDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const goBack = () => {
+    const fromPath = (location.state as any)?.from;
+    if (fromPath) {
+      navigate(fromPath, { replace: true });
+    } else {
+      navigate(-1);
+    }
+  };
 
   const [isUploading, setIsUploading] = useState(false);
   const [newNote, setNewNote] = useState("");
@@ -37,7 +47,7 @@ export default function LawyerCourtCaseDetails() {
           <div className="text-4xl mb-4">⚖️</div>
           <h2 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>Case Not Found</h2>
           <p className="text-slate-500 text-sm mb-6">You may not have permission to view this file or the ID is incorrect.</p>
-          <button onClick={() => navigate(-1)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-semibold text-xs uppercase tracking-widest">Return to Dashboard</button>
+          <button onClick={goBack} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-semibold text-xs uppercase tracking-widest">Return to Dashboard</button>
         </div>
       </div>
     );
@@ -103,13 +113,7 @@ export default function LawyerCourtCaseDetails() {
 
         {/* TOP BAR */}
         <div className="flex justify-between items-center">
-          <button onClick={() => navigate(-1)} className="text-slate-400 font-semibold text-xs uppercase tracking-widest hover:text-blue-600 transition">
-            ← Back to Portfolio
-          </button>
-
-          <div className="flex gap-3">
-            {(isManager || isAdmin) && (
-              <button
+            <button onClick={goBack} className="text-slate-400 font-semibold text-xs uppercase tracking-widest hover:text-blue-600 transition">
                 onClick={downloadProgressReport}
                 className="bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-xl text-xs font-semibold uppercase tracking-widest hover:bg-slate-50 transition shadow-sm flex items-center gap-2"
               >

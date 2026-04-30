@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAppContext } from "./context/AppContext";
 
 import Sidebar from "./components/Sidebar";
+import UpdateBanner from "./components/UpdateBanner";
 
 // Admin & Accountant Shared Pages
 import Dashboard from "./pages/Dashboard";
@@ -111,6 +112,9 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      {/* UPDATE BANNER */}
+      <UpdateBanner />
+
       {/* OFFLINE BANNER */}
       {!isOnline && (
         <div style={bannerStyles}>
