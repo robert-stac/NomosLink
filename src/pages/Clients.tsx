@@ -21,6 +21,7 @@ const Clients: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [commNote, setCommNote] = useState("");
   const [activeDrawerTab, setActiveDrawerTab] = useState<"Overview" | "Expenses">("Overview");
+  const [activeHistoryTab, setActiveHistoryTab] = useState<"Matters" | "Letters">("Matters");
 
   // Add-client form
   const [name, setName] = useState("");
@@ -49,6 +50,17 @@ const Clients: React.FC = () => {
     setShowEditModal(false);
   };
 
+  const selectedClientLetters = useMemo(() => {
+    if (!selectedClient) return [];
+    return letters.filter(l =>
+      l.clientId === selectedClient.id ||
+      (l as any).client_id === selectedClient.id ||
+      ((!l.clientId && !(l as any).client_id) && 
+        ((l.subject || "").toLowerCase().includes(selectedClient.name.toLowerCase()) ||
+         (l.recipient || "").toLowerCase().includes(selectedClient.name.toLowerCase())))
+    );
+  }, [selectedClient, letters]);
+
   const filteredClients = useMemo(() => {
     const result = (clients || [])
       .filter(c =>
@@ -58,7 +70,11 @@ const Clients: React.FC = () => {
       .map(client => {
         const clientCases = courtCases.filter(c => c.clientId === client.id || (!c.clientId && c.fileName.toLowerCase().includes(client.name.toLowerCase())));
         const clientTransactions = transactions.filter(t => t.clientId === client.id || (!t.clientId && t.fileName.toLowerCase().includes(client.name.toLowerCase())));
-        const clientLetters = letters.filter(l => l.clientId === client.id || (!l.clientId && (l.subject || "").toLowerCase().includes(client.name.toLowerCase())));
+        const clientLetters = letters.filter(l =>
+          l.clientId === client.id ||
+          (l as any).client_id === client.id ||
+          ((!l.clientId && !(l as any).client_id) && (l.subject || "").toLowerCase().includes(client.name.toLowerCase()))
+        );
 
         // A title belongs to this client if:
         // 1. It is directly linked via client_id
@@ -81,7 +97,7 @@ const Clients: React.FC = () => {
           return false;
         });
 
-        const totalFilesCount = clientCases.length + clientTransactions.length + clientLetters.length + clientTitles.length;
+        const totalFilesCount = clientCases.length + clientTransactions.length + clientTitles.length;
         const totalOwed =
           clientCases.reduce((sum, c) => sum + (c.balance || 0), 0) +
           clientTransactions.reduce((sum, t) => sum + (t.balance || 0), 0) +
@@ -266,7 +282,7 @@ const Clients: React.FC = () => {
         {filteredClients.map(client => (
           <div
             key={client.id}
-            onClick={() => { setSelectedClient(client); setActiveDrawerTab("Overview"); }}
+            onClick={() => { setSelectedClient(client); setActiveDrawerTab("Overview"); setActiveHistoryTab("Matters"); }}
             className="bg-white rounded-3xl p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group"
           >
             <div className="flex justify-between items-start mb-5">
@@ -341,24 +357,24 @@ const Clients: React.FC = () => {
 
             <div className="px-10 py-8">
 
-              {currentUser?.role === 'accountant' && (
-                <div className="flex gap-2 p-1 bg-slate-200/60 rounded-xl w-fit mb-8">
-                  <button 
-                    onClick={() => setActiveDrawerTab("Overview")}
-                    className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeDrawerTab === "Overview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                  >
-                    Client Overview
-                  </button>
+              <div className="flex gap-2 p-1 bg-slate-200/60 rounded-xl w-fit mb-8">
+                <button 
+                  onClick={() => setActiveDrawerTab("Overview")}
+                  className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeDrawerTab === "Overview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Client Overview
+                </button>
+                {(currentUser?.role === 'accountant' || currentUser?.role === 'admin') && (
                   <button 
                     onClick={() => setActiveDrawerTab("Expenses")}
                     className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeDrawerTab === "Expenses" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                   >
                     Expense Record
                   </button>
-                </div>
-              )}
+                )}
+              </div>
 
-              {activeDrawerTab === "Overview" ? (
+              {activeDrawerTab === "Overview" || !(currentUser?.role === 'accountant' || currentUser?.role === 'admin') ? (
                 <>
                   <div className="grid grid-cols-3 gap-4 mb-8">
                     <div className="bg-slate-50 rounded-2xl p-4 text-center">
@@ -416,41 +432,68 @@ const Clients: React.FC = () => {
                     </div>
                   </div>
 
-                  <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-4">
-                    Linked Matter History
-                  </h4>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest">
+                      Linked Matter History
+                    </h4>
+                    <div className="flex gap-2 p-1 bg-slate-100 rounded-full">
+                      <button
+                        onClick={() => setActiveHistoryTab("Matters")}
+                        className={`px-4 py-2 rounded-full text-xs font-semibold transition ${activeHistoryTab === "Matters" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        Matter History
+                      </button>
+                      <button
+                        onClick={() => setActiveHistoryTab("Letters")}
+                        className={`px-4 py-2 rounded-full text-xs font-semibold transition ${activeHistoryTab === "Letters" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        Letters
+                      </button>
+                    </div>
+                  </div>
                   <div className="space-y-2.5 mb-10">
-                    {selectedClient.cases.map((c: any) => (
-                      <MatterRow key={c.id} title={c.fileName} badge="Court Case"
-                        badgeColor="text-blue-600 bg-blue-50" sub={c.status}
-                        onOpen={() => navigate(`/lawyer/cases/${c.id}`)} />
-                    ))}
-                    {selectedClient.transactions.map((t: any) => (
-                      <MatterRow key={t.id} title={t.fileName} badge="Transaction"
-                        badgeColor="text-purple-600 bg-purple-50" sub={t.status}
-                        onOpen={() => navigate(`/performance?file=${encodeURIComponent(t.fileName)}&openDetails=true`)} />
-                    ))}
-                    {selectedClient.letters.map((l: any) => (
-                      <MatterRow key={l.id} title={l.subject} badge="Letter"
-                        badgeColor="text-orange-600 bg-orange-50" sub={l.status}
-                        onOpen={() => navigate(`/performance?file=${encodeURIComponent(l.subject)}&openDetails=true`)} />
-                    ))}
-                    {selectedClient.titles?.map((t: any) => (
-                      <MatterRow
-                        key={t.id}
-                        title={`Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ""}`}
-                        badge="Land Title"
-                        badgeColor="text-emerald-600 bg-emerald-50"
-                        sub={
-                          t.owner_name?.toLowerCase() !== selectedClient.name.toLowerCase()
-                            ? `${t.status} · Owner: ${t.owner_name}`
-                            : t.status
-                        }
-                        onOpen={() => navigate(`/land-titles/${t.id}`)}
-                      />
-                    ))}
-                    {selectedClient.totalFilesCount === 0 && (
-                      <p className="text-slate-300 text-sm italic py-6 text-center">No matters linked to this client.</p>
+                    {activeHistoryTab === "Matters" ? (
+                      <>
+                        {selectedClient.cases.map((c: any) => (
+                          <MatterRow key={c.id} title={c.fileName} badge="Court Case"
+                            badgeColor="text-blue-600 bg-blue-50" sub={c.status}
+                            onOpen={() => navigate(`/lawyer/cases/${c.id}`)} />
+                        ))}
+                        {selectedClient.transactions.map((t: any) => (
+                          <MatterRow key={t.id} title={t.fileName} badge="Transaction"
+                            badgeColor="text-purple-600 bg-purple-50" sub={t.status}
+                            onOpen={() => navigate(`/performance?file=${encodeURIComponent(t.fileName)}&openDetails=true`)} />
+                        ))}
+                        {selectedClient.titles?.map((t: any) => (
+                          <MatterRow
+                            key={t.id}
+                            title={`Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ""}`}
+                            badge="Land Title"
+                            badgeColor="text-emerald-600 bg-emerald-50"
+                            sub={
+                              t.owner_name?.toLowerCase() !== selectedClient.name.toLowerCase()
+                                ? `${t.status} · Owner: ${t.owner_name}`
+                                : t.status
+                            }
+                            onOpen={() => navigate(`/land-titles/${t.id}`)}
+                          />
+                        ))}
+                        {selectedClient.totalFilesCount === 0 && (
+                          <p className="text-slate-300 text-sm italic py-6 text-center">No matters linked to this client.</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {selectedClientLetters.length > 0 ? (
+                          selectedClientLetters.map((l: any) => (
+                            <MatterRow key={l.id} title={l.subject || 'Untitled Letter'} badge="Letter"
+                              badgeColor="text-orange-600 bg-orange-50" sub={l.status}
+                              onOpen={() => navigate(`/lawyer/letters/${l.id}`)} />
+                          ))
+                        ) : (
+                          <p className="text-slate-400 text-sm italic py-6 text-center">No letters linked to this client.</p>
+                        )}
+                      </>
                     )}
                   </div>
 
