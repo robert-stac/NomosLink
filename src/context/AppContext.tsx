@@ -804,13 +804,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
           if (!cloud || !Array.isArray(cloud)) return prev || [];
-          const cloudIds = new Set(cloud.map((item: any) => item.id));
-          
-          // Keep ALL local items that haven't reached the cloud yet.
-          // Previously this had a 60s timeout which caused data loss if sync failed or was delayed.
-          const onlyLocalNew = (prev || []).filter((item: any) => !cloudIds.has(item.id));
-          
-          return [...cloud, ...onlyLocalNew];
+          // When the app boots online, the cloud should be authoritative.
+          // This avoids restoring stale local copies for items deleted directly in the database.
+          return cloud;
         };
 
         const [courtData, txData, clientData, letterData, userData, taskData, invoiceData, expenseData, draftData, landData] = results.map(r => r.data);
