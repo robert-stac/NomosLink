@@ -365,6 +365,7 @@ const normalizeTask = (raw: any): Task => ({
   relatedFileType: raw.relatedFileType ?? raw.related_file_type ?? undefined,
   relatedFileName: raw.relatedFileName ?? raw.related_file_name ?? undefined,
   deleted: raw.deleted ?? false,
+  lastClientFeedbackDate: raw.lastClientFeedbackDate ?? raw.last_client_feedback_date ?? undefined,
 });
 
 /* =======================
@@ -1077,12 +1078,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     const tasksForDb = tasks.map(({
-      id, title, description, priority, dueDate,
+      id, title, description, priority,
       assignedToId, assignedToName, assignedById, assignedByName,
       status, clerkNote, progressNotes, dateCreated,
       relatedFileId, relatedFileType, relatedFileName, deleted,
     }) => ({
-      id, title, description, priority, dueDate,
+      id, title, description, priority,
       assignedToId, assignedToName, assignedById, assignedByName,
       status, clerkNote, progressNotes, dateCreated,
       relatedFileId, relatedFileType, relatedFileName, deleted,
@@ -1121,9 +1122,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return result;
     };
 
-    const courtCasesForDb = courtCases.map(c => pickFields(c, courtCaseScalarFields));
-    const transactionsForDb = transactions.map(t => pickFields(t, transactionScalarFields));
-    const lettersForDb = letters.map(l => pickFields(l, letterScalarFields));
+    // Map camelCase app fields to snake_case DB columns
+    const transactionToDb = (t: any) => {
+      const mapped = pickFields(t, transactionScalarFields);
+      const result: Record<string, any> = {};
+      Object.entries(mapped).forEach(([key, val]) => {
+        if (key === 'lastClientFeedbackDate') result['last_client_feedback_date'] = val;
+        else if (key === 'billedAmount') result['billed_amount'] = val;
+        else if (key === 'paidAmount') result['paid_amount'] = val;
+        else if (key === 'scannedInvoiceUrl') result['scanned_invoice_url'] = val;
+        else result[key] = val;
+      });
+      return result;
+    };
+
+    const courtCaseToDb = (c: any) => {
+      const mapped = pickFields(c, courtCaseScalarFields);
+      const result: Record<string, any> = {};
+      Object.entries(mapped).forEach(([key, val]) => {
+        if (key === 'lastClientFeedbackDate') result['last_client_feedback_date'] = val;
+        else if (key === 'nextCourtDate') result['next_court_date'] = val;
+        else if (key === 'completedDate') result['completed_date'] = val;
+        else if (key === 'sittingType') result['sitting_type'] = val;
+        else if (key === 'scannedInvoiceUrl') result['scanned_invoice_url'] = val;
+        else result[key] = val;
+      });
+      return result;
+    };
+
+    const letterToDb = (l: any) => {
+      const mapped = pickFields(l, letterScalarFields);
+      const result: Record<string, any> = {};
+      Object.entries(mapped).forEach(([key, val]) => {
+        if (key === 'lastClientFeedbackDate') result['last_client_feedback_date'] = val;
+        else if (key === 'scannedInvoiceUrl') result['scanned_invoice_url'] = val;
+        else result[key] = val;
+      });
+      return result;
+    };
+
+    const courtCasesForDb = courtCases.map(courtCaseToDb);
+    const transactionsForDb = transactions.map(transactionToDb);
+    const lettersForDb = letters.map(letterToDb);
     const expensesForDb = expenses.map(e => pickFields(e, expenseScalarFields));
     const invoicesForDb = invoices.map(inv => ({
       id: inv.id,
@@ -1305,7 +1345,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (logAsFeedback) recordClientFeedback(message, t.clientId);
     
     const updatePayload: any = { progressNotes: updatedNotes };
-    if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+    if (logAsFeedback) updatePayload.last_client_feedback_date = now;
     supabase.from('transactions').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save transaction progress note:', error); });
 
@@ -1446,7 +1486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (logAsFeedback) recordClientFeedback(message, c.clientId);
     
     const updatePayload: any = { progressNotes: updatedNotes };
-    if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+    if (logAsFeedback) updatePayload.last_client_feedback_date = now;
     supabase.from('court_cases').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save court case progress note:', error); });
     
@@ -1608,7 +1648,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (logAsFeedback) recordClientFeedback(message, l.clientId);
     
     const updatePayload: any = { progressNotes: updatedNotes };
-    if (logAsFeedback) updatePayload.lastClientFeedbackDate = now;
+    if (logAsFeedback) updatePayload.last_client_feedback_date = now;
     supabase.from('letters').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save letter progress note:', error); });
     
