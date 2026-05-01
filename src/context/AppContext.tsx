@@ -786,11 +786,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       payload: any,
       setter: React.Dispatch<React.SetStateAction<any[]>>
     ) => {
+      const mergeRow = (current: any, incoming: any) => {
+        const merged = { ...current, ...incoming };
+        if (incoming.progressNotes === undefined) merged.progressNotes = current.progressNotes;
+        if (incoming.documents === undefined) merged.documents = current.documents;
+        if (incoming.deadlines === undefined) merged.deadlines = current.deadlines;
+        return merged;
+      };
+
       if (payload.eventType === 'INSERT') {
         setter(prev => prev.find(item => item.id === payload.new.id) ? prev : [...prev, payload.new]);
       } else if (payload.eventType === 'UPDATE') {
         setter(prev => {
-          const updated = prev.map(item => item.id === payload.new.id ? { ...item, ...payload.new } : item);
+          const updated = prev.map(item => item.id === payload.new.id ? mergeRow(item, payload.new) : item);
           return updated.some(item => item.id === payload.new.id) ? updated : [...prev, payload.new];
         });
       } else if (payload.eventType === 'DELETE') {
