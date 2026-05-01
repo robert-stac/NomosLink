@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAppContext } from "../../context/AppContext";
 
 export default function TransactionDetails() {
@@ -33,6 +33,10 @@ export default function TransactionDetails() {
   const [editMessage, setEditMessage] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isFeedback, setIsFeedback] = useState(false);
+  const [remoteUpdateNotice, setRemoteUpdateNotice] = useState<string | null>(null);
+  const [ignoreRemoteUpdateNotice, setIgnoreRemoteUpdateNotice] = useState(false);
+  const progressSnapshot = useRef<string | null>(null);
+  const activeTransactionIdRef = useRef<string | null>(null);
 
   // 🔒 Safety checks
   if (!currentUser) return <div className="p-10 text-center font-bold">Not logged in.</div>;
@@ -53,8 +57,29 @@ export default function TransactionDetails() {
   const assignedLawyer = users.find(u => u.id === transaction.lawyerId);
   const linkedTitles = landTitles.filter(lt => lt.transaction_id === transaction.id);
 
+  useEffect(() => {
+    const currentSnapshot = (transaction.progressNotes || []).map((n) => n.id).join(",");
+    if (activeTransactionIdRef.current !== transaction.id) {
+      activeTransactionIdRef.current = transaction.id;
+      progressSnapshot.current = currentSnapshot;
+      return;
+    }
+
+    if (progressSnapshot.current !== null && progressSnapshot.current !== currentSnapshot) {
+      if (ignoreRemoteUpdateNotice) {
+        setIgnoreRemoteUpdateNotice(false);
+      } else {
+        setRemoteUpdateNotice("Another user has updated this transaction.");
+        const timer = window.setTimeout(() => setRemoteUpdateNotice(null), 7000);
+        return () => window.clearTimeout(timer);
+      }
+    }
+    progressSnapshot.current = currentSnapshot;
+  }, [transaction.id, transaction.progressNotes?.length, transaction.progressNotes, ignoreRemoteUpdateNotice]);
+
   const handleAddNote = () => {
     if (!note.trim()) return;
+    setIgnoreRemoteUpdateNotice(true);
     addTransactionProgress(transaction.id, note.trim(), isFeedback);
     setNote("");
     setIsFeedback(false);
@@ -120,6 +145,11 @@ export default function TransactionDetails() {
         </div>
 
         {/* MAIN FILE CARD */}
+        {remoteUpdateNotice && (
+          <div className="rounded-3xl bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 text-sm font-semibold">
+            {remoteUpdateNotice}
+          </div>
+        )}
         <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10 text-6xl">📂</div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">{transaction.fileName}</h1>
@@ -183,7 +213,7 @@ export default function TransactionDetails() {
                               className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm mb-3 outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <div className="flex gap-2">
-                              <button onClick={() => { editTransactionProgress(transaction.id, n.id, editMessage); setEditingNoteId(null); }} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Save Changes</button>
+                              <button onClick={() => { setIgnoreRemoteUpdateNotice(true); editTransactionProgress(transaction.id, n.id, editMessage); setEditingNoteId(null); }} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Save Changes</button>
                               <button onClick={() => setEditingNoteId(null)} className="text-slate-400 text-xs font-bold">Cancel</button>
                             </div>
                           </div>
@@ -197,7 +227,7 @@ export default function TransactionDetails() {
                               {isNoteOwner && (
                                 <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition">
                                   <button onClick={() => { setEditingNoteId(n.id); setEditMessage(n.message); }} className="text-blue-600 text-[10px] font-black">EDIT</button>
-                                  <button onClick={() => deleteTransactionProgress(transaction.id, n.id)} className="text-red-500 text-[10px] font-black">DELETE</button>
+                                  <button onClick={() => { setIgnoreRemoteUpdateNotice(true); deleteTransactionProgress(transaction.id, n.id); }} className="text-red-500 text-[10px] font-black">DELETE</button>
                                 </div>
                               )}
                             </div>

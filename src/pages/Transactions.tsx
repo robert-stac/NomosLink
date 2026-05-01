@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAppContext } from "../context/AppContext";
 
 export default function Transactions() {
@@ -16,6 +16,11 @@ export default function Transactions() {
   } = useAppContext();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [remoteUpdateNotice, setRemoteUpdateNotice] = useState<string | null>(null);
+  const [ignoreRemoteUpdateNotice, setIgnoreRemoteUpdateNotice] = useState(false);
+  const progressSnapshot = useRef<string | null>(null);
+  const activeTransactionIdRef = useRef<string | null>(null);
+
   const [sortType, setSortType] = useState("newest");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteViewId, setNoteViewId] = useState<string | null>(null);
@@ -50,6 +55,33 @@ export default function Transactions() {
 
   const activeTransaction = transactions.find(t => t.id === noteViewId);
   const selectedClient = (clients || []).find(c => c.id === form.clientId);
+
+  useEffect(() => {
+    if (!noteViewId || !activeTransaction) {
+      progressSnapshot.current = null;
+      activeTransactionIdRef.current = null;
+      return;
+    }
+
+    const currentSnapshot = (activeTransaction.progressNotes || []).map((n) => n.id).join(",");
+    if (activeTransactionIdRef.current !== activeTransaction.id) {
+      activeTransactionIdRef.current = activeTransaction.id;
+      progressSnapshot.current = currentSnapshot;
+      return;
+    }
+
+    if (progressSnapshot.current !== null && progressSnapshot.current !== currentSnapshot) {
+      if (ignoreRemoteUpdateNotice) {
+        setIgnoreRemoteUpdateNotice(false);
+      } else {
+        setRemoteUpdateNotice("Another user has updated this transaction.");
+        const timer = window.setTimeout(() => setRemoteUpdateNotice(null), 7000);
+        return () => window.clearTimeout(timer);
+      }
+    }
+
+    progressSnapshot.current = currentSnapshot;
+  }, [activeTransaction?.id, activeTransaction?.progressNotes?.length, activeTransaction?.progressNotes, ignoreRemoteUpdateNotice, noteViewId]);
 
   const visibleTransactions = useMemo(() => {
     let data = transactions.filter((t) => t.type !== "Court Case" && !t.archived);
@@ -112,6 +144,7 @@ export default function Transactions() {
 
   const handlePostNote = () => {
     if (!newNote.trim() || !noteViewId) return;
+    setIgnoreRemoteUpdateNotice(true);
     addTransactionProgress(noteViewId, newNote.trim());
     setNewNote("");
   };
@@ -373,6 +406,11 @@ export default function Transactions() {
               <button onClick={() => { setNoteViewId(null); setEditingNoteId(null); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border text-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm">&times;</button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 space-y-4 bg-white">
+              {remoteUpdateNotice && (
+                <div className="rounded-3xl bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 text-sm font-semibold">
+                  {remoteUpdateNotice}
+                </div>
+              )}
               {[...(activeTransaction?.progressNotes || [])].map((n: any) => {
                 const renderDate = (dStr: string) => {
                   const d = new Date(dStr);
@@ -395,7 +433,7 @@ export default function Transactions() {
                             ✎
                           </button>
                           <button
-                            onClick={() => { if (confirm("Delete this progress note?")) deleteTransactionProgress(activeTransaction!.id, n.id); }}
+                            onClick={() => { if (confirm("Delete this progress note?")) { setIgnoreRemoteUpdateNotice(true); deleteTransactionProgress(activeTransaction!.id, n.id); } }}
                             className="w-6 h-6 flex items-center justify-center bg-white border border-slate-200 rounded text-slate-400 hover:text-red-500 hover:border-red-300 transition-all font-bold text-xs"
                             title="Delete"
                           >
@@ -422,6 +460,7 @@ export default function Transactions() {
                         <button
                           onClick={() => {
                             if (!editingNoteText.trim() || !activeTransaction) return;
+                            setIgnoreRemoteUpdateNotice(true);
                             editTransactionProgress(activeTransaction.id, n.id, editingNoteText.trim());
                             setEditingNoteId(null);
                             setEditingNoteText("");

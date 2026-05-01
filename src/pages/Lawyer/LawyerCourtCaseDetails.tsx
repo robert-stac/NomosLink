@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import { getDeadlineUrgency } from "../../utils/dateUtils";
@@ -20,6 +20,10 @@ export default function LawyerCourtCaseDetails() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [newNote, setNewNote] = useState("");
+  const [remoteUpdateNotice, setRemoteUpdateNotice] = useState<string | null>(null);
+  const [ignoreRemoteUpdateNotice, setIgnoreRemoteUpdateNotice] = useState(false);
+  const progressSnapshot = useRef<string | null>(null);
+  const activeCaseIdRef = useRef<string | null>(null);
 
   const {
     currentUser,
@@ -56,8 +60,28 @@ export default function LawyerCourtCaseDetails() {
   const courtCase = foundCase;
   const assignedLawyer = users.find(u => u.id === courtCase.lawyerId);
 
+  useEffect(() => {
+    const currentSnapshot = (courtCase.progressNotes || []).map((n) => n.id).join(",");
+    if (activeCaseIdRef.current !== courtCase.id) {
+      activeCaseIdRef.current = courtCase.id;
+      progressSnapshot.current = currentSnapshot;
+      return;
+    }
+    if (progressSnapshot.current !== null && progressSnapshot.current !== currentSnapshot) {
+      if (ignoreRemoteUpdateNotice) {
+        setIgnoreRemoteUpdateNotice(false);
+      } else {
+        setRemoteUpdateNotice("Another user has updated this court case.");
+        const timer = window.setTimeout(() => setRemoteUpdateNotice(null), 7000);
+        return () => window.clearTimeout(timer);
+      }
+    }
+    progressSnapshot.current = currentSnapshot;
+  }, [courtCase.id, courtCase.progressNotes?.length, courtCase.progressNotes, ignoreRemoteUpdateNotice]);
+
   const handleAddNote = () => {
     if (!newNote.trim()) return;
+    setIgnoreRemoteUpdateNotice(true);
     addCourtCaseProgress(courtCase.id, newNote.trim());
     setNewNote("");
   };
@@ -146,6 +170,11 @@ export default function LawyerCourtCaseDetails() {
             </div>
 
             {/* PROGRESS LOG */}
+            {remoteUpdateNotice && (
+              <div className="rounded-3xl bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 text-sm font-semibold mb-6">
+                {remoteUpdateNotice}
+              </div>
+            )}
             <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
               <h3 className="text-lg font-semibold text-slate-900 mb-8">Matter Progression</h3>
               <div className="space-y-8 relative before:absolute before:inset-y-0 before:left-3 before:w-0.5 before:bg-slate-100">
@@ -165,6 +194,7 @@ export default function LawyerCourtCaseDetails() {
                           <button
                             onClick={() => {
                               if (window.confirm("Delete this progress note?")) {
+                                setIgnoreRemoteUpdateNotice(true);
                                 deleteCourtCaseProgress?.(courtCase.id, note.id);
                               }
                             }}

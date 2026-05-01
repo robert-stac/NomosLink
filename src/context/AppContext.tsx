@@ -779,6 +779,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser?.id]);
 
   /* =======================
+      TRANSACTION / CASE / LETTER REALTIME
+  ======================= */
+  useEffect(() => {
+    const applyRealtimeUpdate = (
+      payload: any,
+      setter: React.Dispatch<React.SetStateAction<any[]>>
+    ) => {
+      if (payload.eventType === 'INSERT') {
+        setter(prev => prev.find(item => item.id === payload.new.id) ? prev : [...prev, payload.new]);
+      } else if (payload.eventType === 'UPDATE') {
+        setter(prev => {
+          const updated = prev.map(item => item.id === payload.new.id ? payload.new : item);
+          return updated.some(item => item.id === payload.new.id) ? updated : [...prev, payload.new];
+        });
+      } else if (payload.eventType === 'DELETE') {
+        setter(prev => prev.filter(item => item.id !== payload.old.id));
+      }
+    };
+
+    const channel = supabase
+      .channel('file-progress-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
+        applyRealtimeUpdate(payload, setTransactions);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'court_cases' }, (payload) => {
+        applyRealtimeUpdate(payload, setCourtCases);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters' }, (payload) => {
+        applyRealtimeUpdate(payload, setLetters);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  /* =======================
       INITIAL DATA FETCH
   ======================= */
   useEffect(() => {

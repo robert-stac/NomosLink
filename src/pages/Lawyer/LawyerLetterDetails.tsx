@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import { supabase } from "../../lib/supabaseClient"; 
@@ -20,6 +20,10 @@ export default function LawyerLetterDetails() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]); 
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [remoteUpdateNotice, setRemoteUpdateNotice] = useState<string | null>(null);
+  const [ignoreRemoteUpdateNotice, setIgnoreRemoteUpdateNotice] = useState(false);
+  const noteSnapshot = useRef<string | null>(null);
+  const activeLetterIdRef = useRef<string | null>(null);
 
   // 1. Find the fresh version of the letter from global state
   const foundLetter = letters.find((l) => String(l.id) === String(id));
@@ -30,7 +34,34 @@ export default function LawyerLetterDetails() {
     if (foundLetter?.progressNotes) {
       setLocalNotes([...foundLetter.progressNotes]);
     }
-  }, [foundLetter, letters]); 
+  }, [foundLetter, letters]);
+
+  useEffect(() => {
+    if (!foundLetter) {
+      noteSnapshot.current = null;
+      activeLetterIdRef.current = null;
+      return;
+    }
+
+    const currentSnapshot = (foundLetter.progressNotes || []).map((n: any) => n.id).join(",");
+    if (activeLetterIdRef.current !== foundLetter.id) {
+      activeLetterIdRef.current = foundLetter.id;
+      noteSnapshot.current = currentSnapshot;
+      return;
+    }
+
+    if (noteSnapshot.current !== null && noteSnapshot.current !== currentSnapshot) {
+      if (ignoreRemoteUpdateNotice) {
+        setIgnoreRemoteUpdateNotice(false);
+      } else {
+        setRemoteUpdateNotice("Another user has updated this letter.");
+        const timer = window.setTimeout(() => setRemoteUpdateNotice(null), 7000);
+        return () => window.clearTimeout(timer);
+      }
+    }
+
+    noteSnapshot.current = currentSnapshot;
+  }, [foundLetter?.id, foundLetter?.progressNotes?.length, foundLetter?.progressNotes, ignoreRemoteUpdateNotice]);
 
   if (!currentUser) return <div className="p-10 text-center font-black text-slate-400">SESSION EXPIRED</div>;
 
@@ -116,6 +147,7 @@ export default function LawyerLetterDetails() {
 
       // 3. Update Letter state (documents and progress)
       // We update docs first, then add progress to trigger the re-render chain
+      setIgnoreRemoteUpdateNotice(true);
       await updateLetter(letter.id, { documents: updatedDocs });
       await addLetterProgress(letter.id, combinedMessage, isFeedback);
 
@@ -133,6 +165,7 @@ export default function LawyerLetterDetails() {
 
   const handleDeleteNote = async (noteId: string) => {
     if (!window.confirm("Delete this update?")) return;
+    setIgnoreRemoteUpdateNotice(true);
     const updated = (letter.progressNotes || []).filter((n: any) => n.id !== noteId);
     await updateLetter(letter.id, { progressNotes: updated });
   };
@@ -192,6 +225,11 @@ export default function LawyerLetterDetails() {
           </div>
         </div>
 
+        {remoteUpdateNotice && (
+          <div className="rounded-3xl bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 text-sm font-semibold mb-6">
+            {remoteUpdateNotice}
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-sm border border-slate-100">
