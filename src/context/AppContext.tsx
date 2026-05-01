@@ -790,7 +790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setter(prev => prev.find(item => item.id === payload.new.id) ? prev : [...prev, payload.new]);
       } else if (payload.eventType === 'UPDATE') {
         setter(prev => {
-          const updated = prev.map(item => item.id === payload.new.id ? payload.new : item);
+          const updated = prev.map(item => item.id === payload.new.id ? { ...item, ...payload.new } : item);
           return updated.some(item => item.id === payload.new.id) ? updated : [...prev, payload.new];
         });
       } else if (payload.eventType === 'DELETE') {
