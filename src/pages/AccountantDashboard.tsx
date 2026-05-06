@@ -6,7 +6,7 @@ import { useAppContext } from "../context/AppContext";
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 export default function AccountantDashboard() {
-  const { transactions, courtCases, letters, expenses, invoices, users, clients } = useAppContext();
+  const { transactions, courtCases, letters, expenses, invoices, users, clients, landTitles } = useAppContext();
 
   const [timeFilter, setTimeFilter] = useState("All Time");
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -183,6 +183,121 @@ export default function AccountantDashboard() {
     setShowInvoiceModal(true);
   };
 
+  const handleDownloadFirmStatementCSV = () => {
+    // Collect File Data (Billed, Paid, Owed)
+    const filesData: any[] = [];
+    
+    const filterByTime = (dateStr: string) => {
+      if (timeFilter === "All Time") return true;
+      if (!dateStr) return true;
+      const d = new Date(dateStr);
+      const now = new Date();
+      if (timeFilter === "This Month") return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      if (timeFilter === "This Year") return d.getFullYear() === now.getFullYear();
+      return true;
+    };
+
+    courtCases?.forEach((c: any) => { 
+      if (filterByTime(c.date || c.createdAt || '')) filesData.push(['Court Case', c.fileName || '', c.billed || 0, c.paid || 0, clients.find((cl: any)=>cl.id===c.clientId)?.name || 'N/A']); 
+    });
+    transactions?.forEach((t: any) => { 
+      if (filterByTime(t.date || '')) filesData.push(['Transaction', t.fileName || '', t.billedAmount || 0, t.paidAmount || 0, clients.find((cl: any)=>cl.id===t.clientId)?.name || 'N/A']); 
+    });
+    landTitles?.forEach((t: any) => { 
+      if (filterByTime(t.date || '')) filesData.push(['Land Title', `Plot ${t.title_number}`, t.total_billed || 0, t.total_paid || 0, clients.find((cl: any)=>cl.id===t.client_id)?.name || 'N/A']); 
+    });
+
+    let totalBilled = 0;
+    let totalFilePaid = 0;
+    filesData.forEach(f => {
+      totalBilled += f[2];
+      totalFilePaid += f[3];
+    });
+    const totalOwed = totalBilled - totalFilePaid;
+
+    const filteredExpenses = (expenses || []).filter(e => filterByTime(e.date || ''));
+    const outExpenses = filteredExpenses.filter((e: any) => e.type === 'out');
+    const inExpenses = filteredExpenses.filter((e: any) => e.type === 'in');
+    
+    let totalInExpenses = 0;
+    inExpenses.forEach((e: any) => { totalInExpenses += (e.amount || 0); });
+
+    let totalOutExpenses = 0;
+    outExpenses.forEach((e: any) => { totalOutExpenses += (e.amount || 0); });
+
+    const totalMoneyReceived = totalFilePaid + totalInExpenses;
+    const netBalance = totalMoneyReceived - totalOutExpenses;
+
+    const lines = [];
+    lines.push(["FIRM INCOME STATEMENT / ACCOUNT SUMMARY"]);
+    lines.push([]);
+    
+    lines.push(["REPORT DETAILS"]);
+    lines.push(["Firm:", '"Buwembo & Company Advocates"']);
+    lines.push(["Time Period:", `"${timeFilter}"`]);
+    lines.push(["Date Generated:", `"${new Date().toLocaleDateString()}"`]);
+    lines.push([]);
+    
+    lines.push(["FILE SUMMARY (BILLED, PAID & OWED)"]);
+    lines.push(["Type", "File Name", "Client", "Billed (UGX)", "Paid (UGX)", "Owed/Balance (UGX)"]);
+    if (filesData.length === 0) {
+      lines.push(["No files in this period", "", "", "0", "0", "0"]);
+    } else {
+      filesData.forEach(f => {
+        lines.push([`"${f[0]}"`, `"${f[1].toString().replace(/"/g, '""')}"`, `"${f[4].toString().replace(/"/g, '""')}"`, f[2], f[3], f[2] - f[3]]);
+      });
+    }
+    lines.push(["TOTAL ACROSS ALL FILES", "", "", totalBilled, totalFilePaid, totalOwed]);
+    lines.push([]);
+
+    lines.push(["OTHER REVENUES / DEPOSITS (MONEY IN)"]);
+    lines.push(["Date", "Related File", "Purpose", "Amount (UGX)"]);
+    if (inExpenses.length === 0) {
+      lines.push(["No deposits recorded", "", "", "0"]);
+    } else {
+      inExpenses.forEach((e: any) => {
+        lines.push([
+          `"${e.date || ''}"`, 
+          `"${(e.relatedFileName || '').replace(/"/g, '""')}"`, 
+          `"${(e.purpose || e.description || '').replace(/"/g, '""')}"`, 
+          e.amount || 0
+        ]);
+      });
+    }
+    lines.push(["TOTAL DEPOSITS", "", "", totalInExpenses]);
+    lines.push([]);
+
+    lines.push(["EXPENSES (MONEY SPENT)"]);
+    lines.push(["Date", "Related File", "Purpose", "Amount (UGX)"]);
+    if (outExpenses.length === 0) {
+      lines.push(["No expenses recorded", "", "", "0"]);
+    } else {
+      outExpenses.forEach((e: any) => {
+        lines.push([
+          `"${e.date || ''}"`, 
+          `"${(e.relatedFileName || '').replace(/"/g, '""')}"`, 
+          `"${(e.purpose || e.description || '').replace(/"/g, '""')}"`, 
+          e.amount || 0
+        ]);
+      });
+    }
+    lines.push(["TOTAL EXPENSES", "", "", totalOutExpenses]);
+    lines.push([]);
+
+    lines.push(["NET ACCOUNT SUMMARY"]);
+    lines.push(["Total Money Received (Files + Deposits)", "", totalMoneyReceived]);
+    lines.push(["Total Money Spent (Expenses)", "", totalOutExpenses]);
+    lines.push(["Firm Surplus / Deficit", "", netBalance]);
+
+    const csvContent = lines.map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Firm_Income_Statement_${timeFilter.replace(/\s+/g, "_")}.csv`);
+    link.click();
+  };
+
   return (
     <div className="bg-slate-50 min-h-screen p-6 font-sans">
 
@@ -192,17 +307,25 @@ export default function AccountantDashboard() {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Financial Command Center</h1>
           <p className="text-slate-500 text-sm font-medium mt-1">Real-time overview of the firm's financial health.</p>
         </div>
-        <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 p-1">
-          {["All Time", "This Year", "This Month"].map(filter => (
-            <button
-              key={filter}
-              onClick={() => setTimeFilter(filter)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeFilter === filter ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-            >
-              {filter}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button 
+            onClick={handleDownloadFirmStatementCSV}
+            className="bg-emerald-600 text-white hover:bg-emerald-500 px-5 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2"
+          >
+            <span>📥</span> Export Firm Statement
+          </button>
+          <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 p-1">
+            {["All Time", "This Year", "This Month"].map(filter => (
+              <button
+                key={filter}
+                onClick={() => setTimeFilter(filter)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeFilter === filter ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

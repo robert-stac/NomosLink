@@ -81,6 +81,7 @@ export interface DraftRequest {
   documentUrl?: string;
   documentName?: string;
   hoursSpent?: number;
+  completionNote?: string;
   dateCreated: string;
   dateCompleted?: string;
 }
@@ -312,7 +313,7 @@ interface AppContextType {
 
   draftRequests: DraftRequest[];
   addDraftRequest: (draft: Omit<DraftRequest, "id" | "status" | "dateCreated">) => Promise<void>;
-  completeDraftRequest: (id: string, hoursSpent?: number, documentUrl?: string, documentName?: string) => void;
+  completeDraftRequest: (id: string, hoursSpent?: number, documentUrl?: string, documentName?: string, completionNote?: string) => void;
   deleteDraftRequest: (id: string) => void;
 
   filingRequests: FilingRequest[];
@@ -590,7 +591,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const delay = transactions.length === 0 && courtCases.length === 0 ? 1000 : 5000;
     const timer = setTimeout(() => { syncToCloud(); }, delay);
     return () => clearTimeout(timer);
-  }, [courtCases, transactions, letters, initialDataLoaded]);
+  }, [courtCases, transactions, letters, clients, tasks, invoices, expenses, draftRequests, filingRequests, landTitles, initialDataLoaded]);
 
   const getAdminIds = () => usersRef.current.filter(u => u.role === 'admin').map(u => u.id);
   const getManagerIds = () => usersRef.current.filter(u => u.role === 'manager').map(u => u.id);
@@ -796,14 +797,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       if (payload.eventType === 'INSERT') {
-        setter(prev => prev.find(item => item.id === payload.new.id) ? prev : [...prev, payload.new]);
+        setter(prev => prev.find(item => String(item.id) === String(payload.new.id)) ? prev : [...prev, payload.new]);
       } else if (payload.eventType === 'UPDATE') {
         setter(prev => {
-          const updated = prev.map(item => item.id === payload.new.id ? mergeRow(item, payload.new) : item);
-          return updated.some(item => item.id === payload.new.id) ? updated : [...prev, payload.new];
+          const updated = prev.map(item => String(item.id) === String(payload.new.id) ? mergeRow(item, payload.new) : item);
+          return updated.some(item => String(item.id) === String(payload.new.id)) ? updated : [...prev, payload.new];
         });
       } else if (payload.eventType === 'DELETE') {
-        setter(prev => prev.filter(item => item.id !== payload.old.id));
+        const oldId = payload.old?.id || payload.old_record?.id || payload.record?.id;
+        setter(prev => prev.filter(item => String(item.id) !== String(oldId)));
       }
     };
 
@@ -1122,15 +1124,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return result;
     };
 
-    // Map camelCase app fields to snake_case DB columns
+    // Map camelCase app fields to snake_case DB columns (only where applicable)
     const transactionToDb = (t: any) => {
       const mapped = pickFields(t, transactionScalarFields);
       const result: Record<string, any> = {};
       Object.entries(mapped).forEach(([key, val]) => {
         if (key === 'lastClientFeedbackDate') result['last_client_feedback_date'] = val;
-        else if (key === 'billedAmount') result['billed_amount'] = val;
-        else if (key === 'paidAmount') result['paid_amount'] = val;
-        else if (key === 'scannedInvoiceUrl') result['scanned_invoice_url'] = val;
         else result[key] = val;
       });
       return result;
@@ -1141,10 +1140,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const result: Record<string, any> = {};
       Object.entries(mapped).forEach(([key, val]) => {
         if (key === 'lastClientFeedbackDate') result['last_client_feedback_date'] = val;
-        else if (key === 'nextCourtDate') result['next_court_date'] = val;
-        else if (key === 'completedDate') result['completed_date'] = val;
-        else if (key === 'sittingType') result['sitting_type'] = val;
-        else if (key === 'scannedInvoiceUrl') result['scanned_invoice_url'] = val;
         else result[key] = val;
       });
       return result;
@@ -1155,7 +1150,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const result: Record<string, any> = {};
       Object.entries(mapped).forEach(([key, val]) => {
         if (key === 'lastClientFeedbackDate') result['last_client_feedback_date'] = val;
-        else if (key === 'scannedInvoiceUrl') result['scanned_invoice_url'] = val;
         else result[key] = val;
       });
       return result;
@@ -1278,6 +1272,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTransaction = (id: string) => {
+    const itemToDelete = transactions.find(t => t.id === id);
     setTransactions(prev => {
       const updated = prev.filter(t => t.id !== id);
       localStorage.setItem('transactions', JSON.stringify(updated));
@@ -1288,6 +1283,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       supabase.from('transactions').delete().eq('id', id).then(({ error }) => {
         if (error) {
           console.error('Failed to delete transaction from Supabase:', error);
+          alert('Failed to delete transaction. Please check if it has related records. Error: ' + error.message);
+          if (itemToDelete) {
+            setTransactions(prev => {
+              const restored = [...prev, itemToDelete];
+              localStorage.setItem('transactions', JSON.stringify(restored));
+              return restored;
+            });
+          }
+          removePendingDelete('transactions', id);
           return;
         }
         removePendingDelete('transactions', id);
@@ -1449,12 +1453,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteCourtCase = (id: string) => {
+    const itemToDelete = courtCases.find(c => c.id === id);
     setCourtCases(prev => {
       const updated = prev.filter(c => c.id !== id);
       localStorage.setItem('courtCases', JSON.stringify(updated));
       return updated;
     });
-    if (navigator.onLine) supabase.from('court_cases').delete().eq('id', id).then();
+    queuePendingDelete('court_cases', id);
+    if (navigator.onLine) {
+      supabase.from('court_cases').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error('Failed to delete court case from Supabase:', error);
+          alert('Failed to delete court case: ' + error.message);
+          if (itemToDelete) {
+            setCourtCases(prev => {
+              const restored = [...prev, itemToDelete];
+              localStorage.setItem('courtCases', JSON.stringify(restored));
+              return restored;
+            });
+          }
+          removePendingDelete('court_cases', id);
+          return;
+        }
+        removePendingDelete('court_cases', id);
+      });
+    }
   };
 
   const addCourtCaseProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
@@ -1611,12 +1634,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteLetter = (id: string) => {
+    const itemToDelete = letters.find(l => l.id === id);
     setLetters(prev => {
       const updated = prev.filter(l => l.id !== id);
       localStorage.setItem('letters', JSON.stringify(updated));
       return updated;
     });
-    if (navigator.onLine) supabase.from('letters').delete().eq('id', id).then();
+    queuePendingDelete('letters', id);
+    if (navigator.onLine) {
+      supabase.from('letters').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error('Failed to delete letter from Supabase:', error);
+          alert('Failed to delete letter: ' + error.message);
+          if (itemToDelete) {
+            setLetters(prev => {
+              const restored = [...prev, itemToDelete];
+              localStorage.setItem('letters', JSON.stringify(restored));
+              return restored;
+            });
+          }
+          removePendingDelete('letters', id);
+          return;
+        }
+        removePendingDelete('letters', id);
+      });
+    }
   };
 
   const addLetterProgress = (id: string, message: string, logAsFeedback: boolean = false) => {
@@ -1857,14 +1899,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const completeDraftRequest = (id: string, _hoursSpent?: number, documentUrl?: string, documentName?: string) => {
+  const completeDraftRequest = (id: string, _hoursSpent?: number, documentUrl?: string, documentName?: string, completionNote?: string) => {
     const draft = draftRequests.find(d => d.id === id);
     if (!draft) return;
     const diffMs = new Date().getTime() - new Date(draft.dateCreated).getTime();
     const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
-    const updated: DraftRequest = { ...draft, status: "Completed", hoursSpent: calculatedHours, documentUrl, documentName, dateCompleted: new Date().toISOString() };
+    const updated: DraftRequest = { ...draft, status: "Completed", hoursSpent: calculatedHours, documentUrl, documentName, completionNote, dateCompleted: new Date().toISOString() };
     setDraftRequests(prev => prev.map(d => d.id === id ? updated : d));
     instantSave('draft_requests', updated);
+    
+    if (completionNote) {
+      addCourtCaseProgress(draft.caseId, `Draft Completed (${draft.title}): ${completionNote}`);
+    }
+
     const requester = usersRef.current.find(u => String(u.id) === String(draft.requestedById));
     if (requester?.email) {
       sendEmail(requester.email, 'Draft Completed: ' + draft.title, buildDraftEmail(requester.name, draft.assignedToName, draft.title, draft.description, draft.deadline, draft.caseFileName, 'completed', calculatedHours));

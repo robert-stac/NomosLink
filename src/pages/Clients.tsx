@@ -55,9 +55,9 @@ const Clients: React.FC = () => {
     return letters.filter(l =>
       l.clientId === selectedClient.id ||
       (l as any).client_id === selectedClient.id ||
-      ((!l.clientId && !(l as any).client_id) && 
+      ((!l.clientId && !(l as any).client_id) &&
         ((l.subject || "").toLowerCase().includes(selectedClient.name.toLowerCase()) ||
-         (l.recipient || "").toLowerCase().includes(selectedClient.name.toLowerCase())))
+          (l.recipient || "").toLowerCase().includes(selectedClient.name.toLowerCase())))
     );
   }, [selectedClient, letters]);
 
@@ -104,7 +104,7 @@ const Clients: React.FC = () => {
           clientLetters.reduce((sum, l) => sum + ((l.billed || 0) - (l.paid || 0)), 0) +
           clientTitles.reduce((sum: number, t: any) => sum + ((t.total_billed || 0) - (t.total_paid || 0)), 0);
 
-        const clientExpenses = (expenses || []).filter((e: any) => 
+        const clientExpenses = (expenses || []).filter((e: any) =>
           clientCases.some(c => c.id === e.relatedFileId) ||
           clientTransactions.some(t => t.id === e.relatedFileId) ||
           clientLetters.some(l => l.id === e.relatedFileId) ||
@@ -164,21 +164,100 @@ const Clients: React.FC = () => {
   };
 
   const handleDownloadExpensesCSV = (client: any) => {
-    if (!client.expenses || client.expenses.length === 0) return alert("No expenses to export");
-    const headers = ["Date", "Type", "File Name", "Purpose", "Amount (UGX)"];
-    const rows = client.expenses.map((exp: any) => [
-      exp.date,
-      exp.type === "in" ? "Money In" : "Money Out",
-      (exp.relatedFileName || "").replace(/,/g, ""),
-      (exp.purpose || exp.description || "").replace(/,/g, ""),
-      exp.amount
-    ]);
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    // Collect File Data (Billed, Paid, Owed)
+    const filesData: any[] = [];
+    client.cases?.forEach((c: any) => filesData.push(['Court Case', c.fileName || '', c.billed || 0, c.paid || 0]));
+    client.transactions?.forEach((t: any) => filesData.push(['Transaction', t.fileName || '', t.billedAmount || 0, t.paidAmount || 0]));
+    client.titles?.forEach((t: any) => filesData.push(['Land Title', `Plot ${t.title_number}`, t.total_billed || 0, t.total_paid || 0]));
+
+    let totalBilled = 0;
+    let totalFilePaid = 0;
+    filesData.forEach(f => {
+      totalBilled += f[2];
+      totalFilePaid += f[3];
+    });
+    const totalOwed = totalBilled - totalFilePaid;
+
+    const outExpenses = (client.expenses || []).filter((e: any) => e.type === 'out');
+    const inExpenses = (client.expenses || []).filter((e: any) => e.type === 'in');
+    
+    let totalInExpenses = 0;
+    inExpenses.forEach((e: any) => { totalInExpenses += (e.amount || 0); });
+
+    let totalOutExpenses = 0;
+    outExpenses.forEach((e: any) => { totalOutExpenses += (e.amount || 0); });
+
+    const totalMoneyReceived = totalFilePaid + totalInExpenses;
+    const netBalance = totalMoneyReceived - totalOutExpenses;
+
+    const lines = [];
+    lines.push(["INCOME STATEMENT / ACCOUNT SUMMARY"]);
+    lines.push([]);
+    
+    lines.push(["CLIENT DETAILS"]);
+    lines.push(["Name:", `"${client.name}"`]);
+    lines.push(["Email:", `"${client.email || 'N/A'}"`]);
+    lines.push(["Phone:", `"${client.phone || 'N/A'}"`]);
+    lines.push(["Date Generated:", `"${new Date().toLocaleDateString()}"`]);
+    lines.push([]);
+    
+    lines.push(["FILE SUMMARY (BILLED, PAID & OWED)"]);
+    lines.push(["Type", "File Name", "Billed (UGX)", "Paid (UGX)", "Owed/Balance (UGX)"]);
+    if (filesData.length === 0) {
+      lines.push(["No files attached", "", "0", "0", "0"]);
+    } else {
+      filesData.forEach(f => {
+        lines.push([`"${f[0]}"`, `"${f[1].toString().replace(/"/g, '""')}"`, f[2], f[3], f[2] - f[3]]);
+      });
+    }
+    lines.push(["TOTAL ACROSS ALL FILES", "", totalBilled, totalFilePaid, totalOwed]);
+    lines.push([]);
+
+    lines.push(["OTHER REVENUES / DEPOSITS (MONEY IN)"]);
+    lines.push(["Date", "Related File", "Purpose", "Amount (UGX)"]);
+    if (inExpenses.length === 0) {
+      lines.push(["No deposits recorded", "", "", "0"]);
+    } else {
+      inExpenses.forEach((e: any) => {
+        lines.push([
+          `"${e.date || ''}"`, 
+          `"${(e.relatedFileName || '').replace(/"/g, '""')}"`, 
+          `"${(e.purpose || e.description || '').replace(/"/g, '""')}"`, 
+          e.amount || 0
+        ]);
+      });
+    }
+    lines.push(["TOTAL DEPOSITS", "", "", totalInExpenses]);
+    lines.push([]);
+
+    lines.push(["EXPENSES (MONEY SPENT)"]);
+    lines.push(["Date", "Related File", "Purpose", "Amount (UGX)"]);
+    if (outExpenses.length === 0) {
+      lines.push(["No expenses recorded", "", "", "0"]);
+    } else {
+      outExpenses.forEach((e: any) => {
+        lines.push([
+          `"${e.date || ''}"`, 
+          `"${(e.relatedFileName || '').replace(/"/g, '""')}"`, 
+          `"${(e.purpose || e.description || '').replace(/"/g, '""')}"`, 
+          e.amount || 0
+        ]);
+      });
+    }
+    lines.push(["TOTAL EXPENSES", "", "", totalOutExpenses]);
+    lines.push([]);
+
+    lines.push(["NET ACCOUNT SUMMARY"]);
+    lines.push(["Total Money Received (Files + Deposits)", "", totalMoneyReceived]);
+    lines.push(["Total Money Spent (Expenses)", "", totalOutExpenses]);
+    lines.push(["Account Surplus / Deficit", "", netBalance]);
+
+    const csvContent = lines.map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `${client.name.replace(/\s+/g, "_")}_Expenses.csv`);
+    link.setAttribute("download", `${client.name.replace(/\s+/g, "_")}_Income_Statement.csv`);
     link.click();
   };
 
@@ -210,9 +289,9 @@ const Clients: React.FC = () => {
       id: Date.now().toString(),
       clientId: selectedClient.id,
       note: commNote,
-      date: new Date().toLocaleString('en-GB', { 
-        day: 'numeric', 
-        month: 'short', 
+      date: new Date().toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
@@ -358,14 +437,14 @@ const Clients: React.FC = () => {
             <div className="px-10 py-8">
 
               <div className="flex gap-2 p-1 bg-slate-200/60 rounded-xl w-fit mb-8">
-                <button 
+                <button
                   onClick={() => setActiveDrawerTab("Overview")}
                   className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeDrawerTab === "Overview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                 >
                   Client Overview
                 </button>
                 {(currentUser?.role === 'accountant' || currentUser?.role === 'admin') && (
-                  <button 
+                  <button
                     onClick={() => setActiveDrawerTab("Expenses")}
                     className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeDrawerTab === "Expenses" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                   >
@@ -561,8 +640,8 @@ const Clients: React.FC = () => {
                           </div>
                         </div>
                         <p className="text-xs text-slate-400 mt-4 italic">
-                          {accountBalance > 0 
-                            ? `Account has surplus of ${fmt(accountBalance)}` 
+                          {accountBalance > 0
+                            ? `Account has surplus of ${fmt(accountBalance)}`
                             : `Account has deficit of ${fmt(Math.abs(accountBalance))}`}
                         </p>
                       </div>
@@ -630,11 +709,11 @@ const Clients: React.FC = () => {
                                 <p className="text-lg font-bold text-[#0B1F3A]">{fmt(totalBilled)}</p>
                               </div>
                               <div>
-                                <p className="text-xs text-slate-500 mb-1">Total Spent</p>
+                                <p className="text-xs text-slate-500 mb-1">Total Received</p>
                                 <p className="text-lg font-bold text-orange-600">{fmt(totalPaid)}</p>
                               </div>
                               <div>
-                                <p className="text-xs text-slate-500 mb-1">Total Balance</p>
+                                <p className="text-xs text-slate-500 mb-1">Total Owed</p>
                                 <p className={`text-lg font-bold ${totalBalance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
                                   {fmt(totalBalance)}
                                 </p>
@@ -696,7 +775,7 @@ const Clients: React.FC = () => {
                                       <tr key={exp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                                         <td className="p-3 whitespace-nowrap text-slate-600">{exp.date}</td>
                                         <td className="p-3">
-                                          {exp.type === 'in' 
+                                          {exp.type === 'in'
                                             ? <span className="text-emerald-600 font-bold text-[10px] bg-emerald-50 px-2 py-1 rounded">IN (+)</span>
                                             : <span className="text-red-500 font-bold text-[10px] bg-red-50 px-2 py-1 rounded">OUT (-)</span>
                                           }

@@ -44,6 +44,7 @@ export default function LawyerDashboard() {
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters" | "Drafts" | "Registry">("Cases");
+  const [draftsTab, setDraftsTab] = useState<"Pending" | "Completed">("Pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export default function LawyerDashboard() {
   const [fileSearch, setFileSearch] = useState("");
 
   const [completingDraftId, setCompletingDraftId] = useState<string | null>(null);
-  const [completeForm, setCompleteForm] = useState({ hoursSpent: "", documentFile: null as File | null });
+  const [completeForm, setCompleteForm] = useState({ hoursSpent: "", documentFile: null as File | null, completionNote: "" });
   const [uploading, setUploading] = useState(false);
 
   if (!currentUser) return null;
@@ -93,8 +94,8 @@ export default function LawyerDashboard() {
       const { error } = await supabase.storage.from('documents').upload(filePath, file);
       if (!error) { documentUrl = supabase.storage.from('documents').getPublicUrl(filePath).data.publicUrl; documentName = file.name; }
     }
-    completeDraftRequest(completingDraftId, completeForm.hoursSpent ? Number(completeForm.hoursSpent) : undefined, documentUrl, documentName);
-    setCompletingDraftId(null); setCompleteForm({ hoursSpent: "", documentFile: null }); setUploading(false);
+    completeDraftRequest(completingDraftId, completeForm.hoursSpent ? Number(completeForm.hoursSpent) : undefined, documentUrl, documentName, completeForm.completionNote);
+    setCompletingDraftId(null); setCompleteForm({ hoursSpent: "", documentFile: null, completionNote: "" }); setUploading(false);
   };
 
   const [showRegistryBanner, setShowRegistryBanner] = useState(() => !localStorage.getItem("dismissed_registry_banner_v1"));
@@ -106,7 +107,7 @@ export default function LawyerDashboard() {
 
     const assignedCases = courtCases.filter(c => {
       const isLead = String(c.lawyerId) === userId;
-      const isAssistant = draftRequests.some(d => String(d.caseId) === String(c.id) && String(d.assignedToId) === userId);
+      const isAssistant = draftRequests.some(d => String(d.caseId) === String(c.id) && String(d.assignedToId) === userId && d.status === 'Pending');
       return !c.archived && (isLead || isAssistant);
     });
 
@@ -424,57 +425,113 @@ export default function LawyerDashboard() {
             {activeTab === "Drafts" && (
               <div className="col-span-3 space-y-8">
                 <div>
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Drafts assigned to me ({filteredAssignedDrafts.length})</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredAssignedDrafts.map(draft => (
-                      <div key={draft.id} className={`bg-white p-6 rounded-[32px] transition-all shadow-sm`}>
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="space-y-1 pr-4">
-                            <h4 className="text-sm font-semibold text-slate-900">{draft.title}</h4>
-                            <p className="text-xs font-medium text-slate-400 uppercase">⚖️ {draft.caseFileName}</p>
-                          </div>
-                          <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${draft.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>{draft.status}</span>
-                        </div>
-                        <p className="text-xs text-slate-500 mb-4">{draft.description}</p>
-                        <div className="flex flex-wrap gap-3 text-xs font-medium text-slate-400 mb-4">
-                          <span>📅 Due {draft.deadline}</span>
-                          <span>👤 From {draft.requestedByName}</span>
-                        </div>
-                        {draft.status === 'Pending' && (
-                          <button onClick={() => setCompletingDraftId(draft.id)} className="w-full bg-emerald-600 text-white py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-emerald-700 transition">
-                            Complete
-                          </button>
+                  <div className="flex justify-between items-center mb-4">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Drafts assigned to me ({filteredAssignedDrafts.filter(d => d.status === draftsTab).length})</p>
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                      <button 
+                        onClick={() => setDraftsTab("Pending")}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition ${draftsTab === "Pending" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        Pending ({filteredAssignedDrafts.filter(d => d.status === 'Pending').length})
+                      </button>
+                      <button 
+                        onClick={() => setDraftsTab("Completed")}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition ${draftsTab === "Completed" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        Completed ({filteredAssignedDrafts.filter(d => d.status === 'Completed').length})
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-white p-8 rounded-[40px] shadow-sm border-none overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                          <th className="pb-4 pr-4">Draft Details</th>
+                          <th className="pb-4 pr-4">Related Matter</th>
+                          <th className="pb-4 pr-4">Requester</th>
+                          <th className="pb-4 pr-4">Status & Due Date</th>
+                          <th className="pb-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm">
+                        {filteredAssignedDrafts.filter(d => d.status === draftsTab).length > 0 ? filteredAssignedDrafts.filter(d => d.status === draftsTab).map(draft => (
+                          <tr key={draft.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition">
+                            <td className="py-4 pr-4 align-top">
+                              <p className="font-semibold text-slate-800">{draft.title}</p>
+                              <p className="text-xs text-slate-500 mt-1 max-w-sm">{draft.description}</p>
+                            </td>
+                            <td className="py-4 pr-4 align-top">
+                              <button onClick={() => navigate(`/lawyer/cases/${draft.caseId}`)} className="text-blue-500 hover:text-blue-700 font-medium text-xs uppercase tracking-wide transition truncate max-w-[200px] block text-left">
+                                ⚖️ {draft.caseFileName}
+                              </button>
+                            </td>
+                            <td className="py-4 pr-4 align-top">
+                              <span className="text-slate-600 font-medium">{draft.requestedByName}</span>
+                            </td>
+                            <td className="py-4 pr-4 align-top">
+                              <div className="flex flex-col gap-2 items-start">
+                                <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase ${draft.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                                  {draft.status}
+                                </span>
+                                <span className="text-xs text-slate-500 font-medium">Due {draft.deadline}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 text-right align-top">
+                              {draft.status === 'Pending' && (
+                                <button onClick={() => setCompletingDraftId(draft.id)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-4 py-2 rounded-xl text-xs font-semibold transition whitespace-nowrap ml-auto block">
+                                  Complete
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={5} className="py-8 text-center text-sm italic text-slate-300">No {draftsTab.toLowerCase()} drafts found.</td></tr>
                         )}
-                      </div>
-                    ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
+
                 {filteredRequestedDrafts.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Drafts I've delegated ({filteredRequestedDrafts.length})</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {filteredRequestedDrafts.map(draft => (
-                        <div key={draft.id} className="bg-slate-50 p-6 rounded-[32px] shadow-sm">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="space-y-1 pr-4">
-                              <h4 className="text-sm font-semibold text-slate-700">{draft.title}</h4>
-                              <p className="text-xs font-medium text-slate-400 uppercase">⚖️ {draft.caseFileName}</p>
-                            </div>
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${draft.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{draft.status}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-3 text-xs font-medium text-slate-400">
-                            <span>📅 Due {draft.deadline}</span>
-                            <span>👤 To {draft.assignedToName}</span>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="bg-white p-8 rounded-[40px] shadow-sm border-none overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                            <th className="pb-4 pr-4">Draft Details</th>
+                            <th className="pb-4 pr-4">Related Matter</th>
+                            <th className="pb-4 pr-4">Assignee</th>
+                            <th className="pb-4">Status & Due Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                          {filteredRequestedDrafts.map(draft => (
+                            <tr key={draft.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition">
+                              <td className="py-4 pr-4 align-top">
+                                <p className="font-semibold text-slate-800">{draft.title}</p>
+                              </td>
+                              <td className="py-4 pr-4 align-top">
+                                <button onClick={() => navigate(`/lawyer/cases/${draft.caseId}`)} className="text-blue-500 hover:text-blue-700 font-medium text-xs uppercase tracking-wide transition truncate max-w-[200px] block text-left">
+                                  ⚖️ {draft.caseFileName}
+                                </button>
+                              </td>
+                              <td className="py-4 pr-4 align-top">
+                                <span className="text-slate-600 font-medium">{draft.assignedToName}</span>
+                              </td>
+                              <td className="py-4 align-top">
+                                <div className="flex flex-col gap-2 items-start">
+                                  <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase ${draft.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                                    {draft.status}
+                                  </span>
+                                  <span className="text-xs text-slate-500 font-medium">Due {draft.deadline}</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                )}
-                {filteredAssignedDrafts.length === 0 && filteredRequestedDrafts.length === 0 && (
-                  <div className="text-center py-16">
-                    <p className="text-4xl mb-4">📝</p>
-                    <p className="text-sm italic text-slate-300">No draft requests found.</p>
                   </div>
                 )}
               </div>
@@ -704,12 +761,24 @@ export default function LawyerDashboard() {
           <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl">
             <h3 style={serif} className="text-xl font-bold text-slate-900 mb-2">Complete Draft</h3>
             <p className="text-slate-400 text-sm mb-7 leading-relaxed">Optionally attach the completed document before marking this as done.</p>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Upload Document (optional)</label>
-              <input type="file" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none" onChange={e => setCompleteForm({ ...completeForm, documentFile: e.target.files?.[0] || null })} />
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Completion Note / Update (optional)</label>
+                <textarea 
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500" 
+                  rows={3}
+                  placeholder="Provide a brief update..."
+                  value={completeForm.completionNote}
+                  onChange={e => setCompleteForm({ ...completeForm, completionNote: e.target.value })} 
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Upload Document (optional)</label>
+                <input type="file" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none" onChange={e => setCompleteForm({ ...completeForm, documentFile: e.target.files?.[0] || null })} />
+              </div>
             </div>
             <div className="flex gap-4 mt-8">
-              <button onClick={() => { setCompletingDraftId(null); setCompleteForm({ hoursSpent: "", documentFile: null }); }} className="flex-1 text-slate-400 text-xs font-semibold uppercase">Cancel</button>
+              <button onClick={() => { setCompletingDraftId(null); setCompleteForm({ hoursSpent: "", documentFile: null, completionNote: "" }); }} className="flex-1 text-slate-400 text-xs font-semibold uppercase">Cancel</button>
               <button onClick={handleCompleteDraft} disabled={uploading} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl text-xs font-semibold uppercase tracking-wider shadow-lg hover:bg-emerald-700 transition disabled:opacity-50">
                 {uploading ? "Uploading…" : "Mark as Complete"}
               </button>

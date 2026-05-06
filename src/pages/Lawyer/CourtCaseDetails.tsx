@@ -33,7 +33,7 @@ export default function CourtCaseDetails() {
 
   // Complete draft modal state
   const [completingDraftId, setCompletingDraftId] = useState<string | null>(null);
-  const [completeForm, setCompleteForm] = useState({ hoursSpent: "", documentFile: null as File | null });
+  const [completeForm, setCompleteForm] = useState({ hoursSpent: "", documentFile: null as File | null, completionNote: "" });
   const [uploading, setUploading] = useState(false);
 
   // Deadline form state
@@ -177,9 +177,10 @@ export default function CourtCaseDetails() {
       completeForm.hoursSpent ? Number(completeForm.hoursSpent) : undefined,
       documentUrl,
       documentName,
+      completeForm.completionNote
     );
     setCompletingDraftId(null);
-    setCompleteForm({ hoursSpent: "", documentFile: null });
+    setCompleteForm({ hoursSpent: "", documentFile: null, completionNote: "" });
     setUploading(false);
   };
 
@@ -944,6 +945,16 @@ export default function CourtCaseDetails() {
             <p className="text-slate-400 text-sm mb-8">Attach the completed document. **Hours spent will be calculated automatically** based on the time since assignment.</p>
             <div className="space-y-4">
               <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Completion Note / Update (optional)</label>
+                <textarea
+                  className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Provide a brief update on what was completed..."
+                  value={completeForm.completionNote}
+                  onChange={e => setCompleteForm({ ...completeForm, completionNote: e.target.value })}
+                />
+              </div>
+              <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Upload Document (optional)</label>
                 <input
                   type="file"
@@ -954,7 +965,7 @@ export default function CourtCaseDetails() {
             </div>
             <div className="flex gap-4 mt-8">
               <button
-                onClick={() => { setCompletingDraftId(null); setCompleteForm({ hoursSpent: "", documentFile: null }); }}
+                onClick={() => { setCompletingDraftId(null); setCompleteForm({ hoursSpent: "", documentFile: null, completionNote: "" }); }}
                 className="flex-1 font-black text-slate-400 uppercase text-xs"
               >
                 Cancel

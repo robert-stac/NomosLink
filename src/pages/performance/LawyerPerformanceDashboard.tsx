@@ -50,6 +50,7 @@ export default function LawyerPerformanceDashboard() {
     const sid = String(selectedLawyerId);
 
     const myCases = sid === "ALL" ? activeCases : activeCases.filter(c => String(c.lawyerId) === sid);
+    const assistedCases = sid === "ALL" ? [] : activeCases.filter(c => String(c.lawyerId) !== sid && draftRequests.some(d => String(d.caseId) === String(c.id) && String(d.assignedToId) === sid));
     const myTransactions = sid === "ALL" ? activeTransactions : activeTransactions.filter(t => String(t.lawyerId) === sid);
     const myLetters = sid === "ALL" ? activeLetters : activeLetters.filter(l => String(l.lawyerId) === sid || String((l as any).lawyer?.id) === sid);
     const myDrafts = sid === "ALL" ? draftRequests : draftRequests.filter(d => String(d.assignedToId) === sid);
@@ -115,6 +116,7 @@ export default function LawyerPerformanceDashboard() {
     return {
       financials,
       cases: myCases,
+      assistedCases,
       transactions: myTransactions,
       letters: myLetters,
       stagnant: stagnant.sort((a: any, b: any) => b.daysStagnant - a.daysStagnant),
@@ -168,9 +170,9 @@ export default function LawyerPerformanceDashboard() {
       `"${d.description.replace(/"/g, '""')}"`,
       `"${d.deadline || d.dateCreated}"`,
       `"${d.status}"`,
-      `"Case: ${d.caseFileName}"`,
+      `"${(d.completionNote || '').replace(/"/g, '""')}"`,
       `"${d.hoursSpent || ''}"`,
-      '""'
+      `"Case: ${d.caseFileName}"`
     ]);
 
     const taskRows = stats.tasks.all.map(t => [
@@ -196,7 +198,14 @@ export default function LawyerPerformanceDashboard() {
     ]);
 
     const caseRows = stats.cases.map(c => [
-      "Court Case",
+      "Court Case (Lead)",
+      `"${c.fileName.replace(/"/g, '""')}"`,
+      `"${(c.details || '').replace(/"/g, '""')}"`,
+      '""', `"${c.status}"`, '""', '""', '""'
+    ]);
+
+    const assistedCaseRows = stats.assistedCases.map(c => [
+      "Court Case (Assisting)",
       `"${c.fileName.replace(/"/g, '""')}"`,
       `"${(c.details || '').replace(/"/g, '""')}"`,
       '""', `"${c.status}"`, '""', '""', '""'
@@ -221,7 +230,7 @@ export default function LawyerPerformanceDashboard() {
       '""', '""', '""'
     ]);
 
-    const csvContent = [headers, ...draftRows, ...taskRows, ...filingRows, ...caseRows, ...txRows, ...letterRows]
+    const csvContent = [headers, ...draftRows, ...taskRows, ...filingRows, ...caseRows, ...assistedCaseRows, ...txRows, ...letterRows]
       .map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -366,7 +375,10 @@ export default function LawyerPerformanceDashboard() {
                         <tbody className="divide-y divide-slate-50">
                           {stats.drafts.all.map((d: any) => (
                             <tr key={d.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="py-4 font-bold text-slate-800">{d.title}</td>
+                              <td className="py-4">
+                                <p className="font-bold text-slate-800">{d.title}</p>
+                                {d.completionNote && <p className="text-[10px] text-slate-500 italic mt-1 max-w-xs line-clamp-2">"{d.completionNote}"</p>}
+                              </td>
                               <td className="py-4 text-slate-500 text-xs font-medium">{d.caseFileName}</td>
                               <td className="py-4 text-slate-500 text-xs font-medium">{d.deadline}</td>
                               <td className="py-4">
