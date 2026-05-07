@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import NotificationBell from "../NotificationBell";
 import { getDeadlineUrgency, getUrgencyStyles } from "../../utils/dateUtils";
+import CourtCalendar from "../CourtCalendar";
 
 const body: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 const serif: React.CSSProperties = { fontFamily: "'Playfair Display', serif" };
@@ -43,7 +44,7 @@ export default function LawyerDashboard() {
     updateCourtCaseDeadline,
   } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters" | "Drafts" | "Registry">("Cases");
+  const [activeTab, setActiveTab] = useState<"Cases" | "Transactions" | "Letters" | "Drafts" | "Registry" | "Calendar">("Cases");
   const [draftsTab, setDraftsTab] = useState<"Pending" | "Completed">("Pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -388,11 +389,11 @@ export default function LawyerDashboard() {
         {/* TABS */}
         <div>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div className="flex gap-8 border-b border-slate-200">
-              {(["Cases", "Transactions", "Letters", "Drafts", "Registry"] as const).map(tab => (
+            <div className="flex gap-8 border-b border-slate-200 overflow-x-auto">
+              {(["Cases", "Transactions", "Letters", "Drafts", "Registry", "Calendar"] as const).map(tab => (
                 <button key={tab} onClick={() => { setActiveTab(tab); setSearchQuery(""); }}
-                  className={`pb-3 text-xs font-semibold uppercase tracking-wider transition border-b-2 -mb-px flex items-center gap-2 ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"}`}>
-                  {tab}
+                  className={`pb-3 text-xs font-semibold uppercase tracking-wider transition border-b-2 -mb-px flex items-center gap-2 whitespace-nowrap ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"}`}>
+                  {tab === "Calendar" ? "📅 Calendar" : tab}
                   {tab === "Drafts" && pendingIncomingCount > 0 && (
                     <span className="bg-orange-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">{pendingIncomingCount}</span>
                   )}
@@ -409,7 +410,13 @@ export default function LawyerDashboard() {
 
           {searchQuery && <p className="text-xs font-medium text-slate-400 mb-4">{currentCount} result{currentCount !== 1 ? "s" : ""} for "{searchQuery}"</p>}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {activeTab === "Calendar" && (
+            <div className="col-span-3 bg-white p-8 rounded-[40px] shadow-sm">
+              <CourtCalendar embedded />
+            </div>
+          )}
+
+          <div className={activeTab === "Calendar" ? "hidden" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
             {activeTab === "Cases" && (filteredCases.length > 0
               ? filteredCases.map(c => <FileCard key={c.id} title={c.fileName} subtitle="Litigation Matter" status={c.status} date={c.nextCourtDate || "Date TBD"} onView={() => navigate(`/lawyer/cases/${c.id}`)} isLead={String(c.lawyerId) === String(currentUser.id)} />)
               : <p className="col-span-3 text-center text-sm italic text-slate-300 py-10">No cases found{searchQuery ? ` for "${searchQuery}"` : ""}.</p>

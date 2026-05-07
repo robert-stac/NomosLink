@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppContext } from "../../context/AppContext";
+import CourtCalendar from "../CourtCalendar";
 
 // Typography: Playfair Display (headings) + DM Sans (body)
 // Add to index.html:
@@ -15,7 +16,7 @@ export default function ClerkDashboard() {
   const [note, setNote] = useState("");
   const [updateNote, setUpdateNote] = useState("");
   const [sortTasksBy, setSortTasksBy] = useState("newest");
-  const [activeTab, setActiveTab] = useState<"Pending" | "Completed">("Pending");
+  const [activeTab, setActiveTab] = useState<"Pending" | "Completed" | "Calendar">("Pending");
   const [searchQuery, setSearchQuery] = useState("");
 
   if (!currentUser) return null;
@@ -104,15 +105,15 @@ export default function ClerkDashboard() {
 
         {/* TABS + SEARCH */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex gap-8 border-b border-slate-200">
-            {(["Pending", "Completed"] as const).map(tab => (
+          <div className="flex gap-8 border-b border-slate-200 overflow-x-auto">
+            {(["Pending", "Completed", "Calendar"] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => { setActiveTab(tab); setSearchQuery(""); }}
-                className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-all border-b-2 -mb-px flex items-center gap-2 ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
+                className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-all border-b-2 -mb-px flex items-center gap-2 whitespace-nowrap ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
                   }`}
               >
-                {tab} Tasks
+                {tab === "Calendar" ? "📅 Court Calendar" : `${tab} Tasks`}
                 {tab === "Pending" && pendingCount > 0 && (
                   <span className="bg-orange-500 text-white text-[9px] font-semibold px-2 py-0.5 rounded-full">{pendingCount}</span>
                 )}
@@ -145,8 +146,15 @@ export default function ClerkDashboard() {
           </div>
         </div>
 
+        {/* CALENDAR TAB */}
+        {activeTab === "Calendar" && (
+          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+            <CourtCalendar embedded />
+          </div>
+        )}
+
         {/* TASK CARDS */}
-        {myTasks.length > 0 ? myTasks.map(task => (
+        {activeTab !== "Calendar" && (myTasks.length > 0 ? myTasks.map(task => (
           <div key={task.id} className="bg-white p-7 rounded-[36px] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div className="space-y-2 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -218,7 +226,7 @@ export default function ClerkDashboard() {
               {searchQuery ? `No ${activeTab.toLowerCase()} tasks match your search.` : `No ${activeTab.toLowerCase()} tasks found.`}
             </p>
           </div>
-        )}
+        ))}
       </div>
 
       {/* COMPLETION MODAL */}

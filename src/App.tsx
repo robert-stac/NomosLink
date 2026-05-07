@@ -39,6 +39,9 @@ import ClerkDashboard from "./pages/Clerk/ClerkDashboard";
 // Performance
 import LawyerPerformanceDashboard from "./pages/performance/LawyerPerformanceDashboard";
 
+// Court Calendar
+import CourtCalendar from "./pages/CourtCalendar";
+
 // Route Guard
 import ProtectedRoute from "./routes/ProtectedRoute";
 import ResetPassword from "./components/ResetPassword";
@@ -353,6 +356,23 @@ export default function App() {
               <AdminLayout isOnline={isOnline}>
                 <LawyerPerformanceDashboard />
               </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ================= COURT CALENDAR ================= */}
+        <Route
+          path="/court-calendar"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "manager", "lawyer", "clerk"]}>
+              <div style={{ paddingTop: isOnline ? 0 : "40px" }}>
+                <div style={{ display: "flex" }}>
+                  {["admin", "manager"].includes(currentUser?.role || "") && <Sidebar />}
+                  <main style={{ flex: 1, padding: ["admin", "manager"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
+                    <CourtCalendar />
+                  </main>
+                </div>
+              </div>
             </ProtectedRoute>
           }
         />

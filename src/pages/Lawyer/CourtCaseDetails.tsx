@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import { getDeadlineUrgency, getUrgencyStyles } from "../../utils/dateUtils";
@@ -67,7 +67,31 @@ export default function CourtCaseDetails() {
   const isLeadCounsel = String(courtCase.lawyerId) === String(currentUser.id);
   const canCreateDraft = isManagerOrAdmin || isLeadCounsel;
 
-  // All lawyers except current user as potential assignees
+  // ── Adjournment / date editing state ──────────────────────────────────────
+  const [courtDateInput, setCourtDateInput] = useState("");
+  const [isEditingDate, setIsEditingDate] = useState(false);
+
+  // Build a quick lookup: which other cases share a proposed date?
+  const busyCasesOnDate = useMemo(() => {
+    if (!courtDateInput || !isEditingDate) return [];
+    return courtCases.filter(c => {
+      if (String(c.id) === String(id) || c.archived || !c.nextCourtDate) return false;
+      try {
+        const d = new Date(c.nextCourtDate);
+        if (isNaN(d.getTime())) return false;
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const chosen = new Date(courtDateInput);
+        const chosenKey = `${chosen.getFullYear()}-${String(chosen.getMonth()+1).padStart(2,'0')}-${String(chosen.getDate()).padStart(2,'0')}`;
+        return key === chosenKey;
+      } catch { return false; }
+    });
+  }, [courtDateInput, isEditingDate, courtCases, id]);
+
+  const handleSaveCourtDate = () => {
+    updateCourtCase(courtCase!.id, { nextCourtDate: courtDateInput || undefined });
+    setIsEditingDate(false);
+  };
+
   const assignableLawyers = users.filter(u => (u.role === 'lawyer') && String(u.id) !== String(currentUser.id));
 
   // Draft requests for this case
@@ -905,17 +929,80 @@ export default function CourtCaseDetails() {
                   <p className="text-sm font-bold text-orange-600">{courtCase.sittingType || "General Proceedings"}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Next Court Date</p>
-                  <p className={`text-sm font-bold ${getDeadlineUrgency(courtCase.nextCourtDate) === 'overdue' ? 'text-red-500' :
-                      getDeadlineUrgency(courtCase.nextCourtDate) === 'soon' ? 'text-amber-500' : 'text-blue-600'
-                    }`}>
-                    {courtCase.nextCourtDate || "TBD"}
-                    {courtCase.nextCourtDate && getDeadlineUrgency(courtCase.nextCourtDate) !== 'normal' && (
-                      <span className="ml-1 text-[8px] font-black uppercase">
-                        ({getDeadlineUrgency(courtCase.nextCourtDate)})
-                      </span>
-                    )}
-                  </p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Next Court Date</p>
+
+                  {!isEditingDate ? (
+                    // ── READ MODE ──────────────────────────────────────────
+                    <div className="flex items-start gap-2">
+                      <p className={`text-sm font-bold flex-1 ${
+                        getDeadlineUrgency(courtCase.nextCourtDate) === 'overdue' ? 'text-red-500' :
+                        getDeadlineUrgency(courtCase.nextCourtDate) === 'soon' ? 'text-amber-500' : 'text-blue-600'
+                      }`}>
+                        {courtCase.nextCourtDate
+                          ? new Date(courtCase.nextCourtDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : "TBD"}
+                        {courtCase.nextCourtDate && getDeadlineUrgency(courtCase.nextCourtDate) !== 'normal' && (
+                          <span className="ml-1 text-[8px] font-black uppercase">
+                            ({getDeadlineUrgency(courtCase.nextCourtDate)})
+                          </span>
+                        )}
+                      </p>
+                      <button
+                        onClick={() => { setCourtDateInput(courtCase.nextCourtDate || ""); setIsEditingDate(true); }}
+                        className="text-[9px] font-black text-blue-500 uppercase tracking-wider hover:text-blue-700 transition shrink-0 mt-0.5 bg-blue-50 px-2 py-1 rounded-lg"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  ) : (
+                    // ── EDIT MODE ──────────────────────────────────────────
+                    <div className="space-y-2">
+                      <input
+                        type="date"
+                        value={courtDateInput}
+                        onChange={e => setCourtDateInput(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      />
+
+                      {/* ── NON-BLOCKING BUSY DAY WARNING ──────────────────── */}
+                      {busyCasesOnDate.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                          <div className="flex items-start gap-2">
+                            <span className="text-amber-500 text-sm shrink-0 mt-0.5">⚠️</span>
+                            <div>
+                              <p className="text-[10px] font-black text-amber-800 uppercase tracking-wider mb-1">
+                                {busyCasesOnDate.length} other matter{busyCasesOnDate.length > 1 ? 's' : ''} already on this date
+                              </p>
+                              <div className="space-y-0.5">
+                                {busyCasesOnDate.slice(0, 3).map(c => (
+                                  <p key={c.id} className="text-[10px] text-amber-700 font-semibold truncate">• {c.fileName}</p>
+                                ))}
+                                {busyCasesOnDate.length > 3 && (
+                                  <p className="text-[10px] text-amber-500 font-semibold">+{busyCasesOnDate.length - 3} more</p>
+                                )}
+                              </div>
+                              <p className="text-[9px] text-amber-600 mt-1.5 font-medium">You can still proceed — this is a reminder only.</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={handleSaveCourtDate}
+                          className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-blue-700 transition shadow-sm"
+                        >
+                          Save Date
+                        </button>
+                        <button
+                          onClick={() => setIsEditingDate(false)}
+                          className="flex-1 bg-slate-100 text-slate-500 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Reference ID</p>

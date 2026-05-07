@@ -21,6 +21,7 @@ export default function Sidebar() {
     { label: "Dashboard", path: "/", icon: "📊", show: isStaff },
     { label: "Transactions", path: "/transactions", icon: "💸", show: isAdmin || isManager },
     { label: "Court Cases", path: "/court-cases", icon: "⚖️", show: isAdmin || isManager },
+    { label: "Court Calendar", path: "/court-calendar", icon: "📅", show: isAdmin || isManager },
     { label: "Letters", path: "/letters", icon: "✉️", show: isAdmin || isManager },
     { label: "Clients", path: "/clients", icon: "👥", show: isStaff },
     { label: "Land Titles", path: "/land-titles", icon: "📜", show: isAdmin || isManager },
@@ -125,7 +126,7 @@ export default function Sidebar() {
 
         {/* 5. VERSION NUMBER */}
         <div style={{ ...sidebarStyles.versionBadge, color: "white", fontSize: "12px", fontStyle: "italic" }}>
-          v1.5.1
+          v1.6.0
         </div>
       </div>
     </>
