@@ -42,11 +42,14 @@ export default function CourtCaseDetails() {
 
   if (!currentUser) return <div className="p-10 text-center font-black text-slate-400">SESSION EXPIRED</div>;
 
-  const isManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
+  const isManager = currentUser.role === "manager";
+  const isAdmin = currentUser.role === "admin";
+  const isManagerOrAdmin = isManager || isAdmin;
+  const isAccountant = currentUser.role === 'accountant';
 
   const courtCase = courtCases.find(
     (c) => String(c.id) === String(id) &&
-      (isManagerOrAdmin ||
+      (isManagerOrAdmin || isAccountant ||
         String(c.lawyerId) === String(currentUser.id) ||
         draftRequests.some(d => String(d.caseId) === String(c.id) && String(d.assignedToId) === String(currentUser.id)))
   );

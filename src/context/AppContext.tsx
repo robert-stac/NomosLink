@@ -584,14 +584,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
 
-  // Periodic sync 5 seconds after any core data change
+  // Online-recovery: when the browser comes back online, run ONE sync to push
   useEffect(() => {
-    if (!initialDataLoaded || !navigator.onLine) return;
-    // Initial sync after boot happens faster (1s), subsequent debounced syncs stay at 5s
-    const delay = transactions.length === 0 && courtCases.length === 0 ? 1000 : 5000;
-    const timer = setTimeout(() => { syncToCloud(); }, delay);
-    return () => clearTimeout(timer);
-  }, [courtCases, transactions, letters, clients, tasks, invoices, expenses, draftRequests, filingRequests, landTitles, initialDataLoaded]);
+    const handleOnline = () => {
+      if (initialDataLoaded && currentUser) {
+        console.log('[Recovery] Browser came online — running one-time sync...');
+        syncToCloud();
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [initialDataLoaded, currentUser]);
 
   const getAdminIds = () => usersRef.current.filter(u => u.role === 'admin').map(u => u.id);
   const getManagerIds = () => usersRef.current.filter(u => u.role === 'manager').map(u => u.id);
@@ -601,13 +604,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ======================= */
   const sendEmail = (to: string | string[], subject: string, html: string) => {
     if (!navigator.onLine || !to) return;
-    
+
     let recipients = Array.isArray(to) ? [...to] : [to];
     const senderEmail = currentUserRef.current?.email;
     if (senderEmail && !recipients.includes(senderEmail)) {
       recipients.push(senderEmail);
     }
-    
+
     fetch(import.meta.env.VITE_SUPABASE_URL + '/functions/v1/send-email', {
       method: 'POST',
       headers: {
@@ -781,49 +784,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser?.id]);
 
   /* =======================
-      TRANSACTION / CASE / LETTER REALTIME
+      TRANSACTION / CASE / LETTER POLLING
+      Replaces the old Realtime postgres_changes channel that was
+      subscribing to ALL changes on 3 tables with zero filters.
+      That channel cost: (every write × 3 tables × N subscribers) messages.
+      Polling every 5 mins (300s) costs: 0 Realtime messages, just 3 lightweight SELECTs.
   ======================= */
   useEffect(() => {
-    const applyRealtimeUpdate = (
-      payload: any,
-      setter: React.Dispatch<React.SetStateAction<any[]>>
-    ) => {
-      const mergeRow = (current: any, incoming: any) => {
-        const merged = { ...current, ...incoming };
-        if (incoming.progressNotes === undefined) merged.progressNotes = current.progressNotes;
-        if (incoming.documents === undefined) merged.documents = current.documents;
-        if (incoming.deadlines === undefined) merged.deadlines = current.deadlines;
-        return merged;
-      };
+    if (!initialDataLoaded) return;
 
-      if (payload.eventType === 'INSERT') {
-        setter(prev => prev.find(item => String(item.id) === String(payload.new.id)) ? prev : [...prev, payload.new]);
-      } else if (payload.eventType === 'UPDATE') {
-        setter(prev => {
-          const updated = prev.map(item => String(item.id) === String(payload.new.id) ? mergeRow(item, payload.new) : item);
-          return updated.some(item => String(item.id) === String(payload.new.id)) ? updated : [...prev, payload.new];
-        });
-      } else if (payload.eventType === 'DELETE') {
-        const oldId = payload.old?.id || payload.old_record?.id || payload.record?.id;
-        setter(prev => prev.filter(item => String(item.id) !== String(oldId)));
+    const pollFileData = async () => {
+      // Skip polling if offline or tab is in background
+      if (!navigator.onLine || document.hidden) return;
+
+      try {
+        const [txRes, ccRes, ltRes] = await Promise.all([
+          supabase.from('transactions').select('*'),
+          supabase.from('court_cases').select('*'),
+          supabase.from('letters').select('*'),
+        ]);
+
+        if (txRes.data) setTransactions(txRes.data);
+        if (ccRes.data) setCourtCases(ccRes.data);
+        if (ltRes.data) setLetters(ltRes.data);
+      } catch (err) {
+        console.error('[Poll] File data polling failed:', err);
       }
     };
 
-    const channel = supabase
-      .channel('file-progress-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
-        applyRealtimeUpdate(payload, setTransactions);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'court_cases' }, (payload) => {
-        applyRealtimeUpdate(payload, setCourtCases);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters' }, (payload) => {
-        applyRealtimeUpdate(payload, setLetters);
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    const interval = setInterval(pollFileData, 300000);
+    return () => clearInterval(interval);
+  }, [initialDataLoaded]);
 
   /* =======================
       INITIAL DATA FETCH
@@ -1073,6 +1064,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ======================= */
   const syncToCloud = async () => {
     if (!navigator.onLine || !currentUser) return;
+    console.log('[SyncToCloud] Manual/recovery full sync starting...');
 
     // Strip to only columns that exist in the DB  -  prevents 400 errors from extra UI fields
     const clientsForDb = clients.map(({ id, name, type, email, phone, dateAdded }) => ({
@@ -1183,10 +1175,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         { name: 'users', task: supabase.from('users').upsert(users, { onConflict: 'id' }) },
         { name: 'tasks', task: supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }) },
         { name: 'draft_requests', task: supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }) },
-        { name: 'land_titles', task: supabase.from('land_titles').upsert(
+        {
+          name: 'land_titles', task: supabase.from('land_titles').upsert(
             landTitles.map(({ notes_history, ...rest }) => rest),
             { onConflict: 'id' }
-          ) 
+          )
         },
       ];
 
@@ -1301,14 +1294,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const recordClientFeedback = (_note: string, clientId?: string) => {
     if (!currentUser || !clientId) return;
-    const now = new Date().toLocaleString('en-GB', { 
-      day: 'numeric', 
-      month: 'short', 
+    const now = new Date().toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
-    
+
     // Add to Communication Logs
     const newLog: CommunicationLog = {
       id: crypto.randomUUID(),
@@ -1339,15 +1332,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newFeedbackDate = logAsFeedback ? now : t.lastClientFeedbackDate;
 
     // 1. Update UI State
-    setTransactions(prev => prev.map(item => item.id === id ? { 
-      ...item, 
-      progressNotes: updatedNotes, 
-      lastClientFeedbackDate: newFeedbackDate 
+    setTransactions(prev => prev.map(item => item.id === id ? {
+      ...item,
+      progressNotes: updatedNotes,
+      lastClientFeedbackDate: newFeedbackDate
     } : item));
 
     // 2. Side Effects
     if (logAsFeedback) recordClientFeedback(message, t.clientId);
-    
+
     const updatePayload: any = { progressNotes: updatedNotes };
     if (logAsFeedback) updatePayload.last_client_feedback_date = now;
     supabase.from('transactions').update(updatePayload).eq('id', id)
@@ -1367,7 +1360,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const managersToNotify = getManagersToNotify(t.lawyerId, updatedNotes, currentUser.id);
     if (t.lawyerId) managersToNotify.delete(String(t.lawyerId));
     managersToNotify.forEach(mid => sendNotification(mid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction'));
-    
+
     getAdminIds().forEach(aid => {
       if (String(aid) !== String(currentUser.id))
         sendNotification(aid, 'Transaction Update: ' + t.fileName + '  -  "' + message + '"', 'file', t.id, 'transaction');
@@ -1499,20 +1492,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newFeedbackDate = logAsFeedback ? now : c.lastClientFeedbackDate;
 
     // 1. Update UI State
-    setCourtCases(prev => prev.map(item => item.id === id ? { 
-      ...item, 
-      progressNotes: updatedNotes, 
-      lastClientFeedbackDate: newFeedbackDate 
+    setCourtCases(prev => prev.map(item => item.id === id ? {
+      ...item,
+      progressNotes: updatedNotes,
+      lastClientFeedbackDate: newFeedbackDate
     } : item));
 
     // 2. Side Effects
     if (logAsFeedback) recordClientFeedback(message, c.clientId);
-    
+
     const updatePayload: any = { progressNotes: updatedNotes };
     if (logAsFeedback) updatePayload.last_client_feedback_date = now;
     supabase.from('court_cases').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save court case progress note:', error); });
-    
+
     const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
     if (c.lawyerId && String(c.lawyerId) !== String(currentUser.id)) {
       sendNotification(c.lawyerId, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
@@ -1527,7 +1520,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const managersToNotify = getManagersToNotify(c.lawyerId, updatedNotes, currentUser.id);
     if (c.lawyerId) managersToNotify.delete(String(c.lawyerId));
     managersToNotify.forEach(mid => sendNotification(mid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case'));
-    
+
     getAdminIds().forEach(aid => {
       if (String(aid) !== String(currentUser.id))
         sendNotification(aid, 'Court Case Update: ' + c.fileName + '  -  "' + message + '"', 'file', c.id, 'case');
@@ -1680,20 +1673,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newFeedbackDate = logAsFeedback ? now : l.lastClientFeedbackDate;
 
     // 1. Update UI State
-    setLetters(prev => prev.map(item => item.id === id ? { 
-      ...item, 
-      progressNotes: updatedNotes, 
-      lastClientFeedbackDate: newFeedbackDate 
+    setLetters(prev => prev.map(item => item.id === id ? {
+      ...item,
+      progressNotes: updatedNotes,
+      lastClientFeedbackDate: newFeedbackDate
     } : item));
 
     // 2. Side Effects
     if (logAsFeedback) recordClientFeedback(message, l.clientId);
-    
+
     const updatePayload: any = { progressNotes: updatedNotes };
     if (logAsFeedback) updatePayload.last_client_feedback_date = now;
     supabase.from('letters').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save letter progress note:', error); });
-    
+
     const isAuthorManagerOrAdmin = currentUser.role === 'manager' || currentUser.role === 'admin';
     if (l.lawyerId && String(l.lawyerId) !== String(currentUser.id)) {
       sendNotification(l.lawyerId, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
@@ -1708,7 +1701,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const managersToNotify = getManagersToNotify(l.lawyerId, updatedNotes, currentUser.id);
     if (l.lawyerId) managersToNotify.delete(String(l.lawyerId));
     managersToNotify.forEach(mid => sendNotification(mid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter'));
-    
+
     getAdminIds().forEach(aid => {
       if (String(aid) !== String(currentUser.id))
         sendNotification(aid, 'Letter Update: ' + l.subject + '  -  "' + message + '"', 'file', l.id, 'letter');
@@ -1907,7 +1900,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated: DraftRequest = { ...draft, status: "Completed", hoursSpent: calculatedHours, documentUrl, documentName, completionNote, dateCompleted: new Date().toISOString() };
     setDraftRequests(prev => prev.map(d => d.id === id ? updated : d));
     instantSave('draft_requests', updated);
-    
+
     if (completionNote) {
       addCourtCaseProgress(draft.caseId, `Draft Completed (${draft.title}): ${completionNote}`);
     }

@@ -2,16 +2,18 @@ import React from "react";
 import { useAppContext } from "../context/AppContext";
 
 const UpdateBanner: React.FC = () => {
-  const { updateAvailable, dismissUpdateNotification } = useAppContext();
+  const { updateAvailable, dismissUpdateNotification, currentUser } = useAppContext();
 
   if (!updateAvailable) return null;
+
+  const showSidebar = currentUser && ["admin", "manager", "accountant"].includes(currentUser.role);
 
   const handleRefresh = () => {
     window.location.reload();
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 animate-slideDown">
+    <div className={`fixed top-0 left-0 right-0 z-[55] animate-slideDown ${showSidebar ? "md:left-[260px]" : ""}`}>
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 shadow-lg border-b-2 border-blue-800">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">

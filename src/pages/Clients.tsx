@@ -307,6 +307,8 @@ const Clients: React.FC = () => {
   const body = { fontFamily: "'DM Sans', sans-serif" } as React.CSSProperties;
   const serif = { fontFamily: "'Playfair Display', serif" } as React.CSSProperties;
 
+
+
   return (
     <div style={body} className="min-h-screen bg-[#F4F7F9] p-8">
 
@@ -541,7 +543,7 @@ const Clients: React.FC = () => {
                         {selectedClient.transactions.map((t: any) => (
                           <MatterRow key={t.id} title={t.fileName} badge="Transaction"
                             badgeColor="text-purple-600 bg-purple-50" sub={t.status}
-                            onOpen={() => navigate(`/performance?file=${encodeURIComponent(t.fileName)}&openDetails=true`)} />
+                            onOpen={() => navigate(`/lawyer/transactions/${t.id}`)} />
                         ))}
                         {selectedClient.titles?.map((t: any) => (
                           <MatterRow

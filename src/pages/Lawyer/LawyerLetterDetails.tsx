@@ -70,6 +70,7 @@ export default function LawyerLetterDetails() {
   const isOwner = letter && String(lid) === String(currentUser.id);
   const isManager = currentUser.role === "manager";
   const isAdmin = currentUser.role === "admin";
+  const isAccountant = currentUser.role === "accountant";
 
   const goBack = () => {
     const fromPath = (location.state as any)?.from;
@@ -80,7 +81,7 @@ export default function LawyerLetterDetails() {
     }
   };
 
-  if (!letter || (!isOwner && !isManager && !isAdmin)) {
+  if (!letter || (!isOwner && !isManager && !isAdmin && !isAccountant)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
         <div className="bg-white p-10 rounded-[40px] shadow-xl text-center max-w-sm">

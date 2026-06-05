@@ -25,7 +25,7 @@ export default function TransactionDetails() {
     uploadTransactionDocument,
     deleteTransactionDocument,
     landTitles,
-    users 
+    users
   } = useAppContext();
 
   const [note, setNote] = useState("");
@@ -49,8 +49,9 @@ export default function TransactionDetails() {
   const isOwner = transaction.lawyerId === currentUser.id;
   const isAdmin = currentUser.role === "admin";
   const isManager = currentUser.role === "manager";
+  const isAccountant = currentUser.role === "accountant";
 
-  if (!isOwner && !isAdmin && !isManager) {
+  if (!isOwner && !isAdmin && !isManager && !isAccountant) {
     return <div className="p-10 text-center text-red-500 font-bold">Access denied: You are not authorized to view this transaction.</div>;
   }
 
@@ -116,18 +117,18 @@ export default function TransactionDetails() {
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
-        
+
         {/* HEADER NAVIGATION */}
         <div className="flex justify-between items-center">
           <button onClick={goBack} className="group flex items-center gap-2 text-slate-500 font-bold hover:text-blue-600 transition">
             <span className="bg-white p-2 rounded-xl shadow-sm group-hover:shadow-md transition">←</span>
             Back to Dashboard
           </button>
-          
+
           <div className="flex gap-3 items-center">
             {/* EXPORT BUTTON: Only visible to Managers/Admins */}
             {(isManager || isAdmin) && (
-              <button 
+              <button
                 onClick={downloadProgressReport}
                 className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition shadow-sm flex items-center gap-2"
               >
@@ -139,7 +140,7 @@ export default function TransactionDetails() {
               Counsel: {assignedLawyer?.name || "Unassigned"}
             </span>
             <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${(transaction as any).status === 'Completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                {(transaction as any).status || 'Active'}
+              {(transaction as any).status || 'Active'}
             </span>
           </div>
         </div>
@@ -154,7 +155,7 @@ export default function TransactionDetails() {
           <div className="absolute top-0 right-0 p-8 opacity-10 text-6xl">📂</div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">{transaction.fileName}</h1>
           <p className="text-slate-400 font-bold uppercase text-xs tracking-widest mb-6">{transaction.type}</p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-50">
             {/* Amount hidden from Manager to maintain financial privacy */}
             {!isManager ? (
@@ -163,7 +164,7 @@ export default function TransactionDetails() {
                 <p className="text-xl font-black text-emerald-600">UGX {transaction.billedAmount?.toLocaleString() ?? "0"}</p>
               </div>
             ) : (
-               <div>
+              <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Financial Value</p>
                 <p className="text-sm font-bold text-slate-300 italic">Restricted Access</p>
               </div>
@@ -175,8 +176,8 @@ export default function TransactionDetails() {
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Last Client Feedback</p>
               <p className={`${transaction.lastClientFeedbackDate ? 'text-slate-700' : 'text-orange-500'} font-bold`}>
-                {transaction.lastClientFeedbackDate 
-                  ? new Date(transaction.lastClientFeedbackDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) 
+                {transaction.lastClientFeedbackDate
+                  ? new Date(transaction.lastClientFeedbackDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
                   : "No feedback recorded"}
               </p>
             </div>
@@ -184,7 +185,7 @@ export default function TransactionDetails() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
+
           {/* LEFT: PROGRESS TIMELINE */}
           <div className="lg:col-span-8 space-y-6">
             <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
@@ -204,7 +205,7 @@ export default function TransactionDetails() {
                     return (
                       <div key={n.id} className="relative pl-10 group">
                         <div className="absolute left-3 top-1.5 w-2.5 h-2.5 rounded-full bg-blue-500 border-4 border-white shadow-sm ring-1 ring-blue-100"></div>
-                        
+
                         {editingNoteId === n.id ? (
                           <div className="bg-slate-50 p-4 rounded-2xl border border-blue-100">
                             <textarea
@@ -280,7 +281,7 @@ export default function TransactionDetails() {
               <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                 <span>📎</span> Documents
               </h3>
-              
+
               <div className="space-y-3 mb-6">
                 {transaction.documents?.length ? (
                   transaction.documents.map((doc: any) => (
@@ -288,21 +289,21 @@ export default function TransactionDetails() {
                       <div className="flex items-center gap-3">
                         <span className="text-xl">📄</span>
                         <div className="flex flex-col overflow-hidden">
-                            <span className="text-xs font-bold text-slate-600 truncate max-w-[100px]">{doc.name}</span>
-                            <span className="text-[8px] text-slate-400 font-black uppercase">{doc.date}</span>
+                          <span className="text-xs font-bold text-slate-600 truncate max-w-[100px]">{doc.name}</span>
+                          <span className="text-[8px] text-slate-400 font-black uppercase">{doc.date}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <a 
-                          href={doc.url} 
-                          target="_blank" 
+                        <a
+                          href={doc.url}
+                          target="_blank"
                           rel="noreferrer"
                           className="text-blue-600 text-[10px] font-black hover:underline"
                         >
                           OPEN
                         </a>
                         {(isOwner || isManager) && (
-                          <button 
+                          <button
                             onClick={() => deleteTransactionDocument(transaction.id, doc.id)}
                             className="text-red-400 hover:text-red-600 transition p-1"
                             title="Delete Document"
@@ -333,7 +334,7 @@ export default function TransactionDetails() {
                   />
                   <div className={`border-2 border-dashed rounded-2xl p-4 text-center transition ${isUploading ? 'bg-slate-50 border-slate-200' : 'bg-blue-50 text-blue-600 border-blue-200 group-hover:bg-blue-100'}`}>
                     <p className="text-xs font-black uppercase tracking-widest">
-                        {isUploading ? "Uploading..." : "Upload PDF"}
+                      {isUploading ? "Uploading..." : "Upload PDF"}
                     </p>
                   </div>
                 </div>
@@ -345,7 +346,7 @@ export default function TransactionDetails() {
               <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                 <span>📜</span> Land Titles
               </h3>
-              
+
               <div className="space-y-3">
                 {linkedTitles.length ? (
                   linkedTitles.map((title: any) => (
@@ -357,7 +358,7 @@ export default function TransactionDetails() {
                           <span className="text-[8px] text-slate-400 font-black uppercase">{title.status}</span>
                         </div>
                       </div>
-                      <Link 
+                      <Link
                         to={`/land-titles/${title.id}`}
                         className="text-blue-600 text-[10px] font-black hover:underline"
                       >
@@ -370,9 +371,9 @@ export default function TransactionDetails() {
                     <p className="text-xs text-slate-400 font-bold italic">No titles linked yet.</p>
                   </div>
                 )}
-                
+
                 {(isAdmin || isManager) && (
-                  <Link 
+                  <Link
                     to="/land-titles"
                     className="block w-full text-center border-2 border-dashed border-slate-200 rounded-2xl p-3 text-[10px] font-black uppercase text-slate-400 hover:bg-slate-50 transition"
                   >
