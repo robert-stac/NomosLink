@@ -176,9 +176,17 @@ export default function LawyerDashboard() {
             </div>
             <div className="flex items-center gap-3">
               <NotificationBell currentUser={currentUser} notifications={notifications} markAsRead={() => markNotificationsAsRead(currentUser.id)} />
-              <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3.5 rounded-2xl transition text-xs font-semibold uppercase tracking-wider shadow-lg">
+              <button onClick={() => navigate("/requisitions")} className="bg-white text-[#0B1F3A] hover:bg-slate-100 px-5 py-3.5 rounded-2xl transition text-xs font-semibold uppercase tracking-wider shadow-lg hidden md:block">
+                📝 Requisitions
+              </button>
+              <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3.5 rounded-2xl transition text-xs font-semibold uppercase tracking-wider shadow-lg hidden md:block">
                 + Assign Clerk Task
               </button>
+              {/* Mobile actions menu button or icons could go here if space is tight, but we'll show simplified buttons on mobile */}
+              <div className="md:hidden flex gap-2">
+                 <button onClick={() => navigate("/requisitions")} className="bg-white text-[#0B1F3A] p-3.5 rounded-2xl shadow-lg">📝</button>
+                 <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 text-white p-3.5 rounded-2xl shadow-lg">➕</button>
+              </div>
               <button onClick={logout} className="bg-white/10 hover:bg-red-500/20 text-white px-4 py-3.5 rounded-2xl transition">
                 <span className="text-xs font-semibold uppercase tracking-wider">Logout</span>
               </button>

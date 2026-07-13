@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import CourtCalendar from "../CourtCalendar";
 
@@ -10,6 +11,7 @@ const body: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 const serif: React.CSSProperties = { fontFamily: "'Playfair Display', serif" };
 
 export default function ClerkDashboard() {
+  const navigate = useNavigate();
   const { currentUser, tasks, completeTask, appendTaskNote, logout } = useAppContext();
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [selectedTaskForUpdate, setSelectedTaskForUpdate] = useState<any>(null);
@@ -73,9 +75,17 @@ export default function ClerkDashboard() {
               {currentUser.name.split(' ')[0]}'s Assignments
             </h1>
           </div>
-          <button onClick={logout} className="bg-white/10 hover:bg-red-500/20 text-white px-5 py-3 rounded-2xl transition">
-            <span className="text-xs font-semibold uppercase tracking-wider group-hover:text-red-200">Logout</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/requisitions")} className="bg-white text-[#0B1F3A] hover:bg-slate-100 px-5 py-3 rounded-2xl transition shadow-sm hidden md:block">
+              <span className="text-xs font-semibold uppercase tracking-wider">📝 Requisitions</span>
+            </button>
+            <button onClick={() => navigate("/requisitions")} className="md:hidden bg-white text-[#0B1F3A] p-3 rounded-2xl shadow-sm">
+              📝
+            </button>
+            <button onClick={logout} className="bg-white/10 hover:bg-red-500/20 text-white px-5 py-3 rounded-2xl transition">
+              <span className="text-xs font-semibold uppercase tracking-wider group-hover:text-red-200">Logout</span>
+            </button>
+          </div>
         </div>
       </div>
 

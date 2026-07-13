@@ -242,6 +242,26 @@ export interface LandTitle {
   notes_history?: LandTitleNote[];
 }
 
+export interface Requisition {
+  id: string;
+  title: string;
+  amount: number;
+  status: "Pending" | "Approved" | "Paid" | "Rejected";
+  submittedById: string;
+  submittedByName: string;
+  dateSubmitted: string;
+  approvedById?: string;
+  approvedByName?: string;
+  dateApproved?: string;
+  paidById?: string;
+  paidByName?: string;
+  datePaid?: string;
+  rejectionReason?: string;
+  relatedFileId?: string;
+  relatedFileType?: string;
+  relatedFileName?: string;
+}
+
 /* =======================
     CONTEXT TYPE
 ======================= */
@@ -341,6 +361,11 @@ interface AppContextType {
 
   updateAvailable: boolean;
   dismissUpdateNotification: () => void;
+
+  requisitions: Requisition[];
+  addRequisition: (r: Requisition) => Promise<void>;
+  updateRequisition: (id: string, data: Partial<Requisition>) => Promise<void>;
+  deleteRequisition: (id: string) => Promise<void>;
 
   syncToCloud: () => Promise<void>;
 }
@@ -573,6 +598,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [commLogs, setCommLogs] = useState<CommunicationLog[]>(() => JSON.parse(localStorage.getItem("commLogs") || "[]"));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => JSON.parse(localStorage.getItem("notifications") || "[]"));
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
+  const [requisitions, setRequisitions] = useState<Requisition[]>(() => JSON.parse(localStorage.getItem("requisitions") || "[]"));
   const [pendingDeletes, setPendingDeletes] = useState<{ table: string; id: string }[]>(() => JSON.parse(localStorage.getItem("pendingDeletes") || "[]"));
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -1175,6 +1201,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         { name: 'users', task: supabase.from('users').upsert(users, { onConflict: 'id' }) },
         { name: 'tasks', task: supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }) },
         { name: 'draft_requests', task: supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }) },
+        { name: 'filing_requests', task: supabase.from('filing_requests').upsert(filingRequests, { onConflict: 'id' }) },
+        { name: 'requisitions', task: supabase.from('requisitions').upsert(requisitions, { onConflict: 'id' }) },
         {
           name: 'land_titles', task: supabase.from('land_titles').upsert(
             landTitles.map(({ notes_history, ...rest }) => rest),
@@ -1774,6 +1802,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /* =======================
+      REQUISITIONS
+  ======================= */
+  const addRequisition = async (req: Requisition) => {
+    setRequisitions(prev => [req, ...prev]);
+    if (navigator.onLine) {
+      const { error } = await supabase.from('requisitions').upsert(req, { onConflict: 'id' });
+      if (error) console.error("Failed to save requisition:", error.message);
+    }
+  };
+
+  const updateRequisition = async (id: string, data: Partial<Requisition>) => {
+    setRequisitions(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
+    if (navigator.onLine) {
+      const req = requisitions.find(r => r.id === id);
+      if (req) {
+        const { error } = await supabase.from('requisitions').upsert({ ...req, ...data }, { onConflict: 'id' });
+        if (error) console.error("Failed to update requisition:", error.message);
+      }
+    }
+  };
+
+  const deleteRequisition = async (id: string) => {
+    setRequisitions(prev => prev.filter(r => r.id !== id));
+    if (navigator.onLine) {
+      await supabase.from('requisitions').delete().eq('id', id);
+    }
+  };
+
+  /* =======================
       CLIENTS
   ======================= */
   // Helper: strip client to only DB columns before saving
@@ -2073,6 +2130,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notifications, sendNotification, markNotificationsAsRead, setNotifications,
 
         expenses, setExpenses,
+        requisitions, addRequisition, updateRequisition, deleteRequisition,
         firmName, setFirmName,
         updateAvailable,
         dismissUpdateNotification: () => setUpdateAvailable(false),

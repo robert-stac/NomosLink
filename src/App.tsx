@@ -13,6 +13,7 @@ import Clients from "./pages/Clients";
 import Invoices from "./pages/invoices";
 import Reports from "./pages/Reports";
 import Expenses from "./pages/Expenses";
+import Requisitions from "./pages/Requisitions";
 
 // Admin Only Pages
 import Transactions from "./pages/Transactions";
@@ -187,6 +188,22 @@ export default function App() {
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Expenses />
               </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/requisitions"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "accountant", "manager", "lawyer", "clerk"]}>
+              <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
+                <div style={{ display: "flex" }}>
+                  {["admin", "manager", "accountant"].includes(currentUser?.role || "") && <Sidebar />}
+                  <main style={{ flex: 1, padding: ["admin", "manager", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
+                    <Requisitions />
+                  </main>
+                </div>
+              </div>
             </ProtectedRoute>
           }
         />

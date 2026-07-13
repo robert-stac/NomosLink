@@ -27,6 +27,7 @@ export default function Sidebar() {
     { label: "Land Titles", path: "/land-titles", icon: "📜", show: isAdmin || isManager },
     { label: "Invoices", path: "/invoices", icon: "🧾", show: isStaff },
     { label: "Expenses", path: "/expenses", icon: "📉", show: isAccountant },
+    { label: "Requisitions", path: "/requisitions", icon: "📝", show: true },
     { label: "Reports", path: "/reports", icon: "📈", show: isStaff },
     { label: "Performance", path: "/performance", icon: "🏆", show: isAdmin },
     { label: "Archive", path: "/archive", icon: "📦", show: isAdmin || isManager },
