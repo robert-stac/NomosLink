@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 /* =======================
     TYPES
 ======================= */
-export type UserRole = "admin" | "manager" | "lawyer" | "clerk" | "accountant";
+export type UserRole = "admin" | "manager" | "managing_partner" | "lawyer" | "clerk" | "accountant";
 
 export interface User {
   id: string;
@@ -343,9 +343,10 @@ interface AppContextType {
   deleteFilingRequest: (id: string) => void;
 
   notifications: AppNotification[];
-  sendNotification: (recipientId: string, message: string, type: 'alert' | 'task' | 'file', relatedId?: string, relatedType?: 'case' | 'transaction' | 'letter' | 'task') => void;
+  sendNotification: (recipientId: string, message: string, type: 'alert' | 'task' | 'file', relatedId?: string, relatedType?: 'case' | 'transaction' | 'letter' | 'task' | 'requisition') => void;
   markNotificationsAsRead: (userId: string) => void;
   setNotifications: (notifications: AppNotification[]) => void;
+  requestPushPermission: () => Promise<void>;
 
   landTitles: LandTitle[];
   addLandTitle: (title: Omit<LandTitle, 'id' | 'created_at' | 'updated_at'>) => Promise<LandTitle | null>;
@@ -660,6 +661,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const requestPushPermission = async () => {
+    if (currentUser) {
+      await registerPushSubscription(currentUser.id);
+    }
+  };
+
   /* =======================
       PUSH SUBSCRIPTION
   ======================= */
@@ -860,6 +867,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabase.from('draft_requests').select('*'),
           supabase.from('filing_requests').select('*'),
           supabase.from('land_titles').select('*, notes_history:land_title_notes(*)'),
+          supabase.from('requisitions').select('*'),
         ]);
 
         results.forEach((res, i) => {
@@ -873,7 +881,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return cloud;
         };
 
-        const [courtData, txData, clientData, letterData, userData, taskData, invoiceData, expenseData, draftData, landData] = results.map(r => r.data);
+        const [
+          courtData, txData, clientData, letterData, userData, 
+          taskData, invoiceData, expenseData, draftData, filingData, 
+          landData, requisitionsData
+        ] = results.map(r => r.data);
 
         if (courtData) setCourtCases(prev => mergeIfChanged(prev, courtData));
         if (txData) setTransactions(prev => mergeIfChanged(prev, txData));
@@ -896,8 +908,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData.map(normalizeInvoice)));
         if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData));
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
-        if (results[10]?.data) setFilingRequests(prev => mergeIfChanged(prev, results[10].data));
+        if (filingData) setFilingRequests(prev => mergeIfChanged(prev, filingData));
         if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));
+        if (requisitionsData) setRequisitions(prev => mergeIfChanged(prev, requisitionsData));
 
         setInitialDataLoaded(true);
       } catch (err) {
@@ -1065,6 +1078,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (navigator.onLine) {
+      let pushUrl = '/';
+      if (relatedType === 'requisition') pushUrl = '/requisitions';
+      else if (relatedType === 'case') pushUrl = '/court-cases';
+      else if (relatedType === 'transaction') pushUrl = '/transactions';
+      else if (relatedType === 'letter') pushUrl = '/letters';
+      
       allRecipients.forEach(rid => {
         fetch(import.meta.env.VITE_SUPABASE_URL + '/functions/v1/send-push-notification', {
           method: 'POST',
@@ -1072,7 +1091,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + import.meta.env.VITE_SUPABASE_SERVICE_KEY,
           },
-          body: JSON.stringify({ userId: rid, title: 'NomoSLink', body: message, url: '/' }),
+          body: JSON.stringify({ userId: rid, title: 'NomoSLink', body: message, url: pushUrl }),
         }).catch(() => { });
       });
     }
@@ -2127,7 +2146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         landTitles, addLandTitle, updateLandTitle, deleteLandTitle, addLandTitleNote, uploadLandTitleScan,
 
-        notifications, sendNotification, markNotificationsAsRead, setNotifications,
+        notifications, sendNotification, markNotificationsAsRead, setNotifications, requestPushPermission,
 
         expenses, setExpenses,
         requisitions, addRequisition, updateRequisition, deleteRequisition,

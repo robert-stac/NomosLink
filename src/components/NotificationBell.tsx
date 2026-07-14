@@ -50,14 +50,24 @@ export const NotificationBell = ({ currentUser, notifications, markAsRead }: any
                                 {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
                             </p>
                         </div>
-                        {unreadCount > 0 && (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); markAsRead(); }}
-                                style={{ fontSize: '11px', color: '#3182CE', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}
-                            >
-                                Mark all read
-                            </button>
-                        )}
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            {('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); if (window.confirm("Enable push notifications?")) Notification.requestPermission().then(() => window.location.reload()); }}
+                                    style={{ fontSize: '11px', color: '#38A169', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                                >
+                                    Enable Push
+                                </button>
+                            )}
+                            {unreadCount > 0 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); markAsRead(); }}
+                                    style={{ fontSize: '11px', color: '#3182CE', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                                >
+                                    Mark all read
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                         {myNotifications.length > 0 ? (

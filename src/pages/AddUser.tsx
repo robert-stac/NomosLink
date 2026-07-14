@@ -183,6 +183,7 @@ export default function AddUser() {
             <option value="clerk">Clerk</option>
             <option value="accountant">Accountant</option>
             <option value="manager">Legal Manager</option>
+            <option value="managing_partner">Managing Partner</option>
             </select>
         </div>
 

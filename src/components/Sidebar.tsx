@@ -15,22 +15,23 @@ export default function Sidebar() {
   const isAdmin = role === "admin";
   const isAccountant = role === "accountant";
   const isManager = role === "manager";
-  const isStaff = isAdmin || isAccountant || isManager;
+  const isManagingPartner = role === "managing_partner";
+  const isStaff = isAdmin || isAccountant || isManager || isManagingPartner;
 
   const menuItems = [
     { label: "Dashboard", path: "/", icon: "📊", show: isStaff },
-    { label: "Transactions", path: "/transactions", icon: "💸", show: isAdmin || isManager },
-    { label: "Court Cases", path: "/court-cases", icon: "⚖️", show: isAdmin || isManager },
-    { label: "Court Calendar", path: "/court-calendar", icon: "📅", show: isAdmin || isManager || isAccountant },
-    { label: "Letters", path: "/letters", icon: "✉️", show: isAdmin || isManager },
+    { label: "Transactions", path: "/transactions", icon: "💸", show: isAdmin || isManager || isManagingPartner },
+    { label: "Court Cases", path: "/court-cases", icon: "⚖️", show: isAdmin || isManager || isManagingPartner },
+    { label: "Court Calendar", path: "/court-calendar", icon: "📅", show: isAdmin || isManager || isManagingPartner || isAccountant },
+    { label: "Letters", path: "/letters", icon: "✉️", show: isAdmin || isManager || isManagingPartner },
     { label: "Clients", path: "/clients", icon: "👥", show: isStaff },
-    { label: "Land Titles", path: "/land-titles", icon: "📜", show: isAdmin || isManager },
+    { label: "Land Titles", path: "/land-titles", icon: "📜", show: isAdmin || isManager || isManagingPartner },
     { label: "Invoices", path: "/invoices", icon: "🧾", show: isStaff },
     { label: "Expenses", path: "/expenses", icon: "📉", show: isAccountant },
     { label: "Requisitions", path: "/requisitions", icon: "📝", show: true },
     { label: "Reports", path: "/reports", icon: "📈", show: isStaff },
     { label: "Performance", path: "/performance", icon: "🏆", show: isAdmin },
-    { label: "Archive", path: "/archive", icon: "📦", show: isAdmin || isManager },
+    { label: "Archive", path: "/archive", icon: "📦", show: isAdmin || isManager || isManagingPartner },
     { label: "Add User/Staff", path: "/AddUser", icon: "➕", show: isAdmin },
     { label: "Lawyers List", path: "/lawyers", icon: "👨‍⚖️", show: isAdmin },
   ];

@@ -178,9 +178,9 @@ export default function Dashboard() {
   });
 
   return (
-    <div style={styles.container}>
+    <div className="p-4 md:p-8 bg-[#F8F9FA] min-h-screen font-sans">
       {/* HEADER */}
-      <header style={styles.header}>
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 style={styles.title}>Firm Analytics</h1>
           <p style={styles.subtitle}>
@@ -205,7 +205,7 @@ export default function Dashboard() {
             <h3 style={{ ...styles.sectionTitle, marginBottom: 0, color: 'white' }}>💼 Accounts Overview</h3>
             <span style={{ fontSize: 12, color: '#A0AEC0', backgroundColor: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: 4 }}>LIVE DATA</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: 15, borderRadius: 10 }}>
               <p style={{ fontSize: 11, color: '#A0AEC0', textTransform: 'uppercase', fontWeight: 'bold' }}>Total Revenue</p>
               <p style={{ fontSize: 20, color: '#48BB78', fontWeight: '900' }}>{formatCurrency(stats.totalPaid)}</p>
@@ -265,7 +265,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={styles.mainGrid}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         {/* LEFT COLUMN */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 25 }}>
           <section style={styles.section}>
@@ -408,7 +408,7 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <div style={{ display: 'flex', gap: 20 }}>
+          <div className="flex flex-col sm:flex-row gap-5">
             <div style={{ ...styles.section, flex: 1 }}>
               <h3 style={styles.sectionTitle}>Workload</h3>
               <div style={{ height: 150 }}><Pie data={pieDataPending} options={{ maintainAspectRatio: false }} /></div>

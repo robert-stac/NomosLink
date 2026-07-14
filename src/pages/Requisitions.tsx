@@ -6,7 +6,7 @@ import type { Requisition } from "../context/AppContext";
 export default function Requisitions() {
   const navigate = useNavigate();
   const { currentUser, users, requisitions, addRequisition, updateRequisition, sendNotification, courtCases, transactions, letters } = useAppContext();
-  
+
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -25,13 +25,15 @@ export default function Requisitions() {
   const isManager = currentUser?.role === "manager";
   const isAccountant = currentUser?.role === "accountant";
   const isAdmin = currentUser?.role === "admin";
-  const canApprove = isManager || isAdmin;
+  const isManagingPartner = currentUser?.role === "managing_partner";
+  
+  const canApprove = isManagingPartner || isAdmin;
   const canPay = isAccountant || isAdmin;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
-    
+
     const newReq: Requisition = {
       id: crypto.randomUUID(),
       title,
@@ -45,13 +47,13 @@ export default function Requisitions() {
       relatedFileType,
       relatedFileName
     };
-    
+
     await addRequisition(newReq);
-    
-    // Notify managers about the new requisition
-    users.filter(u => u.role === 'manager' || u.role === 'admin').forEach(m => {
+
+    // Notify managing partners and admins about the new requisition
+    users.filter(u => u.role === 'managing_partner' || u.role === 'admin').forEach(m => {
       if (m.id !== currentUser.id) {
-        sendNotification(m.id, `New Requisition from ${currentUser.name}: "${title}" for UGX ${amount}`, 'alert', newReq.id);
+        sendNotification(m.id, `New Requisition from ${currentUser.name}: "${title}" for UGX ${amount}`, 'alert', newReq.id, 'requisition');
       }
     });
 
@@ -70,14 +72,14 @@ export default function Requisitions() {
     if (!currentUser) return;
     const req = requisitions.find(r => r.id === id);
     if (!req) return;
-    
-    await updateRequisition(id, { 
-      status: "Approved", 
-      approvedById: currentUser.id, 
-      approvedByName: currentUser.name, 
-      dateApproved: new Date().toISOString() 
+
+    await updateRequisition(id, {
+      status: "Approved",
+      approvedById: currentUser.id,
+      approvedByName: currentUser.name,
+      dateApproved: new Date().toISOString()
     });
-    
+
     sendNotification(req.submittedById, `Your requisition "${req.title}" has been approved!`, 'alert', req.id);
 
     // Notify accountants
@@ -93,12 +95,12 @@ export default function Requisitions() {
 
     const reason = prompt("Enter rejection reason:");
     if (reason === null) return;
-    
-    await updateRequisition(id, { 
-      status: "Rejected", 
-      rejectionReason: reason 
+
+    await updateRequisition(id, {
+      status: "Rejected",
+      rejectionReason: reason
     });
-    
+
     sendNotification(req.submittedById, `Your requisition "${req.title}" was rejected. Reason: ${reason}`, 'alert', req.id);
   };
 
@@ -106,26 +108,40 @@ export default function Requisitions() {
     if (!currentUser) return;
     const req = requisitions.find(r => r.id === id);
     if (!req) return;
-    
-    await updateRequisition(id, { 
-      status: "Paid", 
-      paidById: currentUser.id, 
-      paidByName: currentUser.name, 
-      datePaid: new Date().toISOString() 
+
+    await updateRequisition(id, {
+      status: "Paid",
+      paidById: currentUser.id,
+      paidByName: currentUser.name,
+      datePaid: new Date().toISOString()
     });
-    
+
     sendNotification(req.submittedById, `Your requisition "${req.title}" has been paid by the accountant.`, 'alert', req.id);
   };
 
-  // Filter requisitions based on role
-  // Ordinary users only see theirs. Managers/Admins/Accountants see all.
   const visibleRequisitions = useMemo(() => {
     let list = requisitions || [];
-    if (!canApprove && !canPay) {
+    
+    // Ordinary users only see theirs.
+    if (!canApprove && !canPay && !isManager) {
       list = list.filter(r => r.submittedById === currentUser?.id);
+    } else if (isManager || isManagingPartner) {
+      // Managers and Managing Partner only see history for a week
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      
+      list = list.filter(r => {
+        // Always show pending requisitions so they never miss approval
+        if (r.status === "Pending") return true;
+        // Hide processed requisitions after 7 days
+        const actionDate = r.datePaid || r.dateApproved || r.dateSubmitted;
+        return new Date(actionDate) >= oneWeekAgo;
+      });
     }
+    // Accountants and Admins see everything forever.
+
     return list.sort((a, b) => new Date(b.dateSubmitted).getTime() - new Date(a.dateSubmitted).getTime());
-  }, [requisitions, canApprove, canPay, currentUser]);
+  }, [requisitions, canApprove, canPay, isManager, isManagingPartner, currentUser]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -138,7 +154,7 @@ export default function Requisitions() {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8 font-sans">
+    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8" style={{ fontFamily: '"Arial Narrow", Arial, sans-serif' }}>
       <div className="flex items-center gap-4 mb-2">
         <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-2 text-sm font-bold bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
           ← Back
@@ -239,7 +255,7 @@ export default function Requisitions() {
                   </div>
                 </div>
               </div>
-              
+
               {req.status === "Rejected" && req.rejectionReason && (
                 <div className="bg-red-50 p-2 rounded-lg border border-red-100">
                   <p className="text-[10px] text-red-600 font-medium">Reason: {req.rejectionReason}</p>

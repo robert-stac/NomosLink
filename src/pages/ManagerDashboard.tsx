@@ -4,7 +4,7 @@ import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, clients, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest } = useAppContext();
+  const { users, clients, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest, requisitions } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -12,6 +12,8 @@ export default function ManagerDashboard() {
   const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(searchParams.get("lawyerId") || null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyStagnant, setShowOnlyStagnant] = useState(false);
+
+  const pendingRequisitionsCount = (requisitions || []).filter((r: any) => r.status === 'Pending').length;
 
   useEffect(() => {
     const queryLawyerId = searchParams.get("lawyerId");
@@ -451,31 +453,51 @@ export default function ManagerDashboard() {
         </div>
       )}
 
+      {pendingRequisitionsCount > 0 && (currentUser?.role === 'managing_partner' || currentUser?.role === 'admin') && (
+        <div className="bg-orange-500 text-white p-4 rounded-xl shadow-lg mb-6 flex justify-between items-center animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">⚠️</span>
+            <div>
+              <h3 className="font-bold text-lg">Requisitions Pending Approval</h3>
+              <p className="text-sm font-medium opacity-90">
+                You have {pendingRequisitionsCount} new requisition{pendingRequisitionsCount > 1 ? 's' : ''} awaiting your review.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/requisitions')}
+            className="bg-white text-orange-600 px-5 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-orange-50 transition-colors whitespace-nowrap ml-4"
+          >
+            Review Now
+          </button>
+        </div>
+      )}
+
       <header className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Legal Oversight</h1>
             <p className="text-sm text-gray-500">Monitoring: {selectedLawyerName} {showOnlyStagnant && "(Showing Stagnant Only)"}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 w-full mt-4 md:mt-0">
             <button
               onClick={downloadGlobalReport}
-              className="bg-[#0B1F3A] hover:bg-blue-900 text-white px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-colors shadow-sm"
+              className="bg-[#0B1F3A] hover:bg-blue-900 text-white px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-colors shadow-sm w-full md:w-auto"
             >
               <span>📥</span> Export {showOnlyStagnant ? "Stagnant" : "Current"} Report
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
               <input
                 type="text"
                 placeholder="Search files or subjects..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border p-2 rounded-md w-64 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="border p-2 rounded-md w-full md:w-64 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1"
               />
               {(selectedLawyerId || showOnlyStagnant) && (
                 <button
                   onClick={() => { setSelectedLawyerId(null); setShowOnlyStagnant(false); }}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap"
                 >
                   Clear All Filters
                 </button>
@@ -483,7 +505,7 @@ export default function ManagerDashboard() {
 
               <button
                 onClick={() => setIsTaskModalOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-colors shadow-sm ml-2"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-colors shadow-sm whitespace-nowrap"
               >
                 <span>+</span> Assign Clerk Task
               </button>
@@ -586,7 +608,7 @@ export default function ManagerDashboard() {
           <h3 className="text-white font-black text-sm uppercase tracking-widest">💼 Financial Overview</h3>
           <span className="text-[10px] text-blue-300 bg-blue-900/40 px-3 py-1 rounded-full font-bold uppercase tracking-widest">Live Data</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-white/10 rounded-lg p-4">
             <p className="text-[10px] text-blue-300 uppercase font-black tracking-widest mb-1">Total Billed</p>
             <p className="text-lg font-black text-white">{formatCurrency(totalBilledAll)}</p>

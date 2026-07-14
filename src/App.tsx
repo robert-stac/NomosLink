@@ -77,7 +77,7 @@ function AdminLayout({ children, isOnline, updateAvailable }: { children: React.
   return (
     <div style={{ display: "flex", paddingTop: topPadding }}>
       <Sidebar />
-      <main style={{ flex: 1, padding: 20, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
+      <main style={{ flex: 1, padding: "20px 10px", backgroundColor: "#f4f6f8", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
         {children}
       </main>
     </div>
@@ -98,14 +98,14 @@ export default function App() {
   // Helper to determine the main landing page for Management roles
   const getDashboardComponent = () => {
     if (currentUser?.role === "accountant") return <AccountantDashboard />;
-    if (currentUser?.role === "manager") return <ManagerDashboard />;
+    if (currentUser?.role === "manager" || currentUser?.role === "managing_partner") return <ManagerDashboard />;
     return <Dashboard />;
   };
 
   // Helper to get the correct redirect path based on user role
   const getRedirectPath = () => {
     if (!currentUser) return "/login";
-    if (["admin", "accountant", "manager"].includes(currentUser.role)) return "/";
+    if (["admin", "accountant", "manager", "managing_partner"].includes(currentUser.role)) return "/";
     if (currentUser.role === "lawyer") return "/lawyer-dashboard";
     if (currentUser.role === "clerk") return "/clerk-dashboard";
     return "/login";
@@ -140,7 +140,7 @@ export default function App() {
         <Route
           path="/"
           element={
-            <ProtectedRoute allowedRoles={["admin", "accountant", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "accountant", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 {getDashboardComponent()}
               </AdminLayout>
@@ -151,7 +151,7 @@ export default function App() {
         <Route
           path="/clients"
           element={
-            <ProtectedRoute allowedRoles={["admin", "accountant", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "accountant", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Clients />
               </AdminLayout>
@@ -162,7 +162,7 @@ export default function App() {
         <Route
           path="/invoices"
           element={
-            <ProtectedRoute allowedRoles={["admin", "accountant", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "accountant", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Invoices />
               </AdminLayout>
@@ -173,7 +173,7 @@ export default function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute allowedRoles={["admin", "accountant", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "accountant", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Reports />
               </AdminLayout>
@@ -184,7 +184,7 @@ export default function App() {
         <Route
           path="/expenses"
           element={
-            <ProtectedRoute allowedRoles={["admin", "accountant"]}>
+            <ProtectedRoute allowedRoles={["admin", "accountant", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Expenses />
               </AdminLayout>
@@ -195,11 +195,11 @@ export default function App() {
         <Route
           path="/requisitions"
           element={
-            <ProtectedRoute allowedRoles={["admin", "accountant", "manager", "lawyer", "clerk"]}>
+            <ProtectedRoute allowedRoles={["admin", "accountant", "manager", "lawyer", "clerk", "managing_partner"]}>
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <div style={{ display: "flex" }}>
-                  {["admin", "manager", "accountant"].includes(currentUser?.role || "") && <Sidebar />}
-                  <main style={{ flex: 1, padding: ["admin", "manager", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
+                  {["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") && <Sidebar />}
+                  <main style={{ flex: 1, padding: ["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
                     <Requisitions />
                   </main>
                 </div>
@@ -212,7 +212,7 @@ export default function App() {
         <Route
           path="/transactions"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Transactions />
               </AdminLayout>
@@ -223,7 +223,7 @@ export default function App() {
         <Route
           path="/court-cases"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <CourtCases />
               </AdminLayout>
@@ -234,7 +234,7 @@ export default function App() {
         <Route
           path="/letters"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Letters />
               </AdminLayout>
@@ -245,7 +245,7 @@ export default function App() {
         <Route
           path="/land-titles"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <LandTitles />
               </AdminLayout>
@@ -256,7 +256,7 @@ export default function App() {
         <Route
           path="/land-titles/archives"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Archive />
               </AdminLayout>
@@ -267,7 +267,7 @@ export default function App() {
         <Route
           path="/land-titles/:id"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager", "lawyer"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "lawyer", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <LandTitleDetails />
               </AdminLayout>
@@ -279,7 +279,7 @@ export default function App() {
         <Route
           path="/lawyers"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Lawyers />
               </AdminLayout>
@@ -290,7 +290,7 @@ export default function App() {
         <Route
           path="/archive"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <Archive />
               </AdminLayout>
@@ -301,7 +301,7 @@ export default function App() {
         <Route
           path="/AddUser"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <AddUser />
               </AdminLayout>
@@ -313,7 +313,7 @@ export default function App() {
         <Route
           path="/lawyer-dashboard"
           element={
-            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant"]}>
+            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant", "managing_partner"]}>
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <LawyerDashboard />
               </div>
@@ -324,7 +324,7 @@ export default function App() {
         <Route
           path="/lawyer/transactions/:id"
           element={
-            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant"]}>
+            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant", "managing_partner"]}>
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <TransactionDetails />
               </div>
@@ -335,7 +335,7 @@ export default function App() {
         <Route
           path="/lawyer/cases/:id"
           element={
-            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant"]}>
+            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant", "managing_partner"]}>
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <CourtCaseDetails />
               </div>
@@ -346,7 +346,7 @@ export default function App() {
         <Route
           path="/lawyer/letters/:id"
           element={
-            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant"]}>
+            <ProtectedRoute allowedRoles={["lawyer", "clerk", "manager", "accountant", "managing_partner"]}>
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <LawyerLetterDetails />
               </div>
@@ -370,7 +370,7 @@ export default function App() {
         <Route
           path="/performance"
           element={
-            <ProtectedRoute allowedRoles={["admin", "lawyer", "manager"]}>
+            <ProtectedRoute allowedRoles={["admin", "lawyer", "manager", "managing_partner"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <LawyerPerformanceDashboard />
               </AdminLayout>
@@ -382,11 +382,11 @@ export default function App() {
         <Route
           path="/court-calendar"
           element={
-            <ProtectedRoute allowedRoles={["admin", "manager", "lawyer", "clerk", "accountant"]}>
+            <ProtectedRoute allowedRoles={["admin", "manager", "lawyer", "clerk", "accountant", "managing_partner"]}>
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <div style={{ display: "flex" }}>
-                  {["admin", "manager", "accountant"].includes(currentUser?.role || "") && <Sidebar />}
-                  <main style={{ flex: 1, padding: ["admin", "manager", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
+                  {["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") && <Sidebar />}
+                  <main style={{ flex: 1, padding: ["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
                     <CourtCalendar />
                   </main>
                 </div>
