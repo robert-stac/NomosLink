@@ -1195,7 +1195,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const courtCasesForDb = courtCases.map(courtCaseToDb);
     const transactionsForDb = transactions.map(transactionToDb);
     const lettersForDb = letters.map(letterToDb);
-    const expensesForDb = expenses.map(e => pickFields(e, expenseScalarFields));
+    const expenseToDb = (e: any) => {
+      const mapped = pickFields(e, expenseScalarFields);
+      const result: Record<string, any> = {};
+      Object.entries(mapped).forEach(([key, val]) => {
+        if (key === 'staffId') result['staff_id'] = val;
+        else if (key === 'staffName') result['staff_name'] = val;
+        else if (key === 'relatedFileId') result['related_file_id'] = val;
+        else if (key === 'relatedFileType') result['related_file_type'] = val;
+        else if (key === 'relatedFileName') result['related_file_name'] = val;
+        else result[key] = val;
+      });
+      return result;
+    };
+
+    const expensesForDb = expenses.map(expenseToDb);
     const invoicesForDb = invoices.map(inv => ({
       id: inv.id,
       filename: inv.fileName,

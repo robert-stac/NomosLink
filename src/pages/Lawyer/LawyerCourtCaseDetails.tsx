@@ -43,8 +43,9 @@ export default function LawyerCourtCaseDetails() {
   const isOwner = foundCase && String(foundCase.lawyerId) === String(currentUser.id);
   const isManager = currentUser.role === "manager";
   const isAdmin = currentUser.role === "admin";
+  const isManagingPartner = currentUser.role === "managing_partner";
 
-  if (!foundCase || (!isOwner && !isManager && !isAdmin)) {
+  if (!foundCase || (!isOwner && !isManager && !isAdmin && !isManagingPartner)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
         <div className="bg-white p-10 rounded-[40px] shadow-xl text-center max-w-sm">

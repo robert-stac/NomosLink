@@ -193,7 +193,21 @@ export default function Expenses() {
     }
 
     if (navigator.onLine) {
-      const { error } = await supabase.from('expenses').upsert([newExpense], { onConflict: 'id' });
+      const expenseForDb = {
+        id: newExpense.id,
+        type: newExpense.type,
+        date: newExpense.date,
+        category: newExpense.category,
+        description: newExpense.description,
+        purpose: newExpense.purpose,
+        amount: newExpense.amount,
+        staff_id: newExpense.staffId,
+        staff_name: newExpense.staffName,
+        related_file_id: newExpense.relatedFileId,
+        related_file_type: newExpense.relatedFileType,
+        related_file_name: newExpense.relatedFileName,
+      };
+      const { error } = await supabase.from('expenses').upsert([expenseForDb], { onConflict: 'id' });
       if (error) {
         console.error('Failed to save expense to Supabase:', error.message, error.details, error.hint);
         alert('Expense saved locally but failed to sync: ' + error.message);

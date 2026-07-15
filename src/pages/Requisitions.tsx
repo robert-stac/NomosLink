@@ -57,6 +57,18 @@ export default function Requisitions() {
       }
     });
 
+    // Telegram Fallback Notification (WhatsApp style)
+    const telegramBotToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+    const telegramChatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+    if (telegramBotToken && telegramChatId) {
+      const text = `🚨 *New Requisition Pending*\n\n*From:* ${currentUser.name}\n*File Name:* ${relatedFileName || 'N/A'}\n*Details:* ${notes || title}\n*Amount:* UGX ${Number(amount).toLocaleString()}\n\n_Please review in the NomosLink app._`;
+      fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: telegramChatId, text: text, parse_mode: 'Markdown' })
+      }).catch(e => console.error("Telegram error:", e));
+    }
+
     setShowModal(false);
     setTitle("");
     setAmount("");
@@ -86,6 +98,20 @@ export default function Requisitions() {
     users.filter(u => u.role === 'accountant').forEach(a => {
       sendNotification(a.id, `Requisition "${req.title}" approved and ready for payment.`, 'alert', req.id);
     });
+
+    // Telegram notification for accountants when managing partner approves
+    if (currentUser.role === 'managing_partner') {
+      const telegramBotToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+      const telegramChatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+      if (telegramBotToken && telegramChatId) {
+        const text = `✅ *Requisition Approved by Managing Partner*\n\n*From:* ${currentUser.name}\n*File Name:* ${req.relatedFileName || 'N/A'}\n*Details:* ${req.title}\n*Amount:* UGX ${req.amount.toLocaleString()}\n\n_Accountant, please process payment._`;
+        fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: 'Markdown' })
+        }).catch(e => console.error('Telegram error:', e));
+      }
+    }
   };
 
   const handleReject = async (id: string) => {

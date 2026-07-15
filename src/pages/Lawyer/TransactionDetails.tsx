@@ -49,9 +49,10 @@ export default function TransactionDetails() {
   const isOwner = transaction.lawyerId === currentUser.id;
   const isAdmin = currentUser.role === "admin";
   const isManager = currentUser.role === "manager";
+  const isManagingPartner = currentUser.role === "managing_partner";
   const isAccountant = currentUser.role === "accountant";
 
-  if (!isOwner && !isAdmin && !isManager && !isAccountant) {
+  if (!isOwner && !isAdmin && !isManager && !isManagingPartner && !isAccountant) {
     return <div className="p-10 text-center text-red-500 font-bold">Access denied: You are not authorized to view this transaction.</div>;
   }
 
@@ -243,8 +244,8 @@ export default function TransactionDetails() {
               </div>
             </div>
 
-            {/* ADD NOTE BOX - Available to Owner and Manager */}
-            {(isOwner || isManager) && (
+            {/* ADD NOTE BOX - Available to Owner, Manager, and Managing Partner */}
+            {(isOwner || isManager || isManagingPartner) && (
               <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
                 <h3 className="text-sm font-black text-slate-400 uppercase mb-4 tracking-widest">Add New Update</h3>
                 <textarea
@@ -302,7 +303,7 @@ export default function TransactionDetails() {
                         >
                           OPEN
                         </a>
-                        {(isOwner || isManager) && (
+                        {(isOwner || isManager || isManagingPartner) && (
                           <button
                             onClick={() => deleteTransactionDocument(transaction.id, doc.id)}
                             className="text-red-400 hover:text-red-600 transition p-1"
@@ -321,7 +322,7 @@ export default function TransactionDetails() {
                 )}
               </div>
 
-              {(isOwner || isManager) && (
+              {(isOwner || isManager || isManagingPartner) && (
                 <div className="relative group">
                   <input
                     type="file"
@@ -372,7 +373,7 @@ export default function TransactionDetails() {
                   </div>
                 )}
 
-                {(isAdmin || isManager) && (
+                {(isAdmin || isManager || isManagingPartner) && (
                   <Link
                     to="/land-titles"
                     className="block w-full text-center border-2 border-dashed border-slate-200 rounded-2xl p-3 text-[10px] font-black uppercase text-slate-400 hover:bg-slate-50 transition"

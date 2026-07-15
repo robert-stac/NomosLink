@@ -44,12 +44,13 @@ export default function CourtCaseDetails() {
 
   const isManager = currentUser.role === "manager";
   const isAdmin = currentUser.role === "admin";
+  const isManagingPartner = currentUser.role === "managing_partner";
   const isManagerOrAdmin = isManager || isAdmin;
   const isAccountant = currentUser.role === 'accountant';
 
   const courtCase = courtCases.find(
     (c) => String(c.id) === String(id) &&
-      (isManagerOrAdmin || isAccountant ||
+      (isManagerOrAdmin || isAccountant || isManagingPartner ||
         String(c.lawyerId) === String(currentUser.id) ||
         draftRequests.some(d => String(d.caseId) === String(c.id) && String(d.assignedToId) === String(currentUser.id)))
   );
@@ -68,7 +69,7 @@ export default function CourtCaseDetails() {
   }
 
   const isLeadCounsel = String(courtCase.lawyerId) === String(currentUser.id);
-  const canCreateDraft = isManagerOrAdmin || isLeadCounsel;
+  const canCreateDraft = isManagerOrAdmin || isLeadCounsel || isManagingPartner;
 
   // ── Adjournment / date editing state ──────────────────────────────────────
   const [courtDateInput, setCourtDateInput] = useState("");

@@ -4,7 +4,7 @@ import { useAppContext } from "../context/AppContext";
 
 interface Props {
   children: React.ReactNode;
-  allowedRoles: ("admin" | "manager" | "lawyer" | "clerk" | "accountant")[];
+  allowedRoles: ("admin" | "manager" | "lawyer" | "clerk" | "accountant" | "managing_partner")[];
   isInitialising?: boolean;
 }
 
@@ -34,7 +34,8 @@ export default function ProtectedRoute({ children, allowedRoles, isInitialising 
   }
 
   // 3. Check if the user's role is allowed for this specific route
-  const isAuthorized = allowedRoles.includes(currentUser.role);
+  const isManagingPartner = currentUser.role === "managing_partner";
+  const isAuthorized = isManagingPartner || allowedRoles.includes(currentUser.role);
 
   if (!isAuthorized) {
     if (!currentUser.role) {

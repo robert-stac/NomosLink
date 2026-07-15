@@ -42,9 +42,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
-    const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
-    const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "mailto:odoirbrt@gmail.com";
+    const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") || Deno.env.get("VITE_VAPID_PUBLIC_KEY");
+    const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || Deno.env.get("VITE_VAPID_PRIVATE_KEY");
+    const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || Deno.env.get("VITE_VAPID_SUBJECT") || "mailto:odoirbrt@gmail.com";
 
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return new Response(
