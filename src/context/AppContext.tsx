@@ -22,7 +22,7 @@ export interface AppNotification {
   date: string;
   read: boolean;
   relatedId?: string;
-  relatedType?: 'case' | 'transaction' | 'letter' | 'task';
+  relatedType?: 'case' | 'transaction' | 'letter' | 'task' | 'requisition';
 }
 
 export interface TaskProgressNote {
@@ -887,9 +887,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
           if (!cloud || !Array.isArray(cloud)) return prev || [];
-          // When the app boots online, the cloud should be authoritative.
-          // This avoids restoring stale local copies for items deleted directly in the database.
-          return cloud;
+          // Keep cloud as authoritative for existing rows, but preserve local-only items
+          // that may have been created while offline and have not yet reached Supabase.
+          const cloudById = new Map(cloud.map(item => [item.id, item]));
+          const localOnly = (prev || []).filter(item => !cloudById.has(item.id));
+          return [...cloud, ...localOnly];
         };
 
         const [
@@ -1047,7 +1049,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     message: string,
     type: 'alert' | 'task' | 'file' = 'alert',
     relatedId?: string,
-    relatedType?: 'case' | 'transaction' | 'letter' | 'task',
+    relatedType?: 'case' | 'transaction' | 'letter' | 'task' | 'requisition',
   ) => {
     const adminIds = getAdminIds();
     const allRecipients = Array.from(new Set([recipientId, ...adminIds]));
@@ -1170,10 +1172,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'status', 'archived', 'date', 'billed', 'paid',
       'progressNotes', 'documents',
       'lastClientFeedbackDate', 'scannedInvoiceUrl',
-    ];
-    const expenseScalarFields = [
-      'id', 'type', 'date', 'category', 'description', 'purpose', 'amount',
-      'staffId', 'staffName', 'relatedFileId', 'relatedFileType', 'relatedFileName'
     ];
 
     const pickFields = (obj: any, fields: string[]) => {
@@ -2126,9 +2124,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("landTitles", JSON.stringify(landTitles));
     localStorage.setItem("commLogs", JSON.stringify(commLogs));
     localStorage.setItem("expenses", JSON.stringify(expenses));
+    localStorage.setItem("requisitions", JSON.stringify(requisitions));
     localStorage.setItem("pendingDeletes", JSON.stringify(pendingDeletes));
     if (currentUser) localStorage.setItem("currentUser", JSON.stringify(currentUser));
-  }, [users, transactions, courtCases, letters, invoices, clients, tasks, draftRequests, filingRequests, landTitles, commLogs, expenses, pendingDeletes, currentUser]);
+  }, [users, transactions, courtCases, letters, invoices, clients, tasks, draftRequests, filingRequests, landTitles, commLogs, expenses, requisitions, pendingDeletes, currentUser]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
