@@ -7,6 +7,7 @@ export default function Transactions() {
     lawyers = [], 
     clients = [],
     addTransaction, 
+    addCourtCase,
     editTransaction, 
     deleteTransaction, 
     addTransactionProgress, 
@@ -136,6 +137,31 @@ export default function Transactions() {
     if (confirm("Move this transaction to the Firm Archives?")) {
       editTransaction(id, { archived: true });
     }
+  };
+
+  const handleMoveToCourtCase = (transaction: any) => {
+    if (!confirm("Move this transaction to Court Cases? This will create a new court case and archive the transaction.")) {
+      return;
+    }
+
+    addCourtCase({
+      id: Date.now().toString(),
+      fileName: transaction.fileName,
+      lawyerId: transaction.lawyerId,
+      clientId: transaction.clientId,
+      billed: Number(transaction.billedAmount) || 0,
+      paid: Number(transaction.paidAmount) || 0,
+      balance: (Number(transaction.billedAmount) || 0) - (Number(transaction.paidAmount) || 0),
+      status: "Pending",
+      details: transaction.type ? `Converted from transaction: ${transaction.type}` : undefined,
+      categories: transaction.type ? [transaction.type] : [],
+      progressNotes: transaction.progressNotes || [],
+      documents: transaction.documents || [],
+      archived: false,
+      lastClientFeedbackDate: transaction.lastClientFeedbackDate,
+    });
+
+    editTransaction(transaction.id, { archived: true });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -370,7 +396,7 @@ export default function Transactions() {
                     </button>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <div className="flex justify-center gap-4">
+                    <div className="flex justify-center gap-4 flex-wrap">
                       <button onClick={() => {
                         setEditingId(t.id);
                         setForm({
@@ -384,6 +410,7 @@ export default function Transactions() {
                         });
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }} className="text-blue-600 hover:text-blue-800 text-[10px] font-black uppercase">Edit</button>
+                      <button onClick={() => handleMoveToCourtCase(t)} className="text-amber-600 hover:text-amber-800 text-[10px] font-black uppercase">Move</button>
                       <button onClick={() => handleArchive(t.id)} className="text-slate-400 hover:text-slate-600 text-[10px] font-black uppercase">Archive</button>
                       <button onClick={() => { if(confirm("Permanently delete this transaction?")) deleteTransaction(t.id); }} className="text-red-300 hover:text-red-600 text-[10px] font-black uppercase">Delete</button>
                     </div>

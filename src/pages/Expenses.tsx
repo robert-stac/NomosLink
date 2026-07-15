@@ -15,7 +15,7 @@ import {
 ChartJS.register(Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement);
 
 export default function Expenses() {
-  const { expenses, setExpenses, users, courtCases, transactions, letters } = useAppContext();
+  const { expenses, setExpenses, users, courtCases, transactions, letters, currentUser } = useAppContext();
   const [activeTab, setActiveTab] = useState<"Ledger" | "Reports">("Ledger");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,22 +166,16 @@ export default function Expenses() {
 
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     const baseData: Record<string, any> = {
-      type: formData.type,
       date: formData.date,
-      category: formData.type === 'in' ? "Petty Cash Replenishment" : "Expense",
+      amount: Math.round(Number(formData.amount)),
       description: formData.purpose,
       purpose: formData.purpose,
-      amount: Math.round(Number(formData.amount)),
+      category: formData.type === 'in' ? "Petty Cash Replenishment" : "Expense",
+      addedById: currentUser?.id || "",
+      addedByName: currentUser?.name || "",
     };
-
-    if (formData.type === 'out') {
-      if (formData.staffId) baseData.staffId = formData.staffId;
-      if (formData.staffName) baseData.staffName = formData.staffName;
-      if (formData.relatedFileId) baseData.relatedFileId = formData.relatedFileId;
-      if (formData.relatedFileType) baseData.relatedFileType = formData.relatedFileType;
-      if (formData.relatedFileName) baseData.relatedFileName = formData.relatedFileName;
-    }
 
     let newExpense: Record<string, any>;
     if (editingId) {
@@ -193,24 +187,25 @@ export default function Expenses() {
     }
 
     if (navigator.onLine) {
-      const expenseForDb = {
+      // Use camelCase column names as per Supabase schema
+      const expenseForDb: Record<string, any> = {
         id: newExpense.id,
-        type: newExpense.type,
+        amount: newExpense.amount,
         date: newExpense.date,
-        category: newExpense.category,
         description: newExpense.description,
         purpose: newExpense.purpose,
-        amount: newExpense.amount,
-        staff_id: newExpense.staffId,
-        staff_name: newExpense.staffName,
-        related_file_id: newExpense.relatedFileId,
-        related_file_type: newExpense.relatedFileType,
-        related_file_name: newExpense.relatedFileName,
+        category: newExpense.category,
+        addedById: newExpense.addedById,
+        addedByName: newExpense.addedByName,
       };
-      const { error } = await supabase.from('expenses').upsert([expenseForDb], { onConflict: 'id' });
+      
+      console.log('[Expense Save] Payload:', expenseForDb);
+      const { error, data } = await supabase.from('expenses').upsert([expenseForDb], { onConflict: 'id' });
       if (error) {
-        console.error('Failed to save expense to Supabase:', error.message, error.details, error.hint);
-        alert('Expense saved locally but failed to sync: ' + error.message);
+        console.error('[Expense Save] Error:', error.message);
+        alert(`Expense save failed: ${error.message}`);
+      } else {
+        console.log('[Expense Save] Success:', data);
       }
     }
 

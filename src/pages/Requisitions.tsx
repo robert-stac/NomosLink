@@ -1,22 +1,33 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
+import { supabase } from "../lib/supabaseClient";
 import type { Requisition } from "../context/AppContext";
 
 export default function Requisitions() {
   const navigate = useNavigate();
   const { currentUser, users, requisitions, addRequisition, updateRequisition, sendNotification, courtCases, transactions, letters } = useAppContext();
+  const { deleteRequisition } = useAppContext();
 
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [category, setCategory] = useState("");
 
   const [isFileDropdownOpen, setIsFileDropdownOpen] = useState(false);
   const [fileSearch, setFileSearch] = useState("");
   const [relatedFileId, setRelatedFileId] = useState("");
   const [relatedFileType, setRelatedFileType] = useState<any>("");
   const [relatedFileName, setRelatedFileName] = useState("");
+  // Reporting filters
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterRequesterId, setFilterRequesterId] = useState("");
+  const [filterFileName, setFilterFileName] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [presets, setPresets] = useState<Array<any>>([]);
+  const [selectedPreset, setSelectedPreset] = useState("");
 
   const myCases = useMemo(() => courtCases.filter(c => !c.archived && c.lawyerId === currentUser?.id), [courtCases, currentUser]);
   const myTransactions = useMemo(() => transactions.filter(t => !t.archived && t.lawyerId === currentUser?.id), [transactions, currentUser]);
@@ -33,11 +44,13 @@ export default function Requisitions() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+    if (!category) { alert('Please select a category for the requisition.'); return; }
 
     const newReq: Requisition = {
       id: crypto.randomUUID(),
       title,
       amount: Number(amount),
+      category,
       status: "Pending",
       submittedById: currentUser.id,
       submittedByName: currentUser.name,
@@ -53,7 +66,7 @@ export default function Requisitions() {
     // Notify managing partners and admins about the new requisition
     users.filter(u => u.role === 'managing_partner' || u.role === 'admin').forEach(m => {
       if (m.id !== currentUser.id) {
-        sendNotification(m.id, `New Requisition from ${currentUser.name}: "${title}" for UGX ${amount}`, 'alert', newReq.id, 'requisition');
+        sendNotification(m.id, `New Requisition from ${currentUser.name}: "${title}" for UGX ${amount} (Category: ${category})`, 'alert', newReq.id, 'requisition');
       }
     });
 
@@ -61,7 +74,7 @@ export default function Requisitions() {
     const telegramBotToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
     const telegramChatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
     if (telegramBotToken && telegramChatId) {
-      const text = `🚨 *New Requisition Pending*\n\n*From:* ${currentUser.name}\n*File Name:* ${relatedFileName || 'N/A'}\n*Details:* ${notes || title}\n*Amount:* UGX ${Number(amount).toLocaleString()}\n\n_Please review in the NomosLink app._`;
+      const text = `🚨 *New Requisition Pending*\n\n*From:* ${currentUser.name}\n*File Name:* ${relatedFileName || 'N/A'}\n*Category:* ${category}\n*Details:* ${notes || title}\n*Amount:* UGX ${Number(amount).toLocaleString()}\n\n_Please review in the NomosLink app._`;
       fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -72,6 +85,7 @@ export default function Requisitions() {
     setShowModal(false);
     setTitle("");
     setAmount("");
+    setCategory("");
     setNotes("");
     setRelatedFileId("");
     setRelatedFileType("");
@@ -92,24 +106,50 @@ export default function Requisitions() {
       dateApproved: new Date().toISOString()
     });
 
-    sendNotification(req.submittedById, `Your requisition "${req.title}" has been approved!`, 'alert', req.id);
+    sendNotification(req.submittedById, `Your requisition "${req.title}" has been approved! (Category: ${req.category || 'N/A'})`, 'alert', req.id);
 
     // Notify accountants
     users.filter(u => u.role === 'accountant').forEach(a => {
-      sendNotification(a.id, `Requisition "${req.title}" approved and ready for payment.`, 'alert', req.id);
+      sendNotification(a.id, `Requisition "${req.title}" approved and ready for payment. (Category: ${req.category || 'N/A'})`, 'alert', req.id);
     });
 
-    // Telegram notification for accountants when managing partner approves
+    // Send individual Telegram notifications to accountants with Telegram IDs
     if (currentUser.role === 'managing_partner') {
       const telegramBotToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-      const telegramChatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
-      if (telegramBotToken && telegramChatId) {
-        const text = `✅ *Requisition Approved by Managing Partner*\n\n*From:* ${currentUser.name}\n*File Name:* ${req.relatedFileName || 'N/A'}\n*Details:* ${req.title}\n*Amount:* UGX ${req.amount.toLocaleString()}\n\n_Accountant, please process payment._`;
-        fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: 'Markdown' })
-        }).catch(e => console.error('Telegram error:', e));
+
+      if (telegramBotToken) {
+        try {
+          // Fetch latest accountant records from Supabase to pick up any new telegramId values
+          const { data: accountantsFromDb, error: usersError } = await supabase
+            .from('users')
+            .select('id, name, telegramid')
+            .eq('role', 'accountant')
+            .not('telegramid', 'is', null)
+            .neq('telegramid', '')
+            .order('name', { ascending: true });
+
+          if (usersError) console.error('Failed to fetch accountants for Telegram notifications:', usersError.message);
+
+          const accountantsWithTelegram = Array.isArray(accountantsFromDb) ? accountantsFromDb : [];
+
+          if (accountantsWithTelegram.length > 0) {
+            const text = `✅ *Requisition Approved by Managing Partner*\n\n*From:* ${currentUser.name}\n*File Name:* ${req.relatedFileName || 'N/A'}\n*Category:* ${req.category || 'N/A'}\n*Details:* ${req.notes || req.title}\n*Amount:* UGX ${req.amount.toLocaleString()}\n\n_Please process payment._`;
+
+            accountantsWithTelegram.forEach((accountant: any) => {
+              const chatId = accountant.telegramid || accountant.telegramId || accountant.telegram_id;
+              if (!chatId) return;
+              fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
+              }).catch(e => console.error('Telegram error:', e));
+            });
+          } else {
+            console.log('[Requisitions] No accountants with telegramId found to notify via Telegram.');
+          }
+        } catch (e) {
+          console.error('[Requisitions] Error sending Telegram notifications:', e);
+        }
       }
     }
   };
@@ -169,6 +209,103 @@ export default function Requisitions() {
     return list.sort((a, b) => new Date(b.dateSubmitted).getTime() - new Date(a.dateSubmitted).getTime());
   }, [requisitions, canApprove, canPay, isManager, isManagingPartner, currentUser]);
 
+  const filteredForReport = useMemo(() => {
+    return visibleRequisitions.filter(r => {
+      if (filterCategory && r.category !== filterCategory) return false;
+      if (filterRequesterId && r.submittedById !== filterRequesterId) return false;
+      if (filterFileName && !(r.relatedFileName || r.title || "").toLowerCase().includes(filterFileName.toLowerCase())) return false;
+      if (filterDateFrom && new Date(r.dateSubmitted) < new Date(filterDateFrom)) return false;
+      if (filterDateTo && new Date(r.dateSubmitted) > new Date(filterDateTo)) return false;
+      return true;
+    });
+  }, [visibleRequisitions, filterCategory, filterRequesterId, filterFileName, filterDateFrom, filterDateTo]);
+
+  // Presets persisted in localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('requisitionReportPresets');
+      if (raw) setPresets(JSON.parse(raw));
+    } catch (e) { console.error('Failed to load presets', e); }
+  }, []);
+
+  const savePreset = async () => {
+    const name = prompt('Preset name:');
+    if (!name) return;
+    const p = { name, filters: { filterCategory, filterRequesterId, filterFileName, filterDateFrom, filterDateTo } };
+    const next = [...presets.filter((x:any) => x.name !== name), p];
+    setPresets(next);
+    localStorage.setItem('requisitionReportPresets', JSON.stringify(next));
+    setSelectedPreset(name);
+  };
+
+  const applyPreset = (name: string) => {
+    const p = presets.find((x:any) => x.name === name);
+    if (!p) return;
+    const f = p.filters || {};
+    setFilterCategory(f.filterCategory || "");
+    setFilterRequesterId(f.filterRequesterId || "");
+    setFilterFileName(f.filterFileName || "");
+    setFilterDateFrom(f.filterDateFrom || "");
+    setFilterDateTo(f.filterDateTo || "");
+    setSelectedPreset(name);
+  };
+
+  const deletePreset = (name: string) => {
+    if (!confirm(`Delete preset "${name}"?`)) return;
+    const next = presets.filter((x:any) => x.name !== name);
+    setPresets(next);
+    localStorage.setItem('requisitionReportPresets', JSON.stringify(next));
+    if (selectedPreset === name) setSelectedPreset("");
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["Date","Title","Category","Related File","Requestor","Amount","Status","Notes","Approved By","Date Approved","Paid By","Date Paid"];
+    const rows = filteredForReport.map(r => [
+      new Date(r.dateSubmitted).toLocaleString(),
+      (r.title || "").replace(/\n/g, " "),
+      r.category || "",
+      r.relatedFileName || "",
+      r.submittedByName || "",
+      r.amount?.toString() || "",
+      r.status,
+      (r.notes || "").replace(/\n/g, " "),
+      r.approvedByName || "",
+      r.dateApproved ? new Date(r.dateApproved).toLocaleString() : "",
+      r.paidByName || "",
+      r.datePaid ? new Date(r.datePaid).toLocaleString() : ""
+    ]);
+
+    const csvContent = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `requisitions_report_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handlePrint = () => {
+    const htmlRows = filteredForReport.map(r => `
+      <tr>
+        <td>${new Date(r.dateSubmitted).toLocaleString()}</td>
+        <td>${(r.title||"")}</td>
+        <td>${r.category||""}</td>
+        <td>${r.relatedFileName||""}</td>
+        <td>${r.submittedByName||""}</td>
+        <td>${r.amount||""}</td>
+        <td>${r.status||""}</td>
+        <td>${(r.notes||"").replace(/\n/g, '<br/>')}</td>
+      </tr>
+    `).join('');
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<html><head><title>Requisitions Report</title><meta charset="utf-8"/><style>table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:8px}</style></head><body><h2>Requisitions Report</h2><table><thead><tr><th>Date</th><th>Title</th><th>Category</th><th>Related File</th><th>Requestor</th><th>Amount</th><th>Status</th><th>Notes</th></tr></thead><tbody>${htmlRows}</tbody></table></body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Pending": return "bg-yellow-100 text-yellow-700 border-yellow-200";
@@ -199,12 +336,43 @@ export default function Requisitions() {
       </header>
 
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center">
+          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="border p-2 rounded-xl text-sm">
+            <option value="">All categories</option>
+            <option>Commissioning fees</option>
+            <option>Transport expenses</option>
+            <option>Filing fees</option>
+            <option>Office supplies</option>
+            <option>Court Attendence fees</option>
+            <option>Facilitation</option>
+            <option>Stationery & Printing</option>
+            <option>Car Repair & Maintenance</option>
+            <option>Meals</option>
+            <option>Office repairs & Maintenance</option>
+            <option>Telephone & Internet Services</option>
+            <option>Cost of Service</option>
+            <option>Others</option>
+          </select>
+          <select value={filterRequesterId} onChange={e => setFilterRequesterId(e.target.value)} className="border p-2 rounded-xl text-sm">
+            <option value="">All requestors</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+          <input value={filterFileName} onChange={e => setFilterFileName(e.target.value)} placeholder="File name or title" className="border p-2 rounded-xl text-sm" />
+          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="border p-2 rounded-xl text-sm" />
+          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="border p-2 rounded-xl text-sm" />
+          <button onClick={() => { setFilterCategory(''); setFilterRequesterId(''); setFilterFileName(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="text-sm px-3 py-2 bg-gray-100 rounded-xl">Clear</button>
+          <div className="ml-auto flex gap-2">
+            <button onClick={handleExportCSV} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-2 rounded-xl text-sm">📥 Export CSV</button>
+            <button onClick={handlePrint} className="bg-slate-50 text-slate-700 hover:bg-slate-100 px-3 py-2 rounded-xl text-sm">🖨️ Print</button>
+          </div>
+        </div>
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
                 <th className="p-4">Date</th>
+                  <th className="p-4">Category</th>
                 <th className="p-4">Title</th>
                 <th className="p-4">Submitted By</th>
                 <th className="p-4 text-right">Amount (UGX)</th>
@@ -218,6 +386,7 @@ export default function Requisitions() {
                   <td className="p-4 text-slate-600 whitespace-nowrap">{new Date(req.dateSubmitted).toLocaleDateString()}</td>
                   <td className="p-4 text-slate-800 font-bold">
                     {req.title}
+                    {req.category && <p className="text-[11px] text-slate-500 mt-1">Category: {req.category}</p>}
                     {req.relatedFileName && (
                       <p className="text-xs text-blue-600 truncate mt-1">⚖️ {req.relatedFileName}</p>
                     )}
@@ -251,6 +420,9 @@ export default function Requisitions() {
                     {req.status === "Paid" && (
                       <span className="text-slate-400 italic text-xs">Completed</span>
                     )}
+                    {(req.submittedById === currentUser?.id || isAccountant) && (
+                      <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase ml-3">Delete</button>
+                    )}
                   </td>
                 </tr>
               )) : (
@@ -267,7 +439,8 @@ export default function Requisitions() {
               <div className="flex justify-between items-start gap-2">
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">{req.title}</h3>
-                  {req.relatedFileName && (
+                    {req.category && <p className="text-xs text-slate-500 mt-0.5">Category: {req.category}</p>}
+                    {req.relatedFileName && (
                     <p className="text-xs text-blue-600 truncate mt-0.5">⚖️ {req.relatedFileName}</p>
                   )}
                   <p className="text-xs text-slate-500 mt-1">{new Date(req.dateSubmitted).toLocaleDateString()} • {req.submittedByName}</p>
@@ -306,6 +479,9 @@ export default function Requisitions() {
                 )}
                 {req.status === "Paid" && (
                   <span className="text-slate-400 italic text-[11px]">Completed</span>
+                )}
+                {(req.submittedById === currentUser?.id || isAccountant) && (
+                  <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-[11px] uppercase bg-red-50 px-3 py-1.5 rounded-lg">Delete</button>
                 )}
               </div>
             </div>
@@ -411,9 +587,28 @@ export default function Requisitions() {
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Amount (UGX)</label>
-                <input required type="number" className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Category</label>
+                  <select required value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select category...</option>
+                    <option>Commissioning fees</option>
+                    <option>Transport expenses</option>
+                    <option>Filing fees</option>
+                    <option>Office supplies</option>
+                    <option>Court Attendence fees</option>
+                    <option>Facilitation</option>
+                    <option>Stationery & Printing</option>
+                    <option>Car Repair & Maintenance</option>
+                    <option>Meals</option>
+                    <option>Office repairs & Maintenance</option>
+                    <option>Telephone & Internet Services</option>
+                    <option>Cost of Service</option>
+                    <option>Others</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Amount (UGX)</label>
+                  <input required type="number" className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Additional Notes</label>

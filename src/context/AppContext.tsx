@@ -246,6 +246,7 @@ export interface Requisition {
   id: string;
   title: string;
   amount: number;
+  category?: string;
   status: "Pending" | "Approved" | "Paid" | "Rejected";
   submittedById: string;
   submittedByName: string;
@@ -800,12 +801,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: 'recipientId=eq.' + currentUser.id,
+        filter: 'recipient_id=eq.' + currentUser.id,
       }, (payload) => {
         setNotifications(prev => {
           if (prev.find(n => n.id === payload.new.id)) return prev;
           if (localNotifIds.current.has(payload.new.id)) return prev;
-          const newNotif = payload.new as AppNotification;
+          const raw = payload.new as any;
+          const newNotif: AppNotification = {
+            id: raw.id,
+            recipientId: raw.recipient_id ?? raw.recipientId,
+            type: raw.type,
+            message: raw.message,
+            date: raw.date,
+            read: raw.read,
+            relatedId: raw.related_id ?? raw.relatedId,
+            relatedType: raw.related_type ?? raw.relatedType,
+          };
           if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
             new Notification('NomoSLink', { body: newNotif.message, icon: '/icon.png' });
           }
@@ -1022,7 +1033,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     supabase
       .from('notifications')
       .select('*')
-      .eq('recipientId', currentUser.id)
+      .eq('recipient_id', currentUser.id)
       .order('date', { ascending: false })
       .limit(50)
       .then(({ data }) => { if (data) setNotifications(data); });
@@ -1074,7 +1085,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newNotifs.forEach(n => {
       localNotifIds.current.add(n.id);
       setTimeout(() => localNotifIds.current.delete(n.id), 10000);
-      supabase.from('notifications').upsert(n, { onConflict: 'id' }).then();
+      const dbRow = {
+        id: n.id,
+        recipient_id: n.recipientId,
+        message: n.message,
+        type: n.type,
+        date: n.date,
+        read: n.read,
+        related_id: n.relatedId,
+        related_type: n.relatedType,
+      };
+      supabase.from('notifications').upsert(dbRow, { onConflict: 'id' }).then();
     });
 
     if (navigator.onLine) {
@@ -1100,7 +1121,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const markNotificationsAsRead = async (userId: string) => {
     setNotifications(prev => prev.map(n => n.recipientId === userId ? { ...n, read: true } : n));
     if (navigator.onLine) {
-      await supabase.from('notifications').update({ read: true }).eq('recipientId', userId);
+      await supabase.from('notifications').update({ read: true }).eq('recipient_id', userId);
     }
   };
 
@@ -1196,17 +1217,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const transactionsForDb = transactions.map(transactionToDb);
     const lettersForDb = letters.map(letterToDb);
     const expenseToDb = (e: any) => {
-      const mapped = pickFields(e, expenseScalarFields);
-      const result: Record<string, any> = {};
-      Object.entries(mapped).forEach(([key, val]) => {
-        if (key === 'staffId') result['staff_id'] = val;
-        else if (key === 'staffName') result['staff_name'] = val;
-        else if (key === 'relatedFileId') result['related_file_id'] = val;
-        else if (key === 'relatedFileType') result['related_file_type'] = val;
-        else if (key === 'relatedFileName') result['related_file_name'] = val;
-        else result[key] = val;
-      });
-      return result;
+      return {
+        id: e.id,
+        amount: e.amount,
+        date: e.date,
+        description: e.description,
+        purpose: e.purpose,
+        category: e.category,
+        addedById: e.addedById,
+        addedByName: e.addedByName,
+      };
     };
 
     const expensesForDb = expenses.map(expenseToDb);

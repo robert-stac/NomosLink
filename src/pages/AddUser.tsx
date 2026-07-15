@@ -12,6 +12,7 @@ export default function AddUser() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"lawyer" | "clerk" | "accountant" | "manager">("lawyer");
+  const [telegramId, setTelegramId] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -70,15 +71,20 @@ export default function AddUser() {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       // 2. Create new user object
-      const newUser = {
+      const newUser: any = {
         id: crypto.randomUUID(),
         name,
         email,
         password: hashedPassword,
         role,
       };
+      
+      // 3. Add telegramid if provided (accounts use lowercase DB column)
+      if (telegramId.trim()) {
+        newUser.telegramid = telegramId.trim();
+      }
 
-      // 3. Save to Supabase
+      // 4. Save to Supabase
       const { data, error } = await supabase
         .from("users")
         .insert([newUser])
@@ -86,13 +92,14 @@ export default function AddUser() {
 
       if (error) throw error;
 
-      // 4. Add to local state using context
+      // 5. Add to local state using context
       addUser(newUser);
 
-      // 5. Clear form and show success
+      // 6. Clear form and show success
       setName("");
       setEmail("");
       setPassword("");
+      setTelegramId("");
       setRole("lawyer");
       setMessage(`✓ ${name} added successfully!`);
       setTimeout(() => setMessage(""), 3000);
@@ -185,6 +192,16 @@ export default function AddUser() {
             <option value="manager">Legal Manager</option>
             <option value="managing_partner">Managing Partner</option>
             </select>
+            
+            {role === "accountant" && (
+              <input
+              type="text"
+              className="w-full bg-slate-50 border-2 border-amber-200 p-4 rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-sm font-medium"
+              placeholder="Telegram Chat ID (for notifications)"
+              value={telegramId}
+              onChange={(e) => setTelegramId(e.target.value)}
+              />
+            )}
         </div>
 
         <button
