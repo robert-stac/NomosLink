@@ -29,9 +29,9 @@ export default function Requisitions() {
   const [presets, setPresets] = useState<Array<any>>([]);
   const [selectedPreset, setSelectedPreset] = useState("");
 
-  const myCases = useMemo(() => courtCases.filter(c => !c.archived && c.lawyerId === currentUser?.id), [courtCases, currentUser]);
-  const myTransactions = useMemo(() => transactions.filter(t => !t.archived && t.lawyerId === currentUser?.id), [transactions, currentUser]);
-  const myLetters = useMemo(() => letters.filter(l => !l.archived && l.lawyerId === currentUser?.id), [letters, currentUser]);
+  const availableCases = useMemo(() => courtCases.filter(c => !c.archived), [courtCases]);
+  const availableTransactions = useMemo(() => transactions.filter(t => !t.archived), [transactions]);
+  const availableLetters = useMemo(() => letters.filter(l => !l.archived), [letters]);
 
   const isManager = currentUser?.role === "manager";
   const isAccountant = currentUser?.role === "accountant";
@@ -509,7 +509,7 @@ export default function Requisitions() {
               </div>
 
               <div className="group relative z-40">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link Personal File (Optional)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link Related File (Optional)</label>
                 <div className="relative">
                   <div
                     onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
@@ -525,7 +525,7 @@ export default function Requisitions() {
                       <div className="p-3 border-b border-slate-100 bg-slate-50/50">
                         <div className="relative">
                           <input
-                            autoFocus type="text" placeholder="Search your files..."
+                            autoFocus type="text" placeholder="Search files..."
                             className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
                             value={fileSearch} onChange={e => setFileSearch(e.target.value)} onClick={e => e.stopPropagation()}
                           />
@@ -540,10 +540,10 @@ export default function Requisitions() {
                           ❌ No File Linked
                         </button>
 
-                        {myCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                        {availableCases.filter(c => (c.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
                           <div className="pt-2">
                             <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
-                            {myCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
+                            {availableCases.filter(c => (c.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
                               <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                 onClick={() => { setRelatedFileId(c.id); setRelatedFileType("case"); setRelatedFileName(c.fileName); setIsFileDropdownOpen(false); setFileSearch(""); }}
                               >
@@ -553,10 +553,10 @@ export default function Requisitions() {
                           </div>
                         )}
 
-                        {myTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                        {availableTransactions.filter(t => (t.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
                           <div className="pt-2">
                             <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
-                            {myTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
+                            {availableTransactions.filter(t => (t.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
                               <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                 onClick={() => { setRelatedFileId(t.id); setRelatedFileType("transaction"); setRelatedFileName(t.fileName); setIsFileDropdownOpen(false); setFileSearch(""); }}
                               >
@@ -566,10 +566,10 @@ export default function Requisitions() {
                           </div>
                         )}
 
-                        {myLetters.filter(l => l.subject.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                        {availableLetters.filter(l => (l.subject || "").toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
                           <div className="pt-2">
                             <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Letters</p>
-                            {myLetters.filter(l => l.subject.toLowerCase().includes(fileSearch.toLowerCase())).map(l => (
+                            {availableLetters.filter(l => (l.subject || "").toLowerCase().includes(fileSearch.toLowerCase())).map(l => (
                               <button type="button" key={`letter-${l.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${relatedFileId === l.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                 onClick={() => { setRelatedFileId(l.id); setRelatedFileType("letter"); setRelatedFileName(l.subject); setIsFileDropdownOpen(false); setFileSearch(""); }}
                               >
