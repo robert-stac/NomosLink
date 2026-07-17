@@ -57,7 +57,8 @@ export default function LawyerPerformanceDashboard() {
     const completedDrafts = myDrafts.filter(d => d.status === 'Completed');
     const pendingDrafts = myDrafts.filter(d => d.status === 'Pending');
     const totalDraftHours = completedDrafts.reduce((sum, d) => sum + (d.hoursSpent || 0), 0);
-    const myTasks = sid === "ALL" ? tasks : tasks.filter(t => String(t.assignedToId) === sid);
+    const activeTasks = tasks.filter(t => !t.deleted);
+    const myTasks = sid === "ALL" ? activeTasks : activeTasks.filter(t => String(t.assignedToId) === sid);
     const completedTasks = myTasks.filter(t => t.status === 'Completed');
     const pendingTasks = myTasks.filter(t => t.status === 'Pending');
 

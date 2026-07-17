@@ -15,7 +15,7 @@ export default function Archive() {
   // 1. Filtering Logic
   const archivedCases = courtCases.filter((c) => c.archived);
   const archivedTransactions = transactions?.filter((tr) => tr.archived && tr.type !== "Court Case") || [];
-  const archivedTasks = tasks.filter((t) => t.status === "Completed");
+  const archivedTasks = tasks.filter((t) => t.status === "Completed" && !t.deleted);
   const archivedLandTitles = landTitles.filter(t => t.status === 'Released' || t.status === 'Archived');
 
   // 2. Search Logic

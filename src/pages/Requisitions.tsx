@@ -37,7 +37,7 @@ export default function Requisitions() {
   const isAccountant = currentUser?.role === "accountant";
   const isAdmin = currentUser?.role === "admin";
   const isManagingPartner = currentUser?.role === "managing_partner";
-  
+
   const canApprove = isManagingPartner || isAdmin;
   const canPay = isAccountant || isAdmin;
 
@@ -187,7 +187,7 @@ export default function Requisitions() {
 
   const visibleRequisitions = useMemo(() => {
     let list = requisitions || [];
-    
+
     // Ordinary users only see theirs.
     if (!canApprove && !canPay && !isManager) {
       list = list.filter(r => r.submittedById === currentUser?.id);
@@ -195,7 +195,7 @@ export default function Requisitions() {
       // Managers and Managing Partner only see history for a week
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      
+
       list = list.filter(r => {
         // Always show pending requisitions so they never miss approval
         if (r.status === "Pending") return true;
@@ -232,14 +232,14 @@ export default function Requisitions() {
     const name = prompt('Preset name:');
     if (!name) return;
     const p = { name, filters: { filterCategory, filterRequesterId, filterFileName, filterDateFrom, filterDateTo } };
-    const next = [...presets.filter((x:any) => x.name !== name), p];
+    const next = [...presets.filter((x: any) => x.name !== name), p];
     setPresets(next);
     localStorage.setItem('requisitionReportPresets', JSON.stringify(next));
     setSelectedPreset(name);
   };
 
   const applyPreset = (name: string) => {
-    const p = presets.find((x:any) => x.name === name);
+    const p = presets.find((x: any) => x.name === name);
     if (!p) return;
     const f = p.filters || {};
     setFilterCategory(f.filterCategory || "");
@@ -252,14 +252,14 @@ export default function Requisitions() {
 
   const deletePreset = (name: string) => {
     if (!confirm(`Delete preset "${name}"?`)) return;
-    const next = presets.filter((x:any) => x.name !== name);
+    const next = presets.filter((x: any) => x.name !== name);
     setPresets(next);
     localStorage.setItem('requisitionReportPresets', JSON.stringify(next));
     if (selectedPreset === name) setSelectedPreset("");
   };
 
   const handleExportCSV = () => {
-    const headers = ["Date","Title","Category","Related File","Requestor","Amount","Status","Notes","Approved By","Date Approved","Paid By","Date Paid"];
+    const headers = ["Date", "Title", "Category", "Related File", "Requestor", "Amount", "Status", "Notes", "Approved By", "Date Approved", "Paid By", "Date Paid"];
     const rows = filteredForReport.map(r => [
       new Date(r.dateSubmitted).toLocaleString(),
       (r.title || "").replace(/\n/g, " "),
@@ -275,11 +275,11 @@ export default function Requisitions() {
       r.datePaid ? new Date(r.datePaid).toLocaleString() : ""
     ]);
 
-    const csvContent = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const csvContent = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `requisitions_report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `requisitions_report_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -289,13 +289,13 @@ export default function Requisitions() {
     const htmlRows = filteredForReport.map(r => `
       <tr>
         <td>${new Date(r.dateSubmitted).toLocaleString()}</td>
-        <td>${(r.title||"")}</td>
-        <td>${r.category||""}</td>
-        <td>${r.relatedFileName||""}</td>
-        <td>${r.submittedByName||""}</td>
-        <td>${r.amount||""}</td>
-        <td>${r.status||""}</td>
-        <td>${(r.notes||"").replace(/\n/g, '<br/>')}</td>
+        <td>${(r.title || "")}</td>
+        <td>${r.category || ""}</td>
+        <td>${r.relatedFileName || ""}</td>
+        <td>${r.submittedByName || ""}</td>
+        <td>${r.amount || ""}</td>
+        <td>${r.status || ""}</td>
+        <td>${(r.notes || "").replace(/\n/g, '<br/>')}</td>
       </tr>
     `).join('');
     const win = window.open('', '_blank');
@@ -372,7 +372,7 @@ export default function Requisitions() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
                 <th className="p-4">Date</th>
-                  <th className="p-4">Category</th>
+                <th className="p-4">Category</th>
                 <th className="p-4">Title</th>
                 <th className="p-4">Submitted By</th>
                 <th className="p-4 text-right">Amount (UGX)</th>
@@ -439,8 +439,8 @@ export default function Requisitions() {
               <div className="flex justify-between items-start gap-2">
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">{req.title}</h3>
-                    {req.category && <p className="text-xs text-slate-500 mt-0.5">Category: {req.category}</p>}
-                    {req.relatedFileName && (
+                  {req.category && <p className="text-xs text-slate-500 mt-0.5">Category: {req.category}</p>}
+                  {req.relatedFileName && (
                     <p className="text-xs text-blue-600 truncate mt-0.5">⚖️ {req.relatedFileName}</p>
                   )}
                   <p className="text-xs text-slate-500 mt-1">{new Date(req.dateSubmitted).toLocaleDateString()} • {req.submittedByName}</p>
@@ -503,8 +503,27 @@ export default function Requisitions() {
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Category</label>
+                <select required autoFocus value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select category...</option>
+                  <option>Commissioning fees</option>
+                  <option>Transport expenses</option>
+                  <option>Filing fees</option>
+                  <option>Office supplies</option>
+                  <option>Court Attendence fees</option>
+                  <option>Facilitation</option>
+                  <option>Stationery & Printing</option>
+                  <option>Car Repair & Maintenance</option>
+                  <option>Meals</option>
+                  <option>Office repairs & Maintenance</option>
+                  <option>Telephone & Internet Services</option>
+                  <option>Cost of Service</option>
+                  <option>Others</option>
+                </select>
+              </div>
+              <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Title / Purpose</label>
-                <input required autoFocus className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                <input required className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   value={title} onChange={e => setTitle(e.target.value)} placeholder="E.g. Transport to Court" />
               </div>
 
@@ -587,34 +606,11 @@ export default function Requisitions() {
               </div>
 
               <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Category</label>
-                  <select required value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Select category...</option>
-                    <option>Commissioning fees</option>
-                    <option>Transport expenses</option>
-                    <option>Filing fees</option>
-                    <option>Office supplies</option>
-                    <option>Court Attendence fees</option>
-                    <option>Facilitation</option>
-                    <option>Stationery & Printing</option>
-                    <option>Car Repair & Maintenance</option>
-                    <option>Meals</option>
-                    <option>Office repairs & Maintenance</option>
-                    <option>Telephone & Internet Services</option>
-                    <option>Cost of Service</option>
-                    <option>Others</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Amount (UGX)</label>
-                  <input required type="number" className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Amount (UGX)</label>
+                <input required type="number" className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
               </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Additional Notes</label>
-                <textarea className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
-                  value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any extra details..." />
-              </div>
+
               <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-colors shadow-md">
                 Submit Requisition
               </button>

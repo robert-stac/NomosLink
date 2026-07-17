@@ -60,7 +60,7 @@ export default function LawyerDashboard() {
   if (!currentUser) return null;
 
   const clerks = users.filter(u => u.role === "clerk");
-  const myTasks = tasks.filter(t => String(t.assignedById) === String(currentUser.id));
+  const myTasks = tasks.filter(t => String(t.assignedById) === String(currentUser.id) && !t.deleted);
   const draftsAssignedToMe = draftRequests.filter(d => String(d.assignedToId) === String(currentUser.id));
   const draftsRequestedByMe = draftRequests.filter(d => String(d.requestedById) === String(currentUser.id));
   const pendingIncomingCount = draftsAssignedToMe.filter(d => d.status === 'Pending').length;
