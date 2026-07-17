@@ -613,6 +613,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
 
+  // Persist all state changes to localStorage
+  useEffect(() => { localStorage.setItem("transactions", JSON.stringify(transactions)); }, [transactions]);
+  useEffect(() => { localStorage.setItem("courtCases", JSON.stringify(courtCases)); }, [courtCases]);
+  useEffect(() => { localStorage.setItem("letters", JSON.stringify(letters)); }, [letters]);
+  useEffect(() => { localStorage.setItem("invoices", JSON.stringify(invoices)); }, [invoices]);
+  useEffect(() => { localStorage.setItem("clients", JSON.stringify(clients)); }, [clients]);
+  useEffect(() => { localStorage.setItem("tasks", JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem("draftRequests", JSON.stringify(draftRequests)); }, [draftRequests]);
+  useEffect(() => { localStorage.setItem("filingRequests", JSON.stringify(filingRequests)); }, [filingRequests]);
+  useEffect(() => { localStorage.setItem("landTitles", JSON.stringify(landTitles)); }, [landTitles]);
+  useEffect(() => { localStorage.setItem("commLogs", JSON.stringify(commLogs)); }, [commLogs]);
+  useEffect(() => { localStorage.setItem("notifications", JSON.stringify(notifications)); }, [notifications]);
+  useEffect(() => { localStorage.setItem("expenses", JSON.stringify(expenses)); }, [expenses]);
+  useEffect(() => { localStorage.setItem("requisitions", JSON.stringify(requisitions)); }, [requisitions]);
+  useEffect(() => { localStorage.setItem("pendingDeletes", JSON.stringify(pendingDeletes)); }, [pendingDeletes]);
+
   // Online-recovery: when the browser comes back online, run ONE sync to push
   useEffect(() => {
     const handleOnline = () => {
