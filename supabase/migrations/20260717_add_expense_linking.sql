@@ -1,0 +1,8 @@
+-- Add expense linking columns to expenses table
+ALTER TABLE expenses
+ADD COLUMN IF NOT EXISTS type VARCHAR(10) DEFAULT 'out',
+ADD COLUMN IF NOT EXISTS staffId TEXT,
+ADD COLUMN IF NOT EXISTS staffName TEXT,
+ADD COLUMN IF NOT EXISTS relatedFileId TEXT,
+ADD COLUMN IF NOT EXISTS relatedFileType VARCHAR(50),
+ADD COLUMN IF NOT EXISTS relatedFileName TEXT;

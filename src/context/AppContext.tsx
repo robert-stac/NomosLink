@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { buildExpenseForDb } from "../utils/expenseUtils";
 
 /* =======================
     TYPES
@@ -1215,16 +1216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const transactionsForDb = transactions.map(transactionToDb);
     const lettersForDb = letters.map(letterToDb);
     const expenseToDb = (e: any) => {
-      return {
-        id: e.id,
-        amount: e.amount,
-        date: e.date,
-        description: e.description,
-        purpose: e.purpose,
-        category: e.category,
-        addedById: e.addedById,
-        addedByName: e.addedByName,
-      };
+      return buildExpenseForDb(e);
     };
 
     const expensesForDb = expenses.map(expenseToDb);

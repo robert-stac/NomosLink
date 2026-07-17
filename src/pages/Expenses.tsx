@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useAppContext } from "../context/AppContext";
 import { supabase } from "../lib/supabaseClient";
+import { buildExpenseForDb, buildExpenseRecord } from "../utils/expenseUtils";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -173,31 +174,29 @@ export default function Expenses() {
       description: formData.purpose,
       purpose: formData.purpose,
       category: formData.type === 'in' ? "Petty Cash Replenishment" : "Expense",
-      addedById: currentUser?.id || "",
-      addedByName: currentUser?.name || "",
     };
 
     let newExpense: Record<string, any>;
     if (editingId) {
-      newExpense = { id: editingId, ...baseData };
-      setExpenses(expenses.map((exp: any) => exp.id === editingId ? { ...exp, ...baseData } : exp));
+      newExpense = buildExpenseRecord({
+        id: editingId,
+        baseData,
+        formData,
+        currentUser,
+      });
+      setExpenses((prevExpenses: any[]) => prevExpenses.map((exp: any) => exp.id === editingId ? { ...exp, ...newExpense } : exp));
     } else {
-      newExpense = { id: crypto.randomUUID(), ...baseData };
-      setExpenses([...(expenses || []), newExpense]);
+      newExpense = buildExpenseRecord({
+        id: crypto.randomUUID(),
+        baseData,
+        formData,
+        currentUser,
+      });
+      setExpenses((prevExpenses: any[]) => [...(prevExpenses || []), newExpense]);
     }
 
     if (navigator.onLine) {
-      // Use camelCase column names as per Supabase schema
-      const expenseForDb: Record<string, any> = {
-        id: newExpense.id,
-        amount: newExpense.amount,
-        date: newExpense.date,
-        description: newExpense.description,
-        purpose: newExpense.purpose,
-        category: newExpense.category,
-        addedById: newExpense.addedById,
-        addedByName: newExpense.addedByName,
-      };
+      const expenseForDb = buildExpenseForDb(newExpense);
       
       console.log('[Expense Save] Payload:', expenseForDb);
       const { error, data } = await supabase.from('expenses').upsert([expenseForDb], { onConflict: 'id' });
