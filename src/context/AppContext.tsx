@@ -1317,7 +1317,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       TRANSACTIONS
   ======================= */
   const addTransaction = async (tx: Transaction) => {
-    const { id, archived, ...cleanData } = tx as any;
+    const { archived, ...cleanData } = tx as any;
     const { data, error } = await supabase.from('transactions').insert([cleanData]).select().single();
     if (error) { console.error("Supabase Error:", error.message); return; }
     if (data) setTransactions(prev => [...prev, data]);
