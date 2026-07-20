@@ -70,7 +70,11 @@ export default function Expenses() {
   const [isFileDropdownOpen, setIsFileDropdownOpen] = useState(false);
   const [fileSearch, setFileSearch] = useState("");
 
-  const staffList = users.filter(u => ["lawyer", "manager", "clerk", "admin", "accountant"].includes(u.role));
+  const staffList = [
+    ...users.filter(u => ["lawyer", "manager", "managing_partner", "clerk", "admin", "accountant"].includes(u.role)),
+    { id: "teddy", name: "Teddy", role: "staff", email: "", password: "" },
+    { id: "dan", name: "Dan", role: "staff", email: "", password: "" }
+  ];
 
   const activeCases = courtCases.filter(c => !c.archived);
   const activeTransactions = transactions.filter(t => !t.archived);
@@ -189,7 +193,7 @@ export default function Expenses() {
     if (reportData.categoryList.length === 0 && reportData.incomeCategoryList.length === 0) return alert("No P&L data to export");
     const dates = reportData.filteredForReport.map(e => e.date).filter(Boolean).sort();
     const period = dates.length > 0 ? `${new Date(dates[0]).toLocaleDateString()} - ${new Date(dates[dates.length - 1]).toLocaleDateString()}` : "N/A";
-    
+
     const rows = [
       ["Profit & Loss Report"],
       ["Period:", period],
@@ -421,7 +425,7 @@ export default function Expenses() {
                       <td className="p-4 text-slate-600 whitespace-nowrap">{exp.date}</td>
                       <td className="p-2">
                         {exp.type === 'in'
-                          ? <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider">In (+)</span>
+                          ? <span className="text-emerald-700 rounded text-[10px] font-black">In (+)</span>
                           : <span className="text-red-700 rounded text-[10px] font-black">Out (-)</span>
                         }
                       </td>
@@ -736,72 +740,76 @@ export default function Expenses() {
                 </div>
               )}
 
-              {formData.type === 'out' && (
-                <div className="group relative z-40">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link File (Optional)</label>
-                  <div className="relative">
-                    <div
-                      onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
-                      className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-4 ring-blue-500/10" : "border-slate-200"} p-3.5 pl-10 rounded-xl font-bold text-sm text-slate-800 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
-                    >
-                      <span className="truncate">{formData.relatedFileName || "-- General Expense --"}</span>
-                      <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
-                    </div>
+              <div className="group relative z-40">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link File (Optional)</label>
+                <div className="relative">
+                  <div
+                    onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
+                    className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-4 ring-blue-500/10" : "border-slate-200"} p-3.5 pl-10 rounded-xl font-bold text-sm text-slate-800 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
+                  >
+                    <span className="truncate">{formData.relatedFileName || "-- General Transaction --"}</span>
+                    <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
+                  </div>
 
-                    {isFileDropdownOpen && (
-                      <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-72">
-                        <div className="p-3 border-b border-slate-100 bg-slate-50/50">
-                          <div className="relative">
-                            <input
-                              autoFocus type="text" placeholder="Search files..."
-                              className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
-                              value={fileSearch} onChange={e => setFileSearch(e.target.value)} onClick={e => e.stopPropagation()}
-                            />
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-                          </div>
-                        </div>
-
-                        <div className="overflow-y-auto p-2 space-y-1" onClick={e => e.stopPropagation()}>
-                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${!formData.relatedFileId ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
-                            onClick={() => { setFormData({ ...formData, relatedFileId: "", relatedFileType: "", relatedFileName: "" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                          >
-                            ❌ No File Checked
-                          </button>
-
-                          {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
-                            <div className="pt-2">
-                              <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
-                              {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
-                                <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                                  onClick={() => { setFormData({ ...formData, relatedFileId: c.id, relatedFileType: "case", relatedFileName: c.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                                >
-                                  <span className="text-sm">⚖️</span> {c.fileName}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
-                            <div className="pt-2">
-                              <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
-                              {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
-                                <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                                  onClick={() => { setFormData({ ...formData, relatedFileId: t.id, relatedFileType: "transaction", relatedFileName: t.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                                >
-                                  <span className="text-sm">💼</span> {t.fileName}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
+                  {isFileDropdownOpen && (
+                    <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-72">
+                      <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+                        <div className="relative">
+                          <input
+                            autoFocus type="text" placeholder="Search files..."
+                            className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
+                            value={fileSearch} onChange={e => setFileSearch(e.target.value)} onClick={e => e.stopPropagation()}
+                          />
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
                         </div>
                       </div>
-                    )}
-                    {isFileDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsFileDropdownOpen(false)} />}
-                  </div>
+
+                      <div className="overflow-y-auto p-2 space-y-1" onClick={e => e.stopPropagation()}>
+                        <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${formData.relatedFileId === 'BCA' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                          onClick={() => { setFormData({ ...formData, relatedFileId: "BCA", relatedFileType: "general", relatedFileName: "BCA" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                        >
+                          🏦 BCA
+                        </button>
+
+                        <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${!formData.relatedFileId ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
+                          onClick={() => { setFormData({ ...formData, relatedFileId: "", relatedFileType: "", relatedFileName: "" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                        >
+                          ❌ No File Checked
+                        </button>
+
+                        {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                          <div className="pt-2">
+                            <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
+                            {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
+                              <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                onClick={() => { setFormData({ ...formData, relatedFileId: c.id, relatedFileType: "case", relatedFileName: c.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                              >
+                                <span className="text-sm">⚖️</span> {c.fileName}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                          <div className="pt-2">
+                            <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
+                            {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
+                              <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                onClick={() => { setFormData({ ...formData, relatedFileId: t.id, relatedFileType: "transaction", relatedFileName: t.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                              >
+                                <span className="text-sm">💼</span> {t.fileName}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                      </div>
+                    </div>
+                  )}
+                  {isFileDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsFileDropdownOpen(false)} />}
                 </div>
-              )}
+              </div>
 
               <div className="group relative">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Purpose / Details</label>
