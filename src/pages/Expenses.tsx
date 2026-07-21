@@ -437,15 +437,13 @@ export default function Expenses() {
                         )}
                       </td>
                       <td className="p-4 max-w-[200px]">
-                        {exp.type === 'out' ? (
-                          <div className="space-y-1">
-                            {exp.staffName && <p className="text-slate-800 font-bold text-xs">👤 {exp.staffName}</p>}
-                            {exp.relatedFileName && <p className="text-blue-600 text-xs truncate" title={exp.relatedFileName}>⚖️ {exp.relatedFileName}</p>}
-                            {!exp.staffName && !exp.relatedFileName && <span className="text-slate-300 italic text-xs">General</span>}
-                          </div>
-                        ) : (
-                          <span className="text-slate-300 italic text-xs">-</span>
-                        )}
+                        <div className="space-y-1">
+                          {exp.type === 'out' && exp.staffName && <p className="text-slate-800 font-bold text-xs">👤 {exp.staffName}</p>}
+                          {exp.relatedFileName
+                            ? <p className="text-blue-600 text-xs truncate" title={exp.relatedFileName}>⚖️ {exp.relatedFileName}</p>
+                            : <span className="text-slate-300 italic text-xs">{exp.type === 'out' && !exp.staffName ? 'General' : '—'}</span>
+                          }
+                        </div>
                       </td>
                       <td className="p-4 text-slate-700">{exp.purpose || exp.description}</td>
                       <td className={`p-4 text-right font-black whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-600' : 'text-red-500'}`}>

@@ -818,7 +818,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: 'recipient_id=eq.' + currentUser.id,
+        filter: 'recipientid=eq.' + currentUser.id,
       }, (payload) => {
         setNotifications(prev => {
           if (prev.find(n => n.id === payload.new.id)) return prev;
@@ -826,13 +826,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const raw = payload.new as any;
           const newNotif: AppNotification = {
             id: raw.id,
-            recipientId: raw.recipient_id ?? raw.recipientId,
+            recipientId: raw.recipientid ?? raw.recipient_id ?? raw.recipientId,
             type: raw.type,
             message: raw.message,
             date: raw.date,
             read: raw.read,
-            relatedId: raw.related_id ?? raw.relatedId,
-            relatedType: raw.related_type ?? raw.relatedType,
+            relatedId: raw.relatedid ?? raw.related_id ?? raw.relatedId,
+            relatedType: raw.relatedtype ?? raw.related_type ?? raw.relatedType,
           };
           if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
             new Notification('NomoSLink', { body: newNotif.message, icon: '/icon.png' });
@@ -865,9 +865,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           supabase.from('letters').select('*'),
         ]);
 
-        if (txRes.data) setTransactions(txRes.data);
-        if (ccRes.data) setCourtCases(ccRes.data);
-        if (ltRes.data) setLetters(ltRes.data);
+        const normalizeFile = (row: any) => ({
+          ...row,
+          lastClientFeedbackDate: row.last_client_feedback_date ?? row.lastClientFeedbackDate
+        });
+
+        // Merge fetched data with current local state so that in-flight local
+        // changes (e.g. a deadline just marked Done) are not overwritten by a
+        // stale response that arrived before Supabase confirmed the write.
+        const mergeWithLocal = <T extends { id: string }>(cloud: T[], setFn: React.Dispatch<React.SetStateAction<T[]>>) => {
+          setFn(prev => {
+            const localById = new Map(prev.map(item => [item.id, item]));
+            return cloud.map(cloudItem => {
+              const local = localById.get(cloudItem.id);
+              // If there's a local copy, keep the local version for any JSON
+              // blob fields (deadlines, progressNotes, documents) that may have
+              // been updated locally but not yet confirmed by Supabase.
+              if (!local) return cloudItem;
+              return {
+                ...cloudItem,
+                deadlines: (local as any).deadlines ?? (cloudItem as any).deadlines,
+                progressNotes: (local as any).progressNotes ?? (cloudItem as any).progressNotes,
+                documents: (local as any).documents ?? (cloudItem as any).documents,
+                lastClientFeedbackDate: (local as any).lastClientFeedbackDate ?? (cloudItem as any).lastClientFeedbackDate,
+              };
+            });
+          });
+        };
+
+        if (txRes.data) mergeWithLocal(txRes.data.map(normalizeFile), setTransactions);
+        if (ccRes.data) mergeWithLocal(ccRes.data.map(normalizeFile), setCourtCases);
+        if (ltRes.data) mergeWithLocal(ltRes.data.map(normalizeFile), setLetters);
       } catch (err) {
         console.error('[Poll] File data polling failed:', err);
       }
@@ -917,10 +945,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           landData, requisitionsData
         ] = results.map(r => r.data);
 
-        if (courtData) setCourtCases(prev => mergeIfChanged(prev, courtData));
-        if (txData) setTransactions(prev => mergeIfChanged(prev, txData));
+        const normalizeFile = (row: any) => ({
+          ...row,
+          lastClientFeedbackDate: row.last_client_feedback_date ?? row.lastClientFeedbackDate
+        });
+
+        if (courtData) setCourtCases(prev => mergeIfChanged(prev, courtData.map(normalizeFile)));
+        if (txData) setTransactions(prev => mergeIfChanged(prev, txData.map(normalizeFile)));
         if (clientData) setClients(prev => mergeIfChanged(prev, clientData));
-        if (letterData) setLetters(prev => mergeIfChanged(prev, letterData));
+        if (letterData) setLetters(prev => mergeIfChanged(prev, letterData.map(normalizeFile)));
         if (userData) setUsers(prev => mergeIfChanged(prev, userData));
         if (taskData) setTasks(prev => mergeIfChanged(prev, taskData).map(normalizeTask));
         const normalizeInvoice = (row: any): Invoice => ({
@@ -1052,7 +1085,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     supabase
       .from('notifications')
       .select('*')
-      .eq('recipient_id', currentUser.id)
+      .eq('recipientid', currentUser.id)
       .order('date', { ascending: false })
       .limit(50)
       .then(({ data }) => { if (data) setNotifications(data); });
@@ -1073,11 +1106,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = Date.now();
 
     const newNotifs: AppNotification[] = allRecipients.map(rid => ({
-      id: 'NOTIF-' + now + '-' + rid,
+      id: crypto.randomUUID(),
       recipientId: rid,
       message,
       type,
-      date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+      date: new Date().toISOString(),
       read: false,
       relatedId,
       relatedType,
@@ -1087,11 +1120,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => {
       const mine = newNotifs.filter(n => n.recipientId === myId);
       const fresh = mine.filter(newNotif =>
-        !prev.some(n =>
-          n.recipientId === newNotif.recipientId &&
-          n.message === message &&
-          (now - new Date(n.date).getTime() < 3000)
-        )
+        !prev.some(n => {
+          if (n.recipientId !== newNotif.recipientId || n.message !== message) return false;
+          const prevTime = new Date(n.date).getTime();
+          return !isNaN(prevTime) && (now - prevTime < 3000);
+        })
       );
       if (fresh.length === 0) return prev;
       fresh.forEach(n => {
@@ -1106,13 +1139,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTimeout(() => localNotifIds.current.delete(n.id), 10000);
       const dbRow = {
         id: n.id,
-        recipient_id: n.recipientId,
+        recipientid: n.recipientId,
         message: n.message,
         type: n.type,
         date: n.date,
         read: n.read,
-        related_id: n.relatedId,
-        related_type: n.relatedType,
+        relatedid: n.relatedId,
+        relatedtype: n.relatedType,
       };
       supabase.from('notifications').upsert(dbRow, { onConflict: 'id' }).then();
     });
@@ -1140,7 +1173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const markNotificationsAsRead = async (userId: string) => {
     setNotifications(prev => prev.map(n => n.recipientId === userId ? { ...n, read: true } : n));
     if (navigator.onLine) {
-      await supabase.from('notifications').update({ read: true }).eq('recipient_id', userId);
+      await supabase.from('notifications').update({ read: true }).eq('recipientid', userId);
     }
   };
 
@@ -1379,7 +1412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const recordClientFeedback = (_note: string, clientId?: string) => {
+  const recordClientFeedback = (note: string, clientId?: string) => {
     if (!currentUser || !clientId) return;
     const now = new Date().toLocaleString('en-GB', {
       day: 'numeric',
@@ -1393,7 +1426,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newLog: CommunicationLog = {
       id: crypto.randomUUID(),
       clientId,
-      note: `Client was updated`,
+      note: `Update: ${note}`,
       authorName: currentUser.name,
       date: now
     };
@@ -1429,7 +1462,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (logAsFeedback) recordClientFeedback(message, t.clientId);
 
     const updatePayload: any = { progressNotes: updatedNotes };
-    if (logAsFeedback) updatePayload.last_client_feedback_date = now;
+    if (logAsFeedback) {
+      updatePayload.last_client_feedback_date = now;
+      updatePayload.lastClientFeedbackDate = now;
+    }
     supabase.from('transactions').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save transaction progress note:', error); });
 
@@ -1589,7 +1625,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (logAsFeedback) recordClientFeedback(message, c.clientId);
 
     const updatePayload: any = { progressNotes: updatedNotes };
-    if (logAsFeedback) updatePayload.last_client_feedback_date = now;
+    if (logAsFeedback) {
+      updatePayload.last_client_feedback_date = now;
+      updatePayload.lastClientFeedbackDate = now;
+    }
     supabase.from('court_cases').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save court case progress note:', error); });
 
@@ -1770,7 +1809,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (logAsFeedback) recordClientFeedback(message, l.clientId);
 
     const updatePayload: any = { progressNotes: updatedNotes };
-    if (logAsFeedback) updatePayload.last_client_feedback_date = now;
+    if (logAsFeedback) {
+      updatePayload.last_client_feedback_date = now;
+      updatePayload.lastClientFeedbackDate = now;
+    }
     supabase.from('letters').update(updatePayload).eq('id', id)
       .then(({ error }) => { if (error) console.error('Failed to save letter progress note:', error); });
 

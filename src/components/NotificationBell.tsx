@@ -84,7 +84,9 @@ export const NotificationBell = ({ currentUser, notifications, markAsRead }: any
                                             <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#2D3748', fontWeight: n.read ? 'normal' : 'bold', lineHeight: 1.4 }}>
                                                 {n.message}
                                             </p>
-                                            <p style={{ margin: 0, fontSize: '10px', color: '#A0AEC0' }}>{n.date}</p>
+                                            <p style={{ margin: 0, fontSize: '10px', color: '#A0AEC0' }}>
+                                                {n.date && n.date.includes('T') ? new Date(n.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : n.date}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
