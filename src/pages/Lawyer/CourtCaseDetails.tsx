@@ -193,9 +193,9 @@ export default function CourtCaseDetails() {
       const { supabase } = await import("../../lib/supabaseClient");
       const file = completeForm.documentFile;
       const filePath = `draft-docs/${completingDraftId}/${Date.now()}_${file.name}`;
-      const { error } = await supabase.storage.from('documents').upload(filePath, file);
+      const { error } = await supabase.storage.from('transactions').upload(filePath, file);
       if (!error) {
-        documentUrl = supabase.storage.from('documents').getPublicUrl(filePath).data.publicUrl;
+        documentUrl = supabase.storage.from('transactions').getPublicUrl(filePath).data.publicUrl;
         documentName = file.name;
       }
     }

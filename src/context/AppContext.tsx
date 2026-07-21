@@ -1672,9 +1672,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uploadCourtCaseDocument = async (caseId: string, file: File) => {
     try {
       const filePath = 'court-docs/' + caseId + '/' + Date.now() + '_' + file.name;
-      const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('transactions').upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
+      const { data: { publicUrl } } = supabase.storage.from('transactions').getPublicUrl(filePath);
       const newDoc: AppDocument = { id: crypto.randomUUID(), name: file.name, url: publicUrl, date: new Date().toLocaleDateString() };
       setCourtCases(prev => prev.map(c => {
         if (c.id !== caseId) return c;
@@ -2130,9 +2130,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uploadInvoiceScan = async (id: string, file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
     const filePath = 'scanned-invoices/scan_' + id + '_' + Date.now() + '.' + fileExt;
-    const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+    const { error: uploadError } = await supabase.storage.from('transactions').upload(filePath, file);
     if (uploadError) { console.error("Upload Error:", uploadError); throw uploadError; }
-    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
+    const { data: { publicUrl } } = supabase.storage.from('transactions').getPublicUrl(filePath);
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, scannedInvoiceUrl: publicUrl } : inv));
     const invoice = invoices.find(i => i.id === id);
     if (invoice?.relatedFile) {
@@ -2150,9 +2150,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uploadLandTitleScan = async (id: string, file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
     const filePath = 'land-title-scans/title_scan_' + id + '_' + Date.now() + '.' + fileExt;
-    const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+    const { error: uploadError } = await supabase.storage.from('transactions').upload(filePath, file);
     if (uploadError) { console.error("Upload Error:", uploadError); throw uploadError; }
-    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
+    const { data: { publicUrl } } = supabase.storage.from('transactions').getPublicUrl(filePath);
     setLandTitles(prev => prev.map(t => t.id === id ? { ...t, scanned_copy_url: publicUrl, scanned_copy_name: file.name } : t));
     await supabase.from('land_titles').update({ scanned_copy_url: publicUrl, scanned_copy_name: file.name }).eq('id', id);
     return publicUrl;
