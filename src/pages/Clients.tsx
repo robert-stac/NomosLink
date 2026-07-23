@@ -617,8 +617,12 @@ const Clients: React.FC = () => {
                     const expenseTotal = selectedClient.expenses?.reduce((sum: number, exp: any) => {
                       return exp.type === 'out' ? sum + (exp.amount || 0) : sum;
                     }, 0) || 0;
+                    
+                    const incomeTotal = selectedClient.expenses?.reduce((sum: number, exp: any) => {
+                      return exp.type === 'in' ? sum + (exp.amount || 0) : sum;
+                    }, 0) || 0;
 
-                    const moneyReceived = allFilesForBalance.reduce((sum, f) => sum + (f.paid || 0), 0);
+                    const moneyReceived = allFilesForBalance.reduce((sum, f) => sum + (f.paid || 0), 0) + incomeTotal;
                     const moneySpent = expenseTotal;
                     const accountBalance = moneyReceived - moneySpent;
 
@@ -628,7 +632,7 @@ const Clients: React.FC = () => {
                         <div className="grid grid-cols-3 gap-6">
                           <div>
                             <p className="text-xs text-slate-400 mb-2">Money Received</p>
-                            <p className="text-2xl font-bold">{fmt(moneyReceived)}</p>
+                            <p className="text-2xl font-bold text-emerald-400">{fmt(moneyReceived)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-slate-400 mb-2">Money Spent</p>
@@ -661,13 +665,15 @@ const Clients: React.FC = () => {
                     ];
 
                     // Build expense map by file name
-                    const expensesByFile = new Map<string, number>();
+                    const outExpensesByFile = new Map<string, number>();
+                    const inExpensesByFile = new Map<string, number>();
+                    
                     selectedClient.expenses?.forEach((exp: any) => {
                       if (exp.relatedFileName) {
-                        const current = expensesByFile.get(exp.relatedFileName) || 0;
-                        // Only add "OUT" expenses to the spent amount
                         if (exp.type === 'out') {
-                          expensesByFile.set(exp.relatedFileName, current + (exp.amount || 0));
+                          outExpensesByFile.set(exp.relatedFileName, (outExpensesByFile.get(exp.relatedFileName) || 0) + (exp.amount || 0));
+                        } else if (exp.type === 'in') {
+                          inExpensesByFile.set(exp.relatedFileName, (inExpensesByFile.get(exp.relatedFileName) || 0) + (exp.amount || 0));
                         }
                       }
                     });
@@ -679,17 +685,25 @@ const Clients: React.FC = () => {
                         const existing = fileMap.get(file.name);
                         existing.billed += file.billed;
                         existing.paid += file.paid;
+                        existing.spent = existing.spent || 0;
                         existing.balance = existing.billed - existing.paid;
                       } else {
-                        fileMap.set(file.name, { ...file, balance: (file.billed || 0) - (file.paid || 0) });
+                        fileMap.set(file.name, { ...file, spent: 0, balance: (file.billed || 0) - (file.paid || 0) });
                       }
                     });
 
                     // Add expenses to the paid/spent amount
-                    expensesByFile.forEach((expenseAmount, fileName) => {
+                    outExpensesByFile.forEach((expenseAmount, fileName) => {
                       if (fileMap.has(fileName)) {
                         const file = fileMap.get(fileName);
-                        file.paid += expenseAmount;
+                        file.spent = (file.spent || 0) + expenseAmount;
+                      }
+                    });
+                    
+                    inExpensesByFile.forEach((incomeAmount, fileName) => {
+                      if (fileMap.has(fileName)) {
+                        const file = fileMap.get(fileName);
+                        file.paid += incomeAmount;
                         file.balance = file.billed - file.paid;
                       }
                     });
@@ -697,6 +711,7 @@ const Clients: React.FC = () => {
                     const uniqueFiles = Array.from(fileMap.values());
                     const totalBilled = uniqueFiles.reduce((sum, f) => sum + (f.billed || 0), 0);
                     const totalPaid = uniqueFiles.reduce((sum, f) => sum + (f.paid || 0), 0);
+                    const totalSpent = uniqueFiles.reduce((sum, f) => sum + (f.spent || 0), 0);
                     const totalBalance = totalBilled - totalPaid;
 
                     return (
@@ -705,14 +720,18 @@ const Clients: React.FC = () => {
                         {uniqueFiles.length > 1 && (
                           <div className="mb-6 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-4">
                             <h5 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest mb-3">Total Across All Files</h5>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-4 gap-4">
                               <div>
                                 <p className="text-xs text-slate-500 mb-1">Total Billed</p>
                                 <p className="text-lg font-bold text-[#0B1F3A]">{fmt(totalBilled)}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-slate-500 mb-1">Total Received</p>
-                                <p className="text-lg font-bold text-orange-600">{fmt(totalPaid)}</p>
+                                <p className="text-lg font-bold text-emerald-600">{fmt(totalPaid)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Total Spent</p>
+                                <p className="text-lg font-bold text-orange-600">{fmt(totalSpent)}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-slate-500 mb-1">Total Owed</p>
@@ -733,14 +752,18 @@ const Clients: React.FC = () => {
                             {uniqueFiles.map((file: any) => (
                               <div key={file.name} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
                                 <p className="text-sm font-semibold text-[#0B1F3A] mb-3 truncate">{file.name}</p>
-                                <div className="grid grid-cols-3 gap-4">
+                                <div className="grid grid-cols-4 gap-4">
                                   <div>
                                     <p className="text-xs text-slate-400 mb-1">Billed</p>
                                     <p className="text-base font-bold text-[#0B1F3A]">{fmt(file.billed)}</p>
                                   </div>
                                   <div>
+                                    <p className="text-xs text-slate-400 mb-1">Received</p>
+                                    <p className="text-base font-bold text-emerald-600">{fmt(file.paid)}</p>
+                                  </div>
+                                  <div>
                                     <p className="text-xs text-slate-400 mb-1">Spent</p>
-                                    <p className="text-base font-bold text-orange-600">{fmt(file.paid)}</p>
+                                    <p className="text-base font-bold text-orange-600">{fmt(file.spent || 0)}</p>
                                   </div>
                                   <div>
                                     <p className="text-xs text-slate-400 mb-1">Balance</p>

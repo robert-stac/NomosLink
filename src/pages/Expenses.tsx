@@ -99,7 +99,7 @@ export default function Expenses() {
   const summaries = useMemo(() => {
     let totalIn = 0;
     let totalOut = 0;
-    (expenses || []).forEach(exp => {
+    (filteredExpenses || []).forEach((exp: any) => {
       if (exp.type === "in") totalIn += Number(exp.amount || 0);
       else totalOut += Number(exp.amount || 0);
     });
@@ -108,7 +108,7 @@ export default function Expenses() {
       totalSpent: totalOut,
       balance: totalIn - totalOut
     };
-  }, [expenses]);
+  }, [filteredExpenses]);
 
   // Reports Data
   const reportData = useMemo(() => {
@@ -158,11 +158,11 @@ export default function Expenses() {
       const fileName = exp ? exp.relatedFileName : "Unknown File";
 
       if (billed === 0 && spent > 0) {
-        advisoryWarnings.push({ id: fid, fileName, spent, billed, warning: "Spending occurs with zero billed amount." });
+        advisoryWarnings.push({ id: fid, fileName, spent, billed, warning: "You are Spending on a file that is not billed." });
       } else if (spent >= billed) {
-        advisoryWarnings.push({ id: fid, fileName, spent, billed, warning: "Loss risk: Expenditure meets or exceeds billed amount." });
+        advisoryWarnings.push({ id: fid, fileName, spent, billed, warning: "Loss risk: Your Expenditure meets or exceeds the billed amount." });
       } else if (spent > billed * 0.7) {
-        advisoryWarnings.push({ id: fid, fileName, spent, billed, warning: "Margin warning: Expenditure is over 70% of billed amount." });
+        advisoryWarnings.push({ id: fid, fileName, spent, billed, warning: "Margin warning: Your Expenditure is over 70% of the billed amount." });
       }
     });
 
