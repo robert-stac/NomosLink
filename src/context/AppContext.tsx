@@ -870,6 +870,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastClientFeedbackDate: row.last_client_feedback_date ?? row.lastClientFeedbackDate
         });
 
+        const mergeArraysById = (localArr: any[] | undefined, cloudArr: any[] | undefined) => {
+          if (!localArr || localArr.length === 0) return cloudArr;
+          if (!cloudArr || cloudArr.length === 0) return localArr;
+          
+          const localMap = new Map(localArr.map((item: any) => [item.id, item]));
+          
+          const merged = cloudArr.map((cloudItem: any) => {
+            const localItem = localMap.get(cloudItem.id);
+            if (localItem) {
+              // Prefer local "Completed" status if cloud is still "Pending" 
+              // (e.g. due to sync delay or race condition during polling)
+              if (localItem.status === 'Completed' && cloudItem.status === 'Pending') {
+                return localItem;
+              }
+            }
+            return cloudItem;
+          });
+          
+          const cloudMap = new Map(cloudArr.map((item: any) => [item.id, item]));
+          
+          localArr.forEach((item: any) => {
+            if (item.id && !cloudMap.has(item.id)) {
+              merged.push(item);
+            }
+          });
+          
+          return merged;
+        };
+
         // Merge fetched data with current local state so that in-flight local
         // changes (e.g. a deadline just marked Done) are not overwritten by a
         // stale response that arrived before Supabase confirmed the write.
@@ -878,16 +907,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const localById = new Map(prev.map(item => [item.id, item]));
             return cloud.map(cloudItem => {
               const local = localById.get(cloudItem.id);
-              // If there's a local copy, keep the local version for any JSON
-              // blob fields (deadlines, progressNotes, documents) that may have
-              // been updated locally but not yet confirmed by Supabase.
+              // If there's a local copy, intelligently merge JSON blob fields 
+              // (deadlines, progressNotes, documents) so we don't lose local 
+              // additions while still receiving new updates from other clients.
               if (!local) return cloudItem;
               return {
                 ...cloudItem,
-                deadlines: (local as any).deadlines ?? (cloudItem as any).deadlines,
-                progressNotes: (local as any).progressNotes ?? (cloudItem as any).progressNotes,
-                documents: (local as any).documents ?? (cloudItem as any).documents,
-                lastClientFeedbackDate: (local as any).lastClientFeedbackDate ?? (cloudItem as any).lastClientFeedbackDate,
+                deadlines: mergeArraysById((local as any).deadlines, (cloudItem as any).deadlines),
+                progressNotes: mergeArraysById((local as any).progressNotes, (cloudItem as any).progressNotes),
+                documents: mergeArraysById((local as any).documents, (cloudItem as any).documents),
+                lastClientFeedbackDate: (cloudItem as any).lastClientFeedbackDate ?? (local as any).lastClientFeedbackDate,
               };
             });
           });

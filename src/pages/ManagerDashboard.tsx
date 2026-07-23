@@ -12,6 +12,7 @@ export default function ManagerDashboard() {
   const [selectedLawyerId, setSelectedLawyerId] = useState<string | null>(searchParams.get("lawyerId") || null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyStagnant, setShowOnlyStagnant] = useState(false);
+  const [showMissingCourtDates, setShowMissingCourtDates] = useState(false);
 
   const pendingRequisitionsCount = (requisitions || []).filter((r: any) => r.status === 'Pending').length;
 
@@ -79,16 +80,17 @@ export default function ManagerDashboard() {
   const activeCases = courtCases.filter(c => !c.archived);
   const activeLetters = letters.filter(l => !l.archived);
 
-  const filterItem = (item: any) => {
+  const filterItem = (item: any, type: 'tx' | 'case' | 'letter' = 'tx') => {
     const matchesLawyer = !selectedLawyerId || item.lawyerId === selectedLawyerId;
     const matchesSearch = (item.fileName || item.subject || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStagnant = !showOnlyStagnant || isStagnant(item);
-    return matchesLawyer && matchesSearch && matchesStagnant;
+    const matchesMissing = !showMissingCourtDates || (type === 'case' ? !item.nextCourtDate : false);
+    return matchesLawyer && matchesSearch && matchesStagnant && matchesMissing;
   };
 
-  const filteredTransactions = activeTransactions.filter(filterItem);
-  const filteredCases = activeCases.filter(filterItem);
-  const filteredLetters = activeLetters.filter(filterItem);
+  const filteredTransactions = activeTransactions.filter(t => filterItem(t, 'tx'));
+  const filteredCases = activeCases.filter(c => filterItem(c, 'case'));
+  const filteredLetters = activeLetters.filter(l => filterItem(l, 'letter'));
 
   const baseFilter = (item: any) => {
     const matchesLawyer = !selectedLawyerId || item.lawyerId === selectedLawyerId;
@@ -494,9 +496,9 @@ export default function ManagerDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="border p-2 rounded-md w-full md:w-64 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1"
               />
-              {(selectedLawyerId || showOnlyStagnant) && (
+              {(selectedLawyerId || showOnlyStagnant || showMissingCourtDates) && (
                 <button
-                  onClick={() => { setSelectedLawyerId(null); setShowOnlyStagnant(false); }}
+                  onClick={() => { setSelectedLawyerId(null); setShowOnlyStagnant(false); setShowMissingCourtDates(false); }}
                   className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap"
                 >
                   Clear All Filters
@@ -635,7 +637,17 @@ export default function ManagerDashboard() {
               </div>
             </div>
             {missingCourtDates > 0 && (
-              <p className="text-[9px] text-red-500 font-black mt-1 uppercase">⚠ {missingCourtDates} cases missing court date</p>
+              <button 
+                onClick={() => {
+                  setShowMissingCourtDates(true);
+                  setShowOnlyStagnant(false);
+                  const el = document.getElementById('court-cases-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="text-[9px] text-red-500 font-black mt-1 uppercase hover:underline cursor-pointer block text-left"
+              >
+                ⚠ {missingCourtDates} cases missing court date
+              </button>
             )}
           </div>
         </div>
@@ -1011,9 +1023,12 @@ export default function ManagerDashboard() {
             </div>
 
             {/* COURT CASES */}
-            <div className="bg-white p-4 rounded-lg shadow border">
+            <div id="court-cases-section" className="bg-white p-4 rounded-lg shadow border scroll-mt-6">
               <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
-                Court Cases
+                <div className="flex items-center gap-2">
+                  Court Cases
+                  {showMissingCourtDates && <span className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase animate-pulse">Missing Dates</span>}
+                </div>
                 <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full">{filteredCases.length}</span>
               </h2>
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
