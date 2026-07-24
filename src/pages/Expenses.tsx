@@ -34,6 +34,8 @@ export default function Expenses() {
     "Commissioning fees",
     "Transport expenses",
     "Filing fees",
+    "Float",
+    "Newspapers",
     "Office supplies",
     "Court Attendance fees",
     "Facilitation",
@@ -49,6 +51,7 @@ export default function Expenses() {
   const INCOME_CATEGORIES = [
     "Court Attendance",
     "Legal fees",
+    "Land Transfer",
     "Statutory Declaration",
     "Power of Attorney",
     "Other incomes",
@@ -64,7 +67,8 @@ export default function Expenses() {
     staffName: "",
     relatedFileId: "",
     relatedFileType: "" as any,
-    relatedFileName: ""
+    relatedFileName: "",
+    paymentMethod: "" as "" | "Cash" | "Cheque" | "Mobile Money"
   });
 
   const [isFileDropdownOpen, setIsFileDropdownOpen] = useState(false);
@@ -73,7 +77,8 @@ export default function Expenses() {
   const staffList = [
     ...users.filter(u => ["lawyer", "manager", "managing_partner", "clerk", "admin", "accountant"].includes(u.role)),
     { id: "teddy", name: "Teddy", role: "staff", email: "", password: "" },
-    { id: "dan", name: "Dan", role: "staff", email: "", password: "" }
+    { id: "dan", name: "Dan", role: "staff", email: "", password: "" },
+    { id: "kimera_isaac", name: "Kimera Isaac", role: "staff", email: "", password: "" }
   ];
 
   const activeCases = courtCases.filter(c => !c.archived);
@@ -254,11 +259,12 @@ export default function Expenses() {
         staffName: expense.staffName || "",
         relatedFileId: expense.relatedFileId || "",
         relatedFileType: expense.relatedFileType || "",
-        relatedFileName: expense.relatedFileName || ""
+        relatedFileName: expense.relatedFileName || "",
+        paymentMethod: expense.paymentMethod || ""
       });
     } else {
       setEditingId(null);
-      setFormData({ type: "out", date: "", purpose: "", amount: "", category: "", staffId: "", staffName: "", relatedFileId: "", relatedFileType: "", relatedFileName: "" });
+      setFormData({ type: "out", date: "", purpose: "", amount: "", category: "", staffId: "", staffName: "", relatedFileId: "", relatedFileType: "", relatedFileName: "", paymentMethod: "" });
     }
     setShowModal(true);
   };
@@ -266,12 +272,18 @@ export default function Expenses() {
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (formData.type === 'in' && !formData.paymentMethod) {
+      alert("Please select a payment method (Cash, Cheque, or Mobile Money).");
+      return;
+    }
+
     const baseData: Record<string, any> = {
       date: formData.date,
       amount: Math.round(Number(formData.amount)),
       description: formData.purpose,
       purpose: formData.purpose,
       category: formData.category || (formData.type === 'in' ? "Other incomes" : "Others"),
+      paymentMethod: formData.type === 'in' ? formData.paymentMethod : undefined,
     };
 
     let newExpense: Record<string, any>;
@@ -438,6 +450,11 @@ export default function Expenses() {
                       </td>
                       <td className="p-4 max-w-[200px]">
                         <div className="space-y-1">
+                          {exp.type === 'in' && exp.paymentMethod && (
+                            <p className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                              {exp.paymentMethod === 'Cash' ? '💵' : exp.paymentMethod === 'Cheque' ? '📝' : '📱'} {exp.paymentMethod}
+                            </p>
+                          )}
                           {exp.type === 'out' && exp.staffName && <p className="text-slate-800 font-bold text-xs">👤 {exp.staffName}</p>}
                           {exp.relatedFileName
                             ? <p className="text-blue-600 text-xs truncate" title={exp.relatedFileName}>⚖️ {exp.relatedFileName}</p>
@@ -445,7 +462,7 @@ export default function Expenses() {
                           }
                         </div>
                       </td>
-                      <td className="p-4 text-slate-700">{exp.purpose || exp.description}</td>
+                      <td className="p-4 text-slate-700 capitalize">{exp.purpose || exp.description}</td>
                       <td className={`p-4 text-right font-black whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-600' : 'text-red-500'}`}>
                         {exp.type === 'in' ? '+' : '-'} {Number(exp.amount).toLocaleString()}
                       </td>
@@ -697,9 +714,37 @@ export default function Expenses() {
             <form onSubmit={handleSaveExpense} className="p-6 overflow-y-auto space-y-6">
 
               <div className="flex bg-slate-100 p-1 rounded-xl">
-                <button type="button" onClick={() => setFormData({ ...formData, type: "in" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'in' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money In (+) </button>
-                <button type="button" onClick={() => setFormData({ ...formData, type: "out" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'out' ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money Out (-) </button>
+                <button type="button" onClick={() => setFormData({ ...formData, type: "in", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'in' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money In (+) </button>
+                <button type="button" onClick={() => setFormData({ ...formData, type: "out", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'out' ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money Out (-) </button>
               </div>
+
+              {formData.type === 'in' && (
+                <div className="group relative">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1 transition-colors group-focus-within:text-blue-600">Payment Method <span className="text-red-400">*</span></label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["Cash", "Cheque", "Mobile Money"] as const).map((method) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, paymentMethod: method })}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${
+                          formData.paymentMethod === method
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm'
+                            : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'
+                        }`}
+                      >
+                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Cheque' ? '📝' : '📱'}</span>
+                        <span>{method}</span>
+                        {formData.paymentMethod === method && (
+                          <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                            <span className="text-white text-[8px] font-black">✓</span>
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="group relative">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Date</label>

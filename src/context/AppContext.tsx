@@ -998,7 +998,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           scannedInvoiceUrl: row.scannedInvoiceUrl ?? undefined,
         });
         if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData.map(normalizeInvoice)));
-        if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData));
+        const normalizeExpense = (row: any) => ({
+          ...row,
+          relatedFileId: row.relatedfileid ?? row.relatedFileId ?? row.related_file_id ?? '',
+          relatedFileName: row.relatedfilename ?? row.relatedFileName ?? row.related_file_name ?? '',
+          relatedFileType: row.relatedfiletype ?? row.relatedFileType ?? row.related_file_type ?? '',
+          staffId: row.staffid ?? row.staffId ?? row.staff_id ?? '',
+          staffName: row.staffname ?? row.staffName ?? row.staff_name ?? '',
+          addedById: row.addedbyid ?? row.addedById ?? row.added_by_id ?? '',
+          addedByName: row.addedbyname ?? row.addedByName ?? row.added_by_name ?? '',
+          paymentMethod: row.paymentmethod ?? row.paymentMethod ?? row.payment_method ?? '',
+        });
+        
+        if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData.map(normalizeExpense)));
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
         if (filingData) setFilingRequests(prev => mergeIfChanged(prev, filingData));
         if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));

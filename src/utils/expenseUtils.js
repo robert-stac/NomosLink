@@ -15,6 +15,7 @@ export function buildExpenseRecord({
     relatedFileName: formData.relatedFileName || "",
     addedById: currentUser?.id || "",
     addedByName: currentUser?.name || "",
+    paymentMethod: formData.paymentMethod || "",
   };
 }
 
@@ -34,5 +35,6 @@ export function buildExpenseForDb(expense) {
     relatedFileId: expense.relatedFileId,
     relatedFileType: expense.relatedFileType,
     relatedFileName: expense.relatedFileName,
+    paymentMethod: expense.paymentMethod,
   };
 }
