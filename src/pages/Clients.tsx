@@ -164,7 +164,7 @@ const Clients: React.FC = () => {
   };
 
   const handleDownloadExpensesCSV = (client: any) => {
-    // Collect File Data (Billed, Paid, Owed)
+    // ── LEGAL FEES ──
     const filesData: any[] = [];
     client.cases?.forEach((c: any) => filesData.push(['Court Case', c.fileName || '', c.billed || 0, c.paid || 0]));
     client.transactions?.forEach((t: any) => filesData.push(['Transaction', t.fileName || '', t.billedAmount || 0, t.paidAmount || 0]));
@@ -172,85 +172,95 @@ const Clients: React.FC = () => {
 
     let totalBilled = 0;
     let totalFilePaid = 0;
-    filesData.forEach(f => {
-      totalBilled += f[2];
-      totalFilePaid += f[3];
+    filesData.forEach(f => { totalBilled += f[2]; totalFilePaid += f[3]; });
+
+    const LEGAL_FEE_CATEGORIES = ['legal fees', 'file opening fees'];
+    const legalFeeExpenseIncome = (client.expenses || [])
+      .filter((e: any) => e.type === 'in' && LEGAL_FEE_CATEGORIES.includes((e.category || '').toLowerCase()))
+      .reduce((s: number, e: any) => s + (e.amount || 0), 0);
+    const totalLegalFeesReceived = totalFilePaid + legalFeeExpenseIncome;
+
+    // ── DISBURSEMENTS ──
+    const disbursementIncome = (client.expenses || [])
+      .filter((e: any) => e.type === 'in' && !LEGAL_FEE_CATEGORIES.includes((e.category || '').toLowerCase()));
+
+    const CATEGORY_MATCHING: Record<string, string[]> = {
+      'Court Attendance': ['Court Attendance fees'],
+      'Land Transfer': ['Filing fees'],
+      'Statutory Declaration': ['Commissioning fees'],
+      'Power of Attorney': ['Commissioning fees'],
+      'Other incomes': [],
+    };
+
+    const processedCats = new Set<string>();
+    const disbursementRows: { name: string; received: number; spent: number; net: number }[] = [];
+    disbursementIncome.forEach((e: any) => {
+      const cat = e.category || 'Other incomes';
+      if (!processedCats.has(cat)) {
+        processedCats.add(cat);
+        const received = disbursementIncome.filter((x: any) => (x.category || 'Other incomes') === cat).reduce((s: number, x: any) => s + (x.amount || 0), 0);
+        const matchCats = CATEGORY_MATCHING[cat] || [];
+        const spent = matchCats.length > 0
+          ? (client.expenses || []).filter((x: any) => x.type === 'out' && matchCats.includes(x.category)).reduce((s: number, x: any) => s + (x.amount || 0), 0)
+          : 0;
+        disbursementRows.push({ name: cat, received, spent, net: received - spent });
+      }
     });
-    const totalOwed = totalBilled - totalFilePaid;
+    const totalDisbReceived = disbursementRows.reduce((s, d) => s + d.received, 0);
+    const totalDisbSpent = disbursementRows.reduce((s, d) => s + d.spent, 0);
+    const totalDisbNet = totalDisbReceived - totalDisbSpent;
 
-    const outExpenses = (client.expenses || []).filter((e: any) => e.type === 'out');
-    const inExpenses = (client.expenses || []).filter((e: any) => e.type === 'in');
-    
-    let totalInExpenses = 0;
-    inExpenses.forEach((e: any) => { totalInExpenses += (e.amount || 0); });
+    // ── OTHER EXPENSES ──
+    const matchedExpCats = new Set<string>();
+    Object.values(CATEGORY_MATCHING).forEach(cats => cats.forEach(c => matchedExpCats.add(c)));
+    const otherExpenses = (client.expenses || []).filter((e: any) => e.type === 'out' && !matchedExpCats.has(e.category));
+    const totalOtherExpenses = otherExpenses.reduce((s: number, e: any) => s + (e.amount || 0), 0);
 
-    let totalOutExpenses = 0;
-    outExpenses.forEach((e: any) => { totalOutExpenses += (e.amount || 0); });
-
-    const totalMoneyReceived = totalFilePaid + totalInExpenses;
-    const netBalance = totalMoneyReceived - totalOutExpenses;
-
-    const lines = [];
-    lines.push(["INCOME STATEMENT / ACCOUNT SUMMARY"]);
+    // ── BUILD CSV ──
+    const lines: any[] = [];
+    lines.push(["CLIENT INCOME STATEMENT"]);
     lines.push([]);
-    
     lines.push(["CLIENT DETAILS"]);
     lines.push(["Name:", `"${client.name}"`]);
     lines.push(["Email:", `"${client.email || 'N/A'}"`]);
     lines.push(["Phone:", `"${client.phone || 'N/A'}"`]);
     lines.push(["Date Generated:", `"${new Date().toLocaleDateString()}"`]);
     lines.push([]);
-    
-    lines.push(["FILE SUMMARY (BILLED, PAID & OWED)"]);
-    lines.push(["Type", "File Name", "Billed (UGX)", "Paid (UGX)", "Owed/Balance (UGX)"]);
+
+    lines.push(["SECTION 1: LEGAL FEES (BILLABLE REVENUE)"]);
+    lines.push(["Type", "File Name", "Billed (UGX)", "Paid (UGX)", "Balance (UGX)"]);
     if (filesData.length === 0) {
       lines.push(["No files attached", "", "0", "0", "0"]);
     } else {
-      filesData.forEach(f => {
-        lines.push([`"${f[0]}"`, `"${f[1].toString().replace(/"/g, '""')}"`, f[2], f[3], f[2] - f[3]]);
-      });
+      filesData.forEach(f => lines.push([`"${f[0]}"`, `"${f[1].toString().replace(/"/g, '""')}"`, f[2], f[3], f[2] - f[3]]));
     }
-    lines.push(["TOTAL ACROSS ALL FILES", "", totalBilled, totalFilePaid, totalOwed]);
+    lines.push(["TOTAL LEGAL FEES", "", totalBilled, totalLegalFeesReceived, totalBilled - totalFilePaid]);
     lines.push([]);
 
-    lines.push(["OTHER REVENUES / DEPOSITS (MONEY IN)"]);
-    lines.push(["Date", "Related File", "Purpose", "Amount (UGX)"]);
-    if (inExpenses.length === 0) {
-      lines.push(["No deposits recorded", "", "", "0"]);
+    lines.push(["SECTION 2: DISBURSEMENT ACCOUNT (PASS-THROUGH FUNDS)"]);
+    lines.push(["Category", "Received (UGX)", "Spent (UGX)", "Net Balance (UGX)"]);
+    if (disbursementRows.length === 0) {
+      lines.push(["No disbursements recorded", "0", "0", "0"]);
     } else {
-      inExpenses.forEach((e: any) => {
-        lines.push([
-          `"${e.date || ''}"`, 
-          `"${(e.relatedFileName || '').replace(/"/g, '""')}"`, 
-          `"${(e.purpose || e.description || '').replace(/"/g, '""')}"`, 
-          e.amount || 0
-        ]);
-      });
+      disbursementRows.forEach(d => lines.push([`"${d.name}"`, d.received, d.spent, d.net]));
     }
-    lines.push(["TOTAL DEPOSITS", "", "", totalInExpenses]);
+    lines.push(["TOTAL DISBURSEMENTS", totalDisbReceived, totalDisbSpent, totalDisbNet]);
     lines.push([]);
 
-    lines.push(["EXPENSES (MONEY SPENT)"]);
-    lines.push(["Date", "Related File", "Purpose", "Amount (UGX)"]);
-    if (outExpenses.length === 0) {
-      lines.push(["No expenses recorded", "", "", "0"]);
-    } else {
-      outExpenses.forEach((e: any) => {
-        lines.push([
-          `"${e.date || ''}"`, 
-          `"${(e.relatedFileName || '').replace(/"/g, '""')}"`, 
-          `"${(e.purpose || e.description || '').replace(/"/g, '""')}"`, 
-          e.amount || 0
-        ]);
-      });
+    if (otherExpenses.length > 0) {
+      lines.push(["GENERAL OFFICE EXPENSES"]);
+      lines.push(["Date", "Purpose", "Amount (UGX)"]);
+      otherExpenses.forEach((e: any) => lines.push([`"${e.date || ''}"`, `"${(e.purpose || e.description || '').replace(/"/g, '""')}"`, e.amount || 0]));
+      lines.push(["TOTAL GENERAL EXPENSES", "", totalOtherExpenses]);
+      lines.push([]);
     }
-    lines.push(["TOTAL EXPENSES", "", "", totalOutExpenses]);
-    lines.push([]);
 
-    lines.push(["NET ACCOUNT SUMMARY"]);
-    lines.push(["Total Money Received (Files + Deposits)", "", totalMoneyReceived]);
-    lines.push(["Total Money Spent (Expenses)", "", totalOutExpenses]);
-    lines.push(["Account Surplus / Deficit", "", netBalance]);
+    const totalMoneyIn = totalLegalFeesReceived + totalDisbReceived;
+    const totalMoneyOut = totalDisbSpent + totalOtherExpenses;
+    lines.push(["OVERALL ACCOUNT POSITION"]);
+    lines.push(["Total Money In", totalMoneyIn]);
+    lines.push(["Total Money Out", totalMoneyOut]);
+    lines.push(["Account Balance", totalMoneyIn - totalMoneyOut]);
 
     const csvContent = lines.map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -606,51 +616,173 @@ const Clients: React.FC = () => {
 
                   {/* Account Balance Summary - Always visible */}
                   {(() => {
-                    // Calculate total account balance
-                    const allFilesForBalance = [
-                      ...selectedClient.cases.map((c: any) => ({ paid: c.paid || 0 })),
-                      ...selectedClient.transactions.map((t: any) => ({ paid: t.paidAmount || 0 })),
-                      ...selectedClient.letters.map((l: any) => ({ paid: l.paid || 0 })),
-                      ...selectedClient.titles.map((t: any) => ({ paid: t.total_paid || 0 }))
-                    ];
+                    // ── 1. LEGAL FEES (Billable Revenue) ──
+                    // Legal fees = money paid on files (court cases, transactions, letters, titles)
+                    //            + any "Money In" expense records categorised as "Legal fees"
+                    const filePaid =
+                      selectedClient.cases.reduce((s: number, c: any) => s + (c.paid || 0), 0) +
+                      selectedClient.transactions.reduce((s: number, t: any) => s + (t.paidAmount || 0), 0) +
+                      selectedClient.letters.reduce((s: number, l: any) => s + (l.paid || 0), 0) +
+                      selectedClient.titles.reduce((s: number, t: any) => s + (t.total_paid || 0), 0);
 
-                    const expenseTotal = selectedClient.expenses?.reduce((sum: number, exp: any) => {
-                      return exp.type === 'out' ? sum + (exp.amount || 0) : sum;
-                    }, 0) || 0;
-                    
-                    const incomeTotal = selectedClient.expenses?.reduce((sum: number, exp: any) => {
-                      return exp.type === 'in' ? sum + (exp.amount || 0) : sum;
-                    }, 0) || 0;
+                    const legalFeesFromExpenses = (selectedClient.expenses || [])
+                      .filter((e: any) => e.type === 'in' && (e.category || '').toLowerCase() === 'legal fees')
+                      .reduce((s: number, e: any) => s + (e.amount || 0), 0);
 
-                    const moneyReceived = allFilesForBalance.reduce((sum, f) => sum + (f.paid || 0), 0) + incomeTotal;
-                    const moneySpent = expenseTotal;
-                    const accountBalance = moneyReceived - moneySpent;
+                    // Also count "File opening fees" as legal fees
+                    const fileOpeningFeesIn = (selectedClient.expenses || [])
+                      .filter((e: any) => e.type === 'in' && (e.category || '').toLowerCase() === 'file opening fees')
+                      .reduce((s: number, e: any) => s + (e.amount || 0), 0);
+
+                    const totalLegalFees = filePaid + legalFeesFromExpenses + fileOpeningFeesIn;
+
+                    const fileBilled =
+                      selectedClient.cases.reduce((s: number, c: any) => s + (c.billed || 0), 0) +
+                      selectedClient.transactions.reduce((s: number, t: any) => s + (t.billedAmount || 0), 0) +
+                      selectedClient.letters.reduce((s: number, l: any) => s + (l.billed || 0), 0) +
+                      selectedClient.titles.reduce((s: number, t: any) => s + (t.total_billed || 0), 0);
+
+                    const legalFeesOutstanding = fileBilled - filePaid;
+
+                    // ── 2. DISBURSEMENT ACCOUNT (Pass-through funds) ──
+                    // These are non-legal-fee income categories — money received from client
+                    // to cover specific costs on their behalf (court attendance, land transfer, etc.)
+                    const LEGAL_FEE_CATEGORIES = ['legal fees', 'file opening fees'];
+                    const disbursementIncome = (selectedClient.expenses || [])
+                      .filter((e: any) => e.type === 'in' && !LEGAL_FEE_CATEGORIES.includes((e.category || '').toLowerCase()));
+
+                    // Map income categories to their matching expense categories
+                    const CATEGORY_MATCHING: Record<string, string[]> = {
+                      'Court Attendance': ['Court Attendance fees'],
+                      'Land Transfer': ['Filing fees'],
+                      'Statutory Declaration': ['Commissioning fees'],
+                      'Power of Attorney': ['Commissioning fees'],
+                      'Other incomes': [],
+                    };
+
+                    // Build per-category breakdown
+                    const disbursementCategories: { name: string; received: number; spent: number; net: number }[] = [];
+                    const processedCategories = new Set<string>();
+
+                    disbursementIncome.forEach((e: any) => {
+                      const cat = e.category || 'Other incomes';
+                      if (!processedCategories.has(cat)) {
+                        processedCategories.add(cat);
+                        const received = disbursementIncome
+                          .filter((x: any) => (x.category || 'Other incomes') === cat)
+                          .reduce((s: number, x: any) => s + (x.amount || 0), 0);
+
+                        const matchingExpenseCategories = CATEGORY_MATCHING[cat] || [];
+                        const spent = matchingExpenseCategories.length > 0
+                          ? (selectedClient.expenses || [])
+                              .filter((x: any) => x.type === 'out' && matchingExpenseCategories.includes(x.category))
+                              .reduce((s: number, x: any) => s + (x.amount || 0), 0)
+                          : 0;
+
+                        disbursementCategories.push({ name: cat, received, spent, net: received - spent });
+                      }
+                    });
+
+                    const totalDisbursementReceived = disbursementCategories.reduce((s, d) => s + d.received, 0);
+                    const totalDisbursementSpent = disbursementCategories.reduce((s, d) => s + d.spent, 0);
+                    const totalDisbursementNet = totalDisbursementReceived - totalDisbursementSpent;
+
+                    // ── 3. OFFICE EXPENSES (money spent on client that isn't matched to a disbursement) ──
+                    const matchedExpenseCategories = new Set<string>();
+                    Object.values(CATEGORY_MATCHING).forEach(cats => cats.forEach(c => matchedExpenseCategories.add(c)));
+
+                    const unmatchedExpenses = (selectedClient.expenses || [])
+                      .filter((e: any) => e.type === 'out' && !matchedExpenseCategories.has(e.category))
+                      .reduce((s: number, e: any) => s + (e.amount || 0), 0);
+
+                    // ── 4. OVERALL POSITION ──
+                    const totalMoneyIn = totalLegalFees + totalDisbursementReceived;
+                    const totalMoneyOut = totalDisbursementSpent + unmatchedExpenses;
+                    const overallBalance = totalMoneyIn - totalMoneyOut;
 
                     return (
-                      <div className="mb-8 bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-lg">
-                        <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-widest mb-4">Client Account Balance</h5>
-                        <div className="grid grid-cols-3 gap-6">
-                          <div>
-                            <p className="text-xs text-slate-400 mb-2">Money Received</p>
-                            <p className="text-2xl font-bold text-emerald-400">{fmt(moneyReceived)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-400 mb-2">Money Spent</p>
-                            <p className="text-2xl font-bold text-orange-300">{fmt(moneySpent)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-400 mb-2">Balance on Account</p>
-                            <p className={`text-2xl font-bold ${accountBalance > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {fmt(accountBalance)}
-                            </p>
+                      <>
+                        {/* SECTION 1: Legal Fees (Primary Revenue) */}
+                        <div className="mb-6 bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-lg">
+                          <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400" /> Legal Fees — Billable Revenue
+                          </h5>
+                          <div className="grid grid-cols-3 gap-6">
+                            <div>
+                              <p className="text-xs text-slate-400 mb-2">Total Billed</p>
+                              <p className="text-2xl font-bold text-blue-300">{fmt(fileBilled)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 mb-2">Total Received</p>
+                              <p className="text-2xl font-bold text-emerald-400">{fmt(totalLegalFees)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 mb-2">Outstanding Balance</p>
+                              <p className={`text-2xl font-bold ${legalFeesOutstanding > 0 ? 'text-orange-300' : 'text-emerald-400'}`}>
+                                {fmt(legalFeesOutstanding)}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        <p className="text-xs text-slate-400 mt-4 italic">
-                          {accountBalance > 0
-                            ? `Account has surplus of ${fmt(accountBalance)}`
-                            : `Account has deficit of ${fmt(Math.abs(accountBalance))}`}
-                        </p>
-                      </div>
+
+                        {/* SECTION 2: Disbursement Account */}
+                        {disbursementCategories.length > 0 && (
+                          <div className="mb-6 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-6">
+                            <h5 className="text-xs font-semibold text-indigo-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-indigo-500" /> Disbursement Account — Pass-Through Funds
+                            </h5>
+                            <p className="text-xs text-indigo-600/70 mb-4 italic">
+                              Funds received from client to cover specific costs on their behalf (not billed income).
+                            </p>
+                            <div className="space-y-2 mb-4">
+                              {disbursementCategories.map((d, i) => (
+                                <div key={i} className="flex items-center justify-between bg-white/80 rounded-xl p-3 border border-indigo-100">
+                                  <span className="text-sm font-semibold text-slate-700">{d.name}</span>
+                                  <div className="flex items-center gap-4 text-sm">
+                                    <span className="text-emerald-600 font-bold">+{fmt(d.received)}</span>
+                                    {d.spent > 0 && <span className="text-red-500 font-bold">−{fmt(d.spent)}</span>}
+                                    <span className={`font-black px-2 py-0.5 rounded ${d.net > 0 ? 'bg-emerald-100 text-emerald-700' : d.net < 0 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                                      {d.net >= 0 ? '' : '−'}{fmt(Math.abs(d.net))}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between bg-indigo-100/50 rounded-xl p-3 border border-indigo-200">
+                              <span className="text-xs font-bold text-indigo-800 uppercase tracking-widest">Net Disbursement Balance</span>
+                              <span className={`text-lg font-black ${totalDisbursementNet > 0 ? 'text-emerald-600' : totalDisbursementNet < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                                {totalDisbursementNet >= 0 ? '' : '−'}{fmt(Math.abs(totalDisbursementNet))}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* SECTION 3: Overall Account Position */}
+                        <div className={`mb-8 rounded-2xl p-5 border ${overallBalance > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                          <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Overall Account Position</h5>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-xs text-slate-400 mb-1">Total Money In</p>
+                              <p className="text-lg font-bold text-emerald-600">{fmt(totalMoneyIn)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 mb-1">Total Money Out</p>
+                              <p className="text-lg font-bold text-red-500">{fmt(totalMoneyOut)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-400 mb-1">Account Balance</p>
+                              <p className={`text-lg font-black ${overallBalance > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {overallBalance >= 0 ? '' : '−'}{fmt(Math.abs(overallBalance))}
+                              </p>
+                            </div>
+                          </div>
+                          {unmatchedExpenses > 0 && (
+                            <p className="text-xs text-slate-400 mt-3 italic">
+                              Includes {fmt(unmatchedExpenses)} in general office expenses on this client's files.
+                            </p>
+                          )}
+                        </div>
+                      </>
                     );
                   })()}
 
