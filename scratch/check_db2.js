@@ -10,6 +10,7 @@ async function check() {
     console.log(`--- ${table} ---`);
     console.log(Object.keys(data[0] || {}));
   };
+  await getKeys('court_cases');
   await getKeys('transactions');
   await getKeys('letters');
   await getKeys('tasks');

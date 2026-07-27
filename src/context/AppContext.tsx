@@ -845,6 +845,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser?.id]);
 
   /* =======================
+      INTELLIGENT DATA SYNC & MERGE
+      Fixes data loss from concurrent overwrites and offline mode.
+  ======================= */
+  const smartMergeState = <T extends { id: string }>(cloud: T[], prev: T[], tableName: string): T[] => {
+    if (!cloud || !Array.isArray(cloud)) return prev || [];
+    const localById = new Map((prev || []).map(item => [item.id, item]));
+    const cloudById = new Map(cloud.map(item => [item.id, item]));
+
+    const mergeArraysById = (localArr: any[] | undefined, cloudArr: any[] | undefined, onLocalMissingInCloud?: (mergedArr: any[]) => void) => {
+      if (!localArr || localArr.length === 0) return cloudArr || [];
+      if (!cloudArr || cloudArr.length === 0) {
+        if (localArr.length > 0 && onLocalMissingInCloud) onLocalMissingInCloud(localArr);
+        return localArr;
+      }
+      
+      const localMap = new Map(localArr.map((item: any) => [item.id, item]));
+      let hasLocalOnly = false;
+      
+      const merged = cloudArr.map((cloudItem: any) => {
+        const localItem = localMap.get(cloudItem.id);
+        if (localItem && localItem.status === 'Completed' && cloudItem.status === 'Pending') {
+          return localItem;
+        }
+        return cloudItem;
+      });
+      
+      const cloudMap = new Map(cloudArr.map((item: any) => [item.id, item]));
+      
+      localArr.forEach((item: any) => {
+        if (item.id && !cloudMap.has(item.id)) {
+          merged.push(item);
+          hasLocalOnly = true;
+        }
+      });
+      
+      if (hasLocalOnly && onLocalMissingInCloud) onLocalMissingInCloud(merged);
+      return merged;
+    };
+
+    const mergedCloud = cloud.map(cloudItem => {
+      const local = localById.get(cloudItem.id);
+      if (!local) return cloudItem;
+
+      let updatedNotes: any = null;
+      let updatedDeadlines: any = null;
+      let updatedDocs: any = null;
+
+      const finalDeadlines = mergeArraysById((local as any).deadlines, (cloudItem as any).deadlines, (merged) => updatedDeadlines = merged);
+      const finalNotes = mergeArraysById((local as any).progressNotes, (cloudItem as any).progressNotes, (merged) => updatedNotes = merged);
+      const finalDocs = mergeArraysById((local as any).documents, (cloudItem as any).documents, (merged) => updatedDocs = merged);
+
+      // Auto-repair data loss from concurrent overwrites or offline additions!
+      if (updatedNotes || updatedDeadlines || updatedDocs) {
+        const payload: any = {};
+        if (updatedNotes) payload.progressNotes = updatedNotes;
+        if (updatedDeadlines) payload.deadlines = updatedDeadlines;
+        if (updatedDocs) payload.documents = updatedDocs;
+        if (navigator.onLine && tableName) {
+          supabase.from(tableName).update(payload).eq('id', cloudItem.id)
+            .then(({ error }) => { if (error) console.error(`Failed auto-repair of ${tableName}:`, error); });
+        }
+      }
+
+      return {
+        ...cloudItem,
+        deadlines: finalDeadlines,
+        progressNotes: finalNotes,
+        documents: finalDocs,
+        lastClientFeedbackDate: (cloudItem as any).lastClientFeedbackDate ?? (local as any).lastClientFeedbackDate,
+        nextCourtDate: (cloudItem as any).nextCourtDate ?? (local as any).nextCourtDate,
+      };
+    });
+
+    const localOnly = (prev || []).filter(item => !cloudById.has(item.id));
+    return [...mergedCloud, ...localOnly];
+  };
+
+  /* =======================
       TRANSACTION / CASE / LETTER POLLING
       Replaces the old Realtime postgres_changes channel that was
       subscribing to ALL changes on 3 tables with zero filters.
@@ -870,61 +948,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastClientFeedbackDate: row.last_client_feedback_date ?? row.lastClientFeedbackDate
         });
 
-        const mergeArraysById = (localArr: any[] | undefined, cloudArr: any[] | undefined) => {
-          if (!localArr || localArr.length === 0) return cloudArr;
-          if (!cloudArr || cloudArr.length === 0) return localArr;
-          
-          const localMap = new Map(localArr.map((item: any) => [item.id, item]));
-          
-          const merged = cloudArr.map((cloudItem: any) => {
-            const localItem = localMap.get(cloudItem.id);
-            if (localItem) {
-              // Prefer local "Completed" status if cloud is still "Pending" 
-              // (e.g. due to sync delay or race condition during polling)
-              if (localItem.status === 'Completed' && cloudItem.status === 'Pending') {
-                return localItem;
-              }
-            }
-            return cloudItem;
-          });
-          
-          const cloudMap = new Map(cloudArr.map((item: any) => [item.id, item]));
-          
-          localArr.forEach((item: any) => {
-            if (item.id && !cloudMap.has(item.id)) {
-              merged.push(item);
-            }
-          });
-          
-          return merged;
-        };
-
-        // Merge fetched data with current local state so that in-flight local
-        // changes (e.g. a deadline just marked Done) are not overwritten by a
-        // stale response that arrived before Supabase confirmed the write.
-        const mergeWithLocal = <T extends { id: string }>(cloud: T[], setFn: React.Dispatch<React.SetStateAction<T[]>>) => {
-          setFn(prev => {
-            const localById = new Map(prev.map(item => [item.id, item]));
-            return cloud.map(cloudItem => {
-              const local = localById.get(cloudItem.id);
-              // If there's a local copy, intelligently merge JSON blob fields 
-              // (deadlines, progressNotes, documents) so we don't lose local 
-              // additions while still receiving new updates from other clients.
-              if (!local) return cloudItem;
-              return {
-                ...cloudItem,
-                deadlines: mergeArraysById((local as any).deadlines, (cloudItem as any).deadlines),
-                progressNotes: mergeArraysById((local as any).progressNotes, (cloudItem as any).progressNotes),
-                documents: mergeArraysById((local as any).documents, (cloudItem as any).documents),
-                lastClientFeedbackDate: (cloudItem as any).lastClientFeedbackDate ?? (local as any).lastClientFeedbackDate,
-              };
-            });
-          });
-        };
-
-        if (txRes.data) mergeWithLocal(txRes.data.map(normalizeFile), setTransactions);
-        if (ccRes.data) mergeWithLocal(ccRes.data.map(normalizeFile), setCourtCases);
-        if (ltRes.data) mergeWithLocal(ltRes.data.map(normalizeFile), setLetters);
+        if (txRes.data) setTransactions(prev => smartMergeState(txRes.data.map(normalizeFile), prev, 'transactions'));
+        if (ccRes.data) setCourtCases(prev => smartMergeState(ccRes.data.map(normalizeFile), prev, 'court_cases'));
+        if (ltRes.data) setLetters(prev => smartMergeState(ltRes.data.map(normalizeFile), prev, 'letters'));
       } catch (err) {
         console.error('[Poll] File data polling failed:', err);
       }
@@ -979,10 +1005,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastClientFeedbackDate: row.last_client_feedback_date ?? row.lastClientFeedbackDate
         });
 
-        if (courtData) setCourtCases(prev => mergeIfChanged(prev, courtData.map(normalizeFile)));
-        if (txData) setTransactions(prev => mergeIfChanged(prev, txData.map(normalizeFile)));
+        if (courtData) setCourtCases(prev => smartMergeState(courtData.map(normalizeFile), prev, 'court_cases'));
+        if (txData) setTransactions(prev => smartMergeState(txData.map(normalizeFile), prev, 'transactions'));
         if (clientData) setClients(prev => mergeIfChanged(prev, clientData));
-        if (letterData) setLetters(prev => mergeIfChanged(prev, letterData.map(normalizeFile)));
+        if (letterData) setLetters(prev => smartMergeState(letterData.map(normalizeFile), prev, 'letters'));
         if (userData) setUsers(prev => mergeIfChanged(prev, userData));
         if (taskData) setTasks(prev => mergeIfChanged(prev, taskData).map(normalizeTask));
         const normalizeInvoice = (row: any): Invoice => ({
