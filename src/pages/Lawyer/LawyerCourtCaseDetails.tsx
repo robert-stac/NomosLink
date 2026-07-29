@@ -305,11 +305,25 @@ export default function LawyerCourtCaseDetails() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-white/10">
-                  <p className="text-xs font-semibold text-slate-400 uppercase">Outstanding Balance</p>
-                  <p className="text-lg font-bold">
-                    UGX {((courtCase.billed || 0) - (courtCase.paid || 0)).toLocaleString()}
-                  </p>
+                <div className="pt-4 border-t border-white/10 space-y-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Amount Billed</p>
+                    <p className="text-lg font-black text-white">
+                      UGX {(courtCase.billed || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Amount Paid</p>
+                    <p className="text-lg font-black text-emerald-400">
+                      UGX {(courtCase.paid || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="pt-4 border-t border-white/10">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Outstanding Balance</p>
+                    <p className="text-xl font-black text-orange-400">
+                      UGX {((courtCase.billed || 0) - (courtCase.paid || 0)).toLocaleString()}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

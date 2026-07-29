@@ -7,6 +7,7 @@ export default function CourtCases() {
   const location = useLocation();
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [fileName, setFileName] = useState("");
   const [lawyerId, setLawyerId] = useState("");
   const [status, setStatus] = useState<"Ongoing" | "Completed" | "On Hold" | "Pending">("Ongoing");
@@ -95,6 +96,7 @@ export default function CourtCases() {
     setClientId("");
     setClientSearch("");
     setEditingId(null);
+    setIsFormOpen(false);
   };
 
   const CATEGORY_OPTIONS = ["Civil Suit", "Miscellaneous Cause", "Miscellaneous Application", "Divorce Cause", "Criminal Case", "Election Petition"];
@@ -149,6 +151,7 @@ export default function CourtCases() {
   };
 
   const handleEdit = (c: any) => {
+    setIsFormOpen(true);
     setEditingId(c.id);
     setFileName(c.fileName);
     setLawyerId(c.lawyerId || "");
@@ -241,12 +244,26 @@ export default function CourtCases() {
       </div>
 
       {/* ADD / EDIT FORM */}
-      <div className="bg-white shadow-md rounded-lg mb-8 overflow-hidden">
-        <div className="bg-[#0B1F3A] text-white px-6 py-4 flex justify-between items-center">
-          <h3 className="font-semibold tracking-tight">{editingId ? "Edit Court Case" : "Add Court Case"}</h3>
-          {editingId && <button onClick={resetForm} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-md font-semibold transition">Cancel Edit</button>}
+      <div className="bg-white shadow-md rounded-lg mb-8 overflow-hidden transition-all duration-300">
+        <div 
+          className="bg-[#0B1F3A] text-white px-6 py-4 flex justify-between items-center cursor-pointer hover:bg-[#09203b] transition-colors"
+          onClick={() => setIsFormOpen(!isFormOpen)}
+        >
+          <h3 className="font-semibold tracking-tight flex items-center gap-2">
+            {editingId ? "Edit Court Case" : "Add Court Case"}
+            <span className="text-sm bg-white/10 px-2 py-0.5 rounded-full font-mono">{isFormOpen ? '−' : '+'}</span>
+          </h3>
+          {editingId && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); resetForm(); }} 
+              className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-md font-semibold transition"
+            >
+              Cancel Edit
+            </button>
+          )}
         </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {isFormOpen && (
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 fade-in duration-200">
           <div>
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">File Name *</label>
             <input className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="e.g. Civil Suit No. 12" />
@@ -385,6 +402,7 @@ export default function CourtCases() {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* COURT CASES TABLE */}

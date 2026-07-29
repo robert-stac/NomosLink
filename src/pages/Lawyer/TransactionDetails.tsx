@@ -157,19 +157,15 @@ export default function TransactionDetails() {
           <h1 className="text-3xl font-black text-slate-900 mb-2">{transaction.fileName}</h1>
           <p className="text-slate-400 font-bold uppercase text-xs tracking-widest mb-6">{transaction.type}</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-50">
-            {/* Amount hidden from Manager to maintain financial privacy */}
-            {!isManager ? (
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Financial Value</p>
-                <p className="text-xl font-black text-emerald-600">UGX {transaction.billedAmount?.toLocaleString() ?? "0"}</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Financial Value</p>
-                <p className="text-sm font-bold text-slate-300 italic">Restricted Access</p>
-              </div>
-            )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-slate-50">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Amount Billed</p>
+              <p className="text-lg font-black text-slate-700">UGX {(transaction.billed || transaction.billedAmount || 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Amount Paid</p>
+              <p className="text-lg font-black text-emerald-600">UGX {(transaction.paid || transaction.paidAmount || 0).toLocaleString()}</p>
+            </div>
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Commencement Date</p>
               <p className="text-slate-700 font-bold">{transaction.date ? new Date(transaction.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : "Not set"}</p>
