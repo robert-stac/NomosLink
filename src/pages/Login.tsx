@@ -158,7 +158,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "Segoe UI, Arial, sans-serif",
+
   },
   card: {
     width: 380,

@@ -45,10 +45,10 @@ export default function Archive() {
   const getLawyerName = (id: string | undefined) => id ? (lawyers.find(l => l.id === id)?.name || "Unassigned") : "Unassigned";
 
   return (
-    <div className="bg-gray-50 min-h-screen p-8 space-y-12" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="bg-gray-50 min-h-screen p-8 space-y-12">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>Firm Archives</h2>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight font-serif">Firm Archives</h2>
           <p className="text-slate-500 text-sm font-medium">Manage closed cases, completed tasks, and historical transactions.</p>
         </div>
 

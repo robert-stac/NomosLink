@@ -194,9 +194,9 @@ export default function CourtCases() {
   const totalBilledValue = useMemo(() => activeCases.reduce((sum, c) => sum + (c.billed || 0), 0), [activeCases]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-gray-100 p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: "'Playfair Display', serif" }}>Court Cases</h1>
+        <h1 className="text-2xl font-bold text-slate-900 font-serif">Court Cases</h1>
         <div className="flex items-center gap-3">
           <select
             className="border rounded-lg px-4 py-2 bg-white text-sm font-medium text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"

@@ -105,10 +105,12 @@ const Clients: React.FC = () => {
           clientTitles.reduce((sum: number, t: any) => sum + ((t.total_billed || 0) - (t.total_paid || 0)), 0);
 
         const clientExpenses = (expenses || []).filter((e: any) =>
-          clientCases.some(c => c.id === e.relatedFileId) ||
-          clientTransactions.some(t => t.id === e.relatedFileId) ||
-          clientLetters.some(l => l.id === e.relatedFileId) ||
-          clientTitles.some((t: any) => t.id === e.relatedFileId)
+          e.type !== 'transfer' && (
+            clientCases.some(c => c.id === e.relatedFileId) ||
+            clientTransactions.some(t => t.id === e.relatedFileId) ||
+            clientLetters.some(l => l.id === e.relatedFileId) ||
+            clientTitles.some((t: any) => t.id === e.relatedFileId)
+          )
         );
 
         return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, expenses: clientExpenses, totalOwed, totalFilesCount };
@@ -314,7 +316,7 @@ const Clients: React.FC = () => {
   const fmt = (n: number) => "UGX " + Math.round(n).toLocaleString();
   const lbl = "block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5";
   const inp = "w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-400 transition";
-  const body = { fontFamily: "'DM Sans', sans-serif" } as React.CSSProperties;
+  const body = {} as React.CSSProperties;
   const serif = { fontFamily: "'Playfair Display', serif" } as React.CSSProperties;
 
 

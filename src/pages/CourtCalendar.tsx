@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 import type { CourtCase } from "../context/AppContext";
 
-const body: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+const body: React.CSSProperties = {};
 const serif: React.CSSProperties = { fontFamily: "'Playfair Display', serif" };
 
 const MONTHS = [

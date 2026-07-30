@@ -7,7 +7,7 @@ import CourtCalendar from "../CourtCalendar";
 // Add to index.html:
 // <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
 
-const body: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+const body: React.CSSProperties = {};
 const serif: React.CSSProperties = { fontFamily: "'Playfair Display', serif" };
 
 export default function ClerkDashboard() {

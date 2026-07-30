@@ -5,7 +5,7 @@ import NotificationBell from "../NotificationBell";
 import { getDeadlineUrgency, getUrgencyStyles } from "../../utils/dateUtils";
 import CourtCalendar from "../CourtCalendar";
 
-const body: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+const body: React.CSSProperties = {};
 const serif: React.CSSProperties = { fontFamily: "'Playfair Display', serif" };
 
 const FileCard = ({ title, subtitle, status, date, onView, isLead }: any) => (

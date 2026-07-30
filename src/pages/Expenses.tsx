@@ -24,6 +24,7 @@ export default function Expenses() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [filterCategory, setFilterCategory] = useState("All");
+  const [filterAccount, setFilterAccount] = useState("All");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
 
@@ -58,7 +59,7 @@ export default function Expenses() {
   ];
 
   const [formData, setFormData] = useState({
-    type: "out" as "in" | "out",
+    type: "out" as "in" | "out" | "transfer",
     date: "",
     purpose: "",
     amount: "",
@@ -68,7 +69,7 @@ export default function Expenses() {
     relatedFileId: "",
     relatedFileType: "" as any,
     relatedFileName: "",
-    paymentMethod: "" as "" | "Cash" | "Cheque" | "Mobile Money"
+    paymentMethod: "" as "" | "Cash" | "Bank Transfer/ Cheque" | "Mobile Money" | "Petty Cash"
   });
 
   const [isFileDropdownOpen, setIsFileDropdownOpen] = useState(false);
@@ -94,19 +95,70 @@ export default function Expenses() {
         (exp.relatedFileName || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "All" || typeStr === filterType;
       const matchesCategory = filterCategory === "All" || (exp.category || "") === filterCategory;
+      const matchesAccount = filterAccount === "All" ||
+        exp.paymentMethod === filterAccount ||
+        (exp.type === "transfer" && exp.category === filterAccount);
       const matchesDateFrom = !filterDateFrom || new Date(exp.date) >= new Date(filterDateFrom);
       const matchesDateTo = !filterDateTo || new Date(exp.date) <= new Date(filterDateTo);
-      return matchesSearch && matchesType && matchesCategory && matchesDateFrom && matchesDateTo;
+      return matchesSearch && matchesType && matchesCategory && matchesAccount && matchesDateFrom && matchesDateTo;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, searchTerm, filterType, filterCategory, filterDateFrom, filterDateTo]);
+  }, [expenses, searchTerm, filterType, filterCategory, filterAccount, filterDateFrom, filterDateTo]);
 
-  // Summaries
+  // Account Balances (Calculated globally over all expenses)
+  const accountBalances = useMemo(() => {
+    let cash = 0;
+    let momo = 0;
+    let bank = 0;
+    let petty = 0;
+    let unspecified = 0;
+
+    (expenses || []).forEach((exp: any) => {
+      const amt = Number(exp.amount || 0);
+      const method = exp.paymentMethod || "";
+      const type = exp.type || "out";
+
+      if (type === "in") {
+        if (method === "Cash") cash += amt;
+        else if (method === "Mobile Money") momo += amt;
+        else if ((method === "Cheque" || method === "Bank Transfer/ Cheque")) bank += amt;
+        else if (method === "Petty Cash") petty += amt;
+        else unspecified += amt;
+      } else if (type === "out") {
+        if (method === "Cash") cash -= amt;
+        else if (method === "Mobile Money") momo -= amt;
+        else if ((method === "Cheque" || method === "Bank Transfer/ Cheque")) bank -= amt;
+        else if (method === "Petty Cash") petty -= amt;
+        else unspecified -= amt;
+      } else if (type === "transfer") {
+        const source = method;
+        const dest = exp.category || "";
+
+        // Deduct from source
+        if (source === "Cash") cash -= amt;
+        else if (source === "Mobile Money") momo -= amt;
+        else if ((source === "Cheque" || source === "Bank Transfer/ Cheque")) bank -= amt;
+        else if (source === "Petty Cash") petty -= amt;
+        else unspecified -= amt;
+
+        // Add to destination
+        if (dest === "Cash") cash += amt;
+        else if (dest === "Mobile Money") momo += amt;
+        else if ((dest === "Cheque" || dest === "Bank Transfer/ Cheque")) bank += amt;
+        else if (dest === "Petty Cash") petty += amt;
+        else unspecified += amt;
+      }
+    });
+
+    return { cash, momo, bank, petty, unspecified };
+  }, [expenses]);
+
+  // Summaries (Runs over filtered transactions, excluding transfers)
   const summaries = useMemo(() => {
     let totalIn = 0;
     let totalOut = 0;
     (filteredExpenses || []).forEach((exp: any) => {
       if (exp.type === "in") totalIn += Number(exp.amount || 0);
-      else totalOut += Number(exp.amount || 0);
+      else if (exp.type === "out") totalOut += Number(exp.amount || 0);
     });
     return {
       totalReceived: totalIn,
@@ -140,7 +192,7 @@ export default function Expenses() {
       if (exp.type === "in" && amt > 0) {
         const cat = exp.category || "Other incomes";
         incomeCategoryTotals[cat] = (incomeCategoryTotals[cat] || 0) + amt;
-      } else if (exp.type !== "in" && amt > 0) {
+      } else if (exp.type === "out" && amt > 0) {
         if (exp.staffName) {
           staffTotals[exp.staffName] = (staffTotals[exp.staffName] || 0) + amt;
         }
@@ -227,11 +279,12 @@ export default function Expenses() {
 
   const handleExportCSV = () => {
     if (filteredExpenses.length === 0) return alert("No data to export");
-    const headers = ["Date", "Type", "Category", "Staff Name", "Purpose", "File Name", "Amount (UGX)"];
+    const headers = ["Date", "Type", "Account", "Category", "Staff Name", "Purpose", "File Name", "Amount (UGX)"];
     const rows = filteredExpenses.map((exp: any) => [
       exp.date,
-      exp.type === "in" ? "Money In" : "Money Out",
-      exp.category || "",
+      exp.type === "in" ? "Money In" : exp.type === "transfer" ? "Transfer" : "Money Out",
+      exp.type === "transfer" ? `${exp.paymentMethod || ''} > ${exp.category || ''}` : (exp.paymentMethod || ""),
+      exp.type === "transfer" ? "" : (exp.category || ""),
       exp.staffName || "",
       (exp.purpose || exp.description || "").replace(/,/g, ""),
       (exp.relatedFileName || "").replace(/,/g, ""),
@@ -276,14 +329,22 @@ export default function Expenses() {
       alert("Please select a payment method (Cash, Cheque, or Mobile Money).");
       return;
     }
+    if (formData.type === 'out' && !formData.paymentMethod) {
+      alert("Please select a source account (Cash, Cheque, Mobile Money, or Petty Cash).");
+      return;
+    }
+    if (formData.type === 'transfer' && !formData.paymentMethod) {
+      alert("Please select a source account (Cash, Cheque, or Mobile Money) to transfer from.");
+      return;
+    }
 
     const baseData: Record<string, any> = {
       date: formData.date,
       amount: Math.round(Number(formData.amount)),
       description: formData.purpose,
       purpose: formData.purpose,
-      category: formData.category || (formData.type === 'in' ? "Other incomes" : "Others"),
-      paymentMethod: formData.type === 'in' ? formData.paymentMethod : undefined,
+      category: formData.type === 'transfer' ? 'Petty Cash' : (formData.category || (formData.type === 'in' ? "Other incomes" : "Others")),
+      paymentMethod: formData.paymentMethod || "",
     };
 
     let newExpense: Record<string, any>;
@@ -313,12 +374,22 @@ export default function Expenses() {
       if (error) {
         console.error('[Expense Save] Error:', error.message);
         alert(`Expense save failed: ${error.message}`);
+        return;
       } else {
         console.log('[Expense Save] Success:', data);
       }
     }
 
-    setShowModal(false);
+    if (editingId) {
+      // Close modal when editing an existing record
+      setShowModal(false);
+    } else {
+      // Reset form for a new entry so the accountant can keep entering data
+      setFormData({ type: "out", date: "", purpose: "", amount: "", category: "", staffId: "", staffName: "", relatedFileId: "", relatedFileType: "", relatedFileName: "", paymentMethod: "" });
+      setEditingId(null);
+      setIsFileDropdownOpen(false);
+      setFileSearch("");
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -365,18 +436,45 @@ export default function Expenses() {
 
       {activeTab === "Ledger" && (
         <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Account Balances Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">💵 Cash Account</span>
+              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.cash.toLocaleString()}</h4>
+            </div>
+            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">📱 Mobile Money</span>
+              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.momo.toLocaleString()}</h4>
+            </div>
+            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">📝 Bank Transfer / Cheque</span>
+              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.bank.toLocaleString()}</h4>
+            </div>
+            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">💼 Petty Cash</span>
+              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.petty.toLocaleString()}</h4>
+            </div>
+          </div>
+
+          {accountBalances.unspecified !== 0 && (
+            <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex justify-between items-center text-xs text-slate-500 font-semibold shadow-sm">
+              <span className="flex items-center gap-2">⚠️ Legacy / Unspecified General Balance (unassigned payment methods):</span>
+              <span className="font-bold text-slate-700">UGX {accountBalances.unspecified.toLocaleString()}</span>
+            </div>
+          )}
+
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl relative overflow-hidden">
-              <p className="text-xs font-black uppercase tracking-widest text-emerald-600/80 mb-2">Total Received</p>
+              <p className="text-xs font-black uppercase tracking-widest text-emerald-600/80 mb-2">Total Received (Income)</p>
               <h3 className="text-3xl font-black text-emerald-700">UGX {summaries.totalReceived.toLocaleString()}</h3>
             </div>
             <div className="bg-red-50 border border-red-100 p-6 rounded-2xl relative overflow-hidden">
-              <p className="text-xs font-black uppercase tracking-widest text-red-600/80 mb-2">Total Spent</p>
+              <p className="text-xs font-black uppercase tracking-widest text-red-600/80 mb-2">Total Spent (Expenses)</p>
               <h3 className="text-3xl font-black text-red-700">UGX {summaries.totalSpent.toLocaleString()}</h3>
             </div>
             <div className={`border p-6 rounded-2xl relative overflow-hidden ${summaries.balance < 0 ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'}`}>
-              <p className={`text-xs font-black uppercase tracking-widest mb-2 ${summaries.balance < 0 ? 'text-orange-600/80' : 'text-blue-600/80'}`}>Current Balance</p>
+              <p className={`text-xs font-black uppercase tracking-widest mb-2 ${summaries.balance < 0 ? 'text-orange-600/80' : 'text-blue-600/80'}`}>Net Company Balance</p>
               <h3 className={`text-3xl font-black ${summaries.balance < 0 ? 'text-orange-700' : 'text-blue-700'}`}>UGX {summaries.balance.toLocaleString()}</h3>
             </div>
           </div>
@@ -394,9 +492,21 @@ export default function Expenses() {
               onChange={(e) => setFilterType(e.target.value)}
               className="bg-white border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none shadow-sm cursor-pointer"
             >
-              <option value="All">All Transactions</option>
+              <option value="All">All Types</option>
               <option value="in">Money In (+)</option>
               <option value="out">Money Out (-)</option>
+              <option value="transfer">Transfers (⇄)</option>
+            </select>
+            <select
+              value={filterAccount}
+              onChange={(e) => setFilterAccount(e.target.value)}
+              className="bg-white border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none shadow-sm cursor-pointer"
+            >
+              <option value="All">All Accounts</option>
+              <option value="Cash">Cash Account</option>
+              <option value="Mobile Money">Mobile Money</option>
+              <option value="Bank Transfer/ Cheque">Cheque/Bank</option>
+              <option value="Petty Cash">Petty Cash</option>
             </select>
             <select
               value={filterCategory}
@@ -412,8 +522,8 @@ export default function Expenses() {
               <span className="text-slate-400 font-bold text-sm px-1">to</span>
               <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none shadow-sm" title="End Date" />
             </div>
-            {(filterType !== "All" || filterCategory !== "All" || searchTerm || filterDateFrom || filterDateTo) && (
-              <button onClick={() => { setFilterType("All"); setFilterCategory("All"); setSearchTerm(""); setFilterDateFrom(""); setFilterDateTo(""); }} className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">Clear</button>
+            {(filterType !== "All" || filterCategory !== "All" || filterAccount !== "All" || searchTerm || filterDateFrom || filterDateTo) && (
+              <button onClick={() => { setFilterType("All"); setFilterCategory("All"); setFilterAccount("All"); setSearchTerm(""); setFilterDateFrom(""); setFilterDateTo(""); }} className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">Clear</button>
             )}
           </div>
 
@@ -424,6 +534,7 @@ export default function Expenses() {
                   <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
                     <th className="p-4">Date</th>
                     <th className="p-4">Type</th>
+                    <th className="p-4">Account</th>
                     <th className="p-4">Category</th>
                     <th className="p-4">Staff & File</th>
                     <th className="p-4">Purpose</th>
@@ -433,28 +544,38 @@ export default function Expenses() {
                 </thead>
                 <tbody className="text-sm font-medium">
                   {filteredExpenses.length > 0 ? filteredExpenses.map((exp: any) => (
-                    <tr key={exp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                    <tr key={exp.id} className={`border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors ${exp.type === 'transfer' ? 'bg-amber-50/40' : ''}`}>
                       <td className="p-4 text-slate-600 whitespace-nowrap">{exp.date}</td>
                       <td className="p-2">
                         {exp.type === 'in'
                           ? <span className="text-emerald-700 rounded text-[10px] font-black">In (+)</span>
-                          : <span className="text-red-700 rounded text-[10px] font-black">Out (-)</span>
+                          : exp.type === 'transfer'
+                            ? <span className="text-amber-700 rounded text-[10px] font-black">Transfer ⇄</span>
+                            : <span className="text-red-700 rounded text-[10px] font-black">Out (-)</span>
                         }
                       </td>
                       <td className="p-4">
-                        {exp.category ? (
-                          <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider whitespace-nowrap">{exp.category}</span>
+                        {exp.type === 'transfer' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">
+                            {exp.paymentMethod || '?'} ➔ {exp.category || '?'}
+                          </span>
+                        ) : exp.paymentMethod ? (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${exp.type === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                            {exp.paymentMethod === 'Cash' ? '💵' : (exp.paymentMethod === 'Bank Transfer/ Cheque' || exp.paymentMethod === 'Bank Transfer/ Cheque') ? '📝' : exp.paymentMethod === 'Mobile Money' ? '📱' : '💼'} {exp.paymentMethod}
+                          </span>
                         ) : (
                           <span className="text-slate-300 italic text-xs">—</span>
                         )}
                       </td>
+                      <td className="p-4">
+                        {exp.type !== 'transfer' && exp.category ? (
+                          <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider whitespace-nowrap">{exp.category}</span>
+                        ) : exp.type !== 'transfer' ? (
+                          <span className="text-slate-300 italic text-xs">—</span>
+                        ) : null}
+                      </td>
                       <td className="p-4 max-w-[200px]">
                         <div className="space-y-1">
-                          {exp.type === 'in' && exp.paymentMethod && (
-                            <p className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                              {exp.paymentMethod === 'Cash' ? '💵' : exp.paymentMethod === 'Cheque' ? '📝' : '📱'} {exp.paymentMethod}
-                            </p>
-                          )}
                           {exp.type === 'out' && exp.staffName && <p className="text-slate-800 font-bold text-xs">👤 {exp.staffName}</p>}
                           {exp.relatedFileName
                             ? <p className="text-blue-600 text-xs truncate" title={exp.relatedFileName}>⚖️ {exp.relatedFileName}</p>
@@ -463,8 +584,8 @@ export default function Expenses() {
                         </div>
                       </td>
                       <td className="p-4 text-slate-700 capitalize">{exp.purpose || exp.description}</td>
-                      <td className={`p-4 text-right font-black whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {exp.type === 'in' ? '+' : '-'} {Number(exp.amount).toLocaleString()}
+                      <td className={`p-4 text-right font-black whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-600' : exp.type === 'transfer' ? 'text-amber-700' : 'text-red-500'}`}>
+                        {exp.type === 'in' ? '+' : exp.type === 'transfer' ? '⇄' : '-'} {Number(exp.amount).toLocaleString()}
                       </td>
                       <td className="p-4 text-center whitespace-nowrap">
                         <button onClick={() => handleOpenModal(exp)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase mr-3">Edit</button>
@@ -472,7 +593,7 @@ export default function Expenses() {
                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={7} className="p-8 text-center text-slate-400 font-medium italic">No transactions match your search.</td></tr>
+                    <tr><td colSpan={8} className="p-8 text-center text-slate-400 font-medium italic">No transactions match your search.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -716,32 +837,56 @@ export default function Expenses() {
               <div className="flex bg-slate-100 p-1 rounded-xl">
                 <button type="button" onClick={() => setFormData({ ...formData, type: "in", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'in' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money In (+) </button>
                 <button type="button" onClick={() => setFormData({ ...formData, type: "out", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'out' ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money Out (-) </button>
+                <button type="button" onClick={() => setFormData({ ...formData, type: "transfer", paymentMethod: "", category: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'transfer' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Transfer ⇄ </button>
               </div>
 
               {formData.type === 'in' && (
                 <div className="group relative">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1 transition-colors group-focus-within:text-blue-600">Payment Method <span className="text-red-400">*</span></label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">Destination Account <span className="text-red-400">*</span></label>
                   <div className="grid grid-cols-3 gap-2">
-                    {(["Cash", "Cheque", "Mobile Money"] as const).map((method) => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, paymentMethod: method })}
-                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${
-                          formData.paymentMethod === method
-                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm'
-                            : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'
-                        }`}
-                      >
-                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Cheque' ? '📝' : '📱'}</span>
+                    {(["Cash", "Bank Transfer/ Cheque", "Mobile Money"] as const).map((method) => (
+                      <button key={method} type="button" onClick={() => setFormData({ ...formData, paymentMethod: method })}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${formData.paymentMethod === method ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'}`}>
+                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Bank Transfer/ Cheque' ? '📝' : '📱'}</span>
                         <span>{method}</span>
-                        {formData.paymentMethod === method && (
-                          <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-                            <span className="text-white text-[8px] font-black">✓</span>
-                          </span>
-                        )}
+                        {formData.paymentMethod === method && (<span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center"><span className="text-white text-[8px] font-black">✓</span></span>)}
                       </button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {formData.type === 'out' && (
+                <div className="group relative">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">Source Account <span className="text-red-400">*</span></label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["Cash", "Bank Transfer/ Cheque", "Mobile Money", "Petty Cash"] as const).map((method) => (
+                      <button key={method} type="button" onClick={() => setFormData({ ...formData, paymentMethod: method })}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${formData.paymentMethod === method ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'}`}>
+                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Bank Transfer/ Cheque' ? '📝' : method === 'Mobile Money' ? '📱' : '💼'}</span>
+                        <span>{method}</span>
+                        {formData.paymentMethod === method && (<span className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center"><span className="text-white text-[8px] font-black">✓</span></span>)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formData.type === 'transfer' && (
+                <div className="group relative">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">Transfer From <span className="text-red-400">*</span></label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["Cash", "Bank Transfer/ Cheque", "Mobile Money"] as const).map((method) => (
+                      <button key={method} type="button" onClick={() => setFormData({ ...formData, paymentMethod: method })}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${formData.paymentMethod === method ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'}`}>
+                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Bank Transfer/ Cheque' ? '📝' : '📱'}</span>
+                        <span>{method}</span>
+                        {formData.paymentMethod === method && (<span className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center"><span className="text-white text-[8px] font-black">✓</span></span>)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+                    <p className="text-xs font-bold text-amber-800">➔ Destination: <span className="font-black">Petty Cash 💼</span></p>
                   </div>
                 </div>
               )}
@@ -753,106 +898,106 @@ export default function Expenses() {
                 />
               </div>
 
-              <div className="group relative">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Category</label>
-                <select
-                  required
-                  className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
-                  value={formData.category}
-                  onChange={e => setFormData({ ...formData, category: e.target.value })}
-                >
-                  <option value="">Select category...</option>
-                  {(formData.type === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              {formData.type !== 'transfer' && (
+                <div className="group relative">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Category</label>
+                  <select required className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                    value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
+                    <option value="">Select category...</option>
+                    {(formData.type === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
 
               {formData.type === 'out' && (
                 <div className="group relative">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Staff Member Receiving Funds</label>
-                  <select
-                    className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
-                    value={formData.staffId}
-                    onChange={e => {
-                      const staff = staffList.find(s => s.id === e.target.value);
-                      setFormData({ ...formData, staffId: staff?.id || "", staffName: staff?.name || "" });
-                    }}
-                  >
+                  <select className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                    value={formData.staffId} onChange={e => { const staff = staffList.find(s => s.id === e.target.value); setFormData({ ...formData, staffId: staff?.id || "", staffName: staff?.name || "" }); }}>
                     <option value="">-- General / No Specific Staff --</option>
                     {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
                   </select>
                 </div>
               )}
 
-              <div className="group relative z-40">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link File (Optional)</label>
-                <div className="relative">
-                  <div
-                    onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
-                    className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-4 ring-blue-500/10" : "border-slate-200"} p-3.5 pl-10 rounded-xl font-bold text-sm text-slate-800 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
-                  >
-                    <span className="truncate">{formData.relatedFileName || "-- General Transaction --"}</span>
-                    <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
-                  </div>
+              {formData.type !== 'transfer' && (
+                <div className="group relative z-40">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link File (Optional)</label>
+                  <div className="relative">
+                    <div
+                      onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
+                      className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-4 ring-blue-500/10" : "border-slate-200"} p-3.5 pl-10 rounded-xl font-bold text-sm text-slate-800 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
+                    >
+                      <span className="truncate">{formData.relatedFileName || "-- General Transaction --"}</span>
+                      <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
+                    </div>
 
-                  {isFileDropdownOpen && (
-                    <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-72">
-                      <div className="p-3 border-b border-slate-100 bg-slate-50/50">
-                        <div className="relative">
-                          <input
-                            autoFocus type="text" placeholder="Search files..."
-                            className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
-                            value={fileSearch} onChange={e => setFileSearch(e.target.value)} onClick={e => e.stopPropagation()}
-                          />
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                    {isFileDropdownOpen && (
+                      <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-72">
+                        <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+                          <div className="relative">
+                            <input
+                              autoFocus type="text" placeholder="Search files..."
+                              className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
+                              value={fileSearch} onChange={e => setFileSearch(e.target.value)} onClick={e => e.stopPropagation()}
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                          </div>
+                        </div>
+
+                        <div className="overflow-y-auto p-2 space-y-1" onClick={e => e.stopPropagation()}>
+                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${formData.relatedFileId === 'BCA' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                            onClick={() => { setFormData({ ...formData, relatedFileId: "BCA", relatedFileType: "general", relatedFileName: "BCA" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                          >
+                            🏦 BCA
+                          </button>
+
+                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${formData.relatedFileId === 'Fisk (U) Ltd' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                            onClick={() => { setFormData({ ...formData, relatedFileId: "Fisk (U) Ltd", relatedFileType: "general", relatedFileName: "Fisk (U) Ltd" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                          >
+                            🏢 Fisk (U) Ltd
+                          </button>
+
+                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${!formData.relatedFileId ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
+                            onClick={() => { setFormData({ ...formData, relatedFileId: "", relatedFileType: "", relatedFileName: "" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                          >
+                            ❌ No File Checked
+                          </button>
+
+                          {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                            <div className="pt-2">
+                              <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
+                              {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
+                                <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                  onClick={() => { setFormData({ ...formData, relatedFileId: c.id, relatedFileType: "case", relatedFileName: c.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                                >
+                                  <span className="text-sm">⚖️</span> {c.fileName}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                            <div className="pt-2">
+                              <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
+                              {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
+                                <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                  onClick={() => { setFormData({ ...formData, relatedFileId: t.id, relatedFileType: "transaction", relatedFileName: t.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                                >
+                                  <span className="text-sm">💼</span> {t.fileName}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
                         </div>
                       </div>
-
-                      <div className="overflow-y-auto p-2 space-y-1" onClick={e => e.stopPropagation()}>
-                        <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${formData.relatedFileId === 'BCA' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                          onClick={() => { setFormData({ ...formData, relatedFileId: "BCA", relatedFileType: "general", relatedFileName: "BCA" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                        >
-                          🏦 BCA
-                        </button>
-
-                        <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${!formData.relatedFileId ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
-                          onClick={() => { setFormData({ ...formData, relatedFileId: "", relatedFileType: "", relatedFileName: "" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                        >
-                          ❌ No File Checked
-                        </button>
-
-                        {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
-                          <div className="pt-2">
-                            <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
-                            {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
-                              <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                                onClick={() => { setFormData({ ...formData, relatedFileId: c.id, relatedFileType: "case", relatedFileName: c.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                              >
-                                <span className="text-sm">⚖️</span> {c.fileName}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
-                          <div className="pt-2">
-                            <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
-                            {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
-                              <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                                onClick={() => { setFormData({ ...formData, relatedFileId: t.id, relatedFileType: "transaction", relatedFileName: t.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                              >
-                                <span className="text-sm">💼</span> {t.fileName}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                      </div>
-                    </div>
-                  )}
-                  {isFileDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsFileDropdownOpen(false)} />}
+                    )}
+                    {isFileDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsFileDropdownOpen(false)} />}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="group relative">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Purpose / Details</label>
@@ -875,7 +1020,7 @@ export default function Expenses() {
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-white border border-slate-200 text-slate-500 py-3.5 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-slate-50 transition-all shadow-sm">
                   Cancel
                 </button>
-                <button type="submit" className={`flex-1 text-white py-3.5 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-md active:scale-95 ${formData.type === 'in' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20' : 'bg-slate-900 hover:bg-slate-800 shadow-slate-900/20'}`}>
+                <button type="submit" className={`flex-1 text-white py-3.5 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-md active:scale-95 ${formData.type === 'in' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20' : formData.type === 'transfer' ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20' : 'bg-slate-900 hover:bg-slate-800 shadow-slate-900/20'}`}>
                   Save Transaction
                 </button>
               </div>

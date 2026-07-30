@@ -317,7 +317,7 @@ export default function Requisitions() {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8" style={{ fontFamily: '"Arial Narrow", Arial, sans-serif' }}>
+    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8">
       <div className="flex items-center gap-4 mb-2">
         <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-2 text-sm font-bold bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
           ← Back
