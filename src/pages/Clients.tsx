@@ -322,7 +322,7 @@ const Clients: React.FC = () => {
 
 
   return (
-    <div style={body} className="min-h-screen bg-[#F4F7F9] p-8">
+    <div className="min-h-screen bg-[#F4F7F9] p-8">
 
       {/* HEADER */}
       <div className="flex justify-between items-end mb-10">
@@ -330,7 +330,7 @@ const Clients: React.FC = () => {
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
             Buwembo & Company Advocates
           </p>
-          <h1 style={serif} className="text-4xl font-bold text-[#0B1F3A] leading-tight">
+          <h1 className="text-4xl font-bold text-[#0B1F3A] leading-tight">
             Client Portfolio
           </h1>
         </div>
@@ -384,7 +384,7 @@ const Clients: React.FC = () => {
               </span>
               <span className="text-xs text-slate-300">#{client.id.split("-")[1]}</span>
             </div>
-            <h3 style={serif} className="text-xl font-semibold text-[#0B1F3A] mb-1 group-hover:text-blue-700 transition-colors leading-snug">
+            <h3 className="text-xl font-semibold text-[#0B1F3A] mb-1 group-hover:text-blue-700 transition-colors leading-snug">
               {client.name}
             </h3>
             <p className="text-sm text-slate-400 mb-6 truncate">{client.email || "No email on record"}</p>
@@ -417,7 +417,7 @@ const Clients: React.FC = () => {
           <div className="absolute inset-0 bg-[#0B1F3A]/40 backdrop-blur-sm" onClick={() => setSelectedClient(null)} />
 
           <div
-            style={body}
+           
             className="relative w-full max-w-2xl bg-white h-screen shadow-2xl overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
@@ -439,7 +439,7 @@ const Clients: React.FC = () => {
               <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest mb-2 mt-1">
                 {selectedClient.type} Client
               </p>
-              <h2 style={serif} className="text-3xl font-bold leading-tight mb-3">
+              <h2 className="text-3xl font-bold leading-tight mb-3">
                 {selectedClient.name}
               </h2>
               <div className="flex flex-wrap gap-5 text-sm text-blue-200 font-medium">
@@ -967,7 +967,7 @@ const Clients: React.FC = () => {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#0B1F3A]/60 backdrop-blur-sm" onClick={() => setShowEditModal(false)} />
           <div
-            style={body}
+           
             className="relative bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl space-y-5"
             onClick={e => e.stopPropagation()}
           >
@@ -979,7 +979,7 @@ const Clients: React.FC = () => {
             </button>
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Edit Client</p>
-              <h2 style={serif} className="text-2xl font-bold text-[#0B1F3A]">Update Client Details</h2>
+              <h2 className="text-2xl font-bold text-[#0B1F3A]">Update Client Details</h2>
             </div>
             <div>
               <label className={lbl}>Full Name / Company</label>
@@ -1029,7 +1029,7 @@ const Clients: React.FC = () => {
           <div className="absolute inset-0 bg-[#0B1F3A]/80 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
           <form
             onSubmit={handleAddClient}
-            style={body}
+           
             className="relative bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl space-y-5"
             onClick={e => e.stopPropagation()}
           >
@@ -1042,7 +1042,7 @@ const Clients: React.FC = () => {
             </button>
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Client Intake</p>
-              <h2 style={serif} className="text-2xl font-bold text-[#0B1F3A]">New Client Registration</h2>
+              <h2 className="text-2xl font-bold text-[#0B1F3A]">New Client Registration</h2>
             </div>
             <div>
               <label className={lbl}>Full Name / Company</label>

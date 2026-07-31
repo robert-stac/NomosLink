@@ -528,10 +528,10 @@ export default function Expenses() {
           </div>
 
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
+                <thead className="sticky top-0 z-10 bg-slate-50">
+                  <tr className="border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
                     <th className="p-4">Date</th>
                     <th className="p-4">Type</th>
                     <th className="p-4">Account</th>
@@ -543,7 +543,7 @@ export default function Expenses() {
                   </tr>
                 </thead>
                 <tbody className="text-sm font-medium">
-                  {filteredExpenses.length > 0 ? filteredExpenses.map((exp: any) => (
+                  {filteredExpenses.length > 0 ? filteredExpenses.slice(0, 100).map((exp: any) => (
                     <tr key={exp.id} className={`border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors ${exp.type === 'transfer' ? 'bg-amber-50/40' : ''}`}>
                       <td className="p-4 text-slate-600 whitespace-nowrap">{exp.date}</td>
                       <td className="p-2">
@@ -583,7 +583,7 @@ export default function Expenses() {
                           }
                         </div>
                       </td>
-                      <td className="p-4 text-slate-700 capitalize">{exp.purpose || exp.description}</td>
+                      <td className="p-4 text-slate-700 capitalize min-w-[200px] max-w-[300px] whitespace-normal break-words">{exp.purpose || exp.description}</td>
                       <td className={`p-4 text-right font-black whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-600' : exp.type === 'transfer' ? 'text-amber-700' : 'text-red-500'}`}>
                         {exp.type === 'in' ? '+' : exp.type === 'transfer' ? '⇄' : '-'} {Number(exp.amount).toLocaleString()}
                       </td>

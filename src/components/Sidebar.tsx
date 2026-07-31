@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
@@ -7,6 +7,13 @@ export default function Sidebar() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false); // Mobile toggle state
   const [isSyncing, setIsSyncing] = useState(false); // Sync animation state
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem("sidebarCollapsed") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("sidebarCollapsed", isCollapsed.toString());
+  }, [isCollapsed]);
 
   if (!currentUser) return null;
 
@@ -45,6 +52,8 @@ export default function Sidebar() {
     setTimeout(() => setIsSyncing(false), 500);
   };
 
+  const currentWidth = isOpen ? "260px" : (isCollapsed ? "80px" : "260px");
+
   return (
     <>
       {/* 1. MOBILE HAMBURGER BUTTON */}
@@ -67,7 +76,8 @@ export default function Sidebar() {
       <div style={{
         ...sidebarStyles.container,
         left: isOpen ? "0" : "-260px", // Slide logic
-      }} className="mobile-sidebar">
+        width: currentWidth,
+      }} className="mobile-sidebar group">
 
         <style>{`
           nav::-webkit-scrollbar {
@@ -82,12 +92,29 @@ export default function Sidebar() {
           }
         `}</style>
 
-        <div style={sidebarStyles.header}>
-          <h2 style={sidebarStyles.logo}>{firmName}</h2>
-          <div style={sidebarStyles.userBadge}>
-            <span style={sidebarStyles.roleTag}>{role.toUpperCase()}</span>
-            <p style={sidebarStyles.userName}>{currentUser.name}</p>
+        <div style={{...sidebarStyles.header, padding: isCollapsed && !isOpen ? "30px 10px" : "30px 20px"}} className="relative flex items-center justify-between">
+          <div className="flex-1 overflow-hidden">
+            {(!isCollapsed || isOpen) ? (
+              <>
+                <h2 style={sidebarStyles.logo} className="truncate">{firmName}</h2>
+                <div style={sidebarStyles.userBadge}>
+                  <span style={sidebarStyles.roleTag}>{role.toUpperCase()}</span>
+                  <p style={sidebarStyles.userName} className="truncate">{currentUser.name}</p>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center">
+                <span className="text-xl font-black text-[#38bdf8]">{firmName.charAt(0)}</span>
+              </div>
+            )}
           </div>
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="hidden md:flex text-[#38bdf8] hover:text-white transition-colors cursor-pointer w-8 h-8 items-center justify-center rounded-full bg-[#1e293b] flex-shrink-0 absolute -right-4 shadow-md z-50 border border-[#334155]"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {isCollapsed ? "❯" : "❮"}
+          </button>
         </div>
 
         <nav style={sidebarStyles.nav}>
@@ -98,12 +125,15 @@ export default function Sidebar() {
               onClick={() => setIsOpen(false)} // Close menu on link click
               style={{
                 ...sidebarStyles.link,
+                justifyContent: (isCollapsed && !isOpen) ? "center" : "flex-start",
+                padding: (isCollapsed && !isOpen) ? "12px 0" : "12px 15px",
                 backgroundColor: location.pathname === item.path ? "#1e293b" : "transparent",
                 color: location.pathname === item.path ? "#38bdf8" : "#cbd5e1",
               }}
+              title={isCollapsed ? item.label : undefined}
             >
-              <span style={{ marginRight: 12 }}>{item.icon}</span>
-              {item.label}
+              <span style={{ marginRight: (isCollapsed && !isOpen) ? 0 : 12, fontSize: (isCollapsed && !isOpen) ? "20px" : "16px" }}>{item.icon}</span>
+              {(!isCollapsed || isOpen) && <span className="truncate">{item.label}</span>}
             </Link>
           ))}
         </nav>
@@ -112,24 +142,35 @@ export default function Sidebar() {
         <button
           onClick={handleManualSync}
           disabled={isSyncing}
+          title="Sync to Cloud"
           style={{
             ...sidebarStyles.syncBtn,
+            justifyContent: (isCollapsed && !isOpen) ? "center" : "flex-start",
+            padding: (isCollapsed && !isOpen) ? "12px 0" : "12px 15px",
             opacity: isSyncing ? 0.7 : 1,
             cursor: isSyncing ? "not-allowed" : "pointer"
           }}
         >
-          <span style={{ marginRight: 12 }}>{isSyncing ? "⏳" : "☁️"}</span>
-          {isSyncing ? "Syncing..." : "Sync to Cloud"}
+          <span style={{ marginRight: (isCollapsed && !isOpen) ? 0 : 12, fontSize: (isCollapsed && !isOpen) ? "20px" : "16px" }}>{isSyncing ? "⏳" : "☁️"}</span>
+          {(!isCollapsed || isOpen) && <span className="truncate">{isSyncing ? "Syncing..." : "Sync to Cloud"}</span>}
         </button>
 
-        <button onClick={logout} style={sidebarStyles.logoutBtn}>
-          <span style={{ marginRight: 12 }}>🚪</span> Logout
+        {/* LOGOUT BUTTON */}
+        <button onClick={logout} title="Logout" style={{
+            ...sidebarStyles.logoutBtn,
+            justifyContent: (isCollapsed && !isOpen) ? "center" : "flex-start",
+            padding: (isCollapsed && !isOpen) ? "12px 0" : "12px 15px",
+          }}>
+          <span style={{ marginRight: (isCollapsed && !isOpen) ? 0 : 12, fontSize: (isCollapsed && !isOpen) ? "20px" : "16px" }}>🚪</span> 
+          {(!isCollapsed || isOpen) && <span>Logout</span>}
         </button>
 
         {/* 5. VERSION NUMBER */}
-        <div style={{ ...sidebarStyles.versionBadge, color: "white", fontSize: "12px", fontStyle: "italic" }}>
-          v1.10.0
-        </div>
+        {(!isCollapsed || isOpen) && (
+          <div style={{ ...sidebarStyles.versionBadge, color: "white", fontSize: "12px", fontStyle: "italic" }}>
+            v1.10.0
+          </div>
+        )}
       </div>
     </>
   );
@@ -137,7 +178,6 @@ export default function Sidebar() {
 
 const sidebarStyles = {
   container: {
-    width: "260px",
     backgroundColor: "#0B1F3A",
     color: "white",
     height: "100vh",
@@ -146,12 +186,12 @@ const sidebarStyles = {
     position: "fixed" as const, // Changed to fixed for mobile slide-in
     top: 0,
     zIndex: 50,
-    transition: "left 0.3s ease-in-out", // Smooth slide transition
+    transition: "all 0.3s ease-in-out", // Smooth slide transition
     boxShadow: "4px 0 10px rgba(0,0,0,0.1)",
   },
   header: {
-    padding: "30px 20px",
     borderBottom: "1px solid #1e293b",
+    transition: "padding 0.3s",
   },
   logo: {
     fontSize: "18px",
@@ -186,7 +226,6 @@ const sidebarStyles = {
   link: {
     display: "flex",
     alignItems: "center",
-    padding: "12px 15px",
     textDecoration: "none",
     borderRadius: "8px",
     marginBottom: "5px",
@@ -195,7 +234,6 @@ const sidebarStyles = {
   },
   syncBtn: {
     margin: "10px 10px 0 10px",
-    padding: "12px 15px",
     backgroundColor: "#1e293b",
     border: "1px solid #334155",
     color: "#38bdf8",
@@ -208,8 +246,7 @@ const sidebarStyles = {
     transition: "all 0.2s",
   },
   logoutBtn: {
-    margin: "10px 10px 20px 10px", // Adjusted margin to accommodate the sync button
-    padding: "12px 15px",
+    margin: "10px 10px 20px 10px",
     backgroundColor: "transparent",
     border: "1px solid #334155",
     color: "#ef4444",
@@ -220,6 +257,7 @@ const sidebarStyles = {
     display: "flex",
     alignItems: "center",
     fontWeight: "bold",
+    transition: "all 0.2s",
   },
   versionBadge: {
     padding: "10px 15px 20px 15px",

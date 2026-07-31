@@ -115,7 +115,7 @@ export default function CourtCalendar({ embedded = false }: Props) {
   const caseLink = (id: string) => isAdmin ? `/lawyer/cases/${id}` : `/lawyer/cases/${id}`;
 
   return (
-    <div style={body} className={embedded ? "" : "min-h-screen bg-[#F8FAFC] pb-20"}>
+    <div className={embedded ? "" : "min-h-screen bg-[#F8FAFC] pb-20"}>
 
       {/* ── STANDALONE HEADER ─────────────────────────────────────────────── */}
       {!embedded && (
@@ -124,7 +124,7 @@ export default function CourtCalendar({ embedded = false }: Props) {
             <p className="text-blue-400 text-xs font-semibold uppercase tracking-widest mb-2">
               Firm-Wide Calendar
             </p>
-            <h1 style={serif} className="text-white text-3xl md:text-4xl font-bold tracking-tight mb-8">
+            <h1 className="text-white text-3xl md:text-4xl font-bold tracking-tight mb-8">
               Court Hearing Dates
             </h1>
 
@@ -187,7 +187,7 @@ export default function CourtCalendar({ embedded = false }: Props) {
                   >
                     ‹
                   </button>
-                  <h2 style={serif} className="text-xl font-bold text-slate-900">
+                  <h2 className="text-xl font-bold text-slate-900">
                     {MONTHS[viewDate.getMonth()]} {viewDate.getFullYear()}
                   </h2>
                   <button

@@ -16,6 +16,7 @@ const Invoices: React.FC = () => {
   const [relatedFileId, setRelatedFileId] = useState("");
   const [amountBilled, setAmountBilled] = useState<number>(0);
   const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>("Bank Transfer/ Cheque");
   const [includeVAT, setIncludeVAT] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -32,6 +33,7 @@ const Invoices: React.FC = () => {
   /* ===== PARTIAL PAYMENT MODAL ===== */
   const [partialInvoice, setPartialInvoice] = useState<any>(null);
   const [partialAmount, setPartialAmount] = useState<number>(0);
+  const [partialMethod, setPartialMethod] = useState<string>("Bank Transfer/ Cheque");
 
   const VAT_RATE = 0.18;
 
@@ -68,14 +70,14 @@ const Invoices: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFileName(""); setRelatedFile(""); setRelatedFileId(""); setAmountBilled(0); setAmountPaid(0);
+    setFileName(""); setRelatedFile(""); setRelatedFileId(""); setAmountBilled(0); setAmountPaid(0); setPaymentMethod("Bank Transfer/ Cheque");
     setIsEditing(false); setEditingId(null); setScannedFile(null); setMatterSearchTerm(""); setShowMatterDropdown(false);
     setInvoiceDescription("");
     setShowForm(false);
   };
 
   /* Post a "Money In" expense entry to the expenses ledger */
-  const postToExpenses = async (inv: any, amount: number, note: string) => {
+  const postToExpenses = async (inv: any, amount: number, note: string, method: string) => {
     const exp: any = {
       id: crypto.randomUUID(),
       type: "in",
@@ -84,6 +86,7 @@ const Invoices: React.FC = () => {
       purpose: `${note} — Invoice ${inv.fileName}`,
       description: `${note} — Invoice ${inv.fileName}`,
       category: "Legal fees",
+      paymentMethod: method,
       relatedFileId: inv.relatedFileId || "",
       relatedFileName: inv.relatedFile || "",
       staffId: currentUser?.id || "",
@@ -100,10 +103,12 @@ const Invoices: React.FC = () => {
 
   /* Mark fully paid */
   const handleMarkPaid = async (inv: any) => {
+    const method = window.prompt("Payment Method (Cash, Mobile Money, Bank Transfer/ Cheque):", "Bank Transfer/ Cheque");
+    if (!method) return;
     if (!window.confirm(`Mark invoice ${inv.fileName} as fully paid (${formatCurrency(inv.balance)} remaining)?`)) return;
     const updated = { ...inv, amountPaid: inv.amountBilled, balance: 0, isPaid: true };
     updateInvoice(updated);
-    await postToExpenses(inv, inv.balance, "Full payment received");
+    await postToExpenses(inv, inv.balance, "Full payment received", method);
   };
 
   /* Record partial payment */
@@ -115,9 +120,10 @@ const Invoices: React.FC = () => {
     const newBalance = partialInvoice.amountBilled - newPaid;
     const updated = { ...partialInvoice, amountPaid: newPaid, balance: newBalance, isPaid: newBalance <= 0 };
     updateInvoice(updated);
-    await postToExpenses(partialInvoice, payment, "Partial payment received");
+    await postToExpenses(partialInvoice, payment, "Partial payment received", partialMethod);
     setPartialInvoice(null);
     setPartialAmount(0);
+    setPartialMethod("Bank Transfer/ Cheque");
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -140,7 +146,14 @@ const Invoices: React.FC = () => {
       dueDate: new Date(Date.now() + 12096e5).toISOString().split("T")[0],
     };
 
-    if (isEditing) updateInvoice(payload); else addInvoice(payload);
+    if (isEditing) {
+      updateInvoice(payload);
+    } else {
+      addInvoice(payload);
+      if (paid > 0) {
+        await postToExpenses(payload, paid, "Initial payment on invoice creation", paymentMethod);
+      }
+    }
 
     if (scannedFile) {
       setIsUploading(true);
@@ -151,7 +164,7 @@ const Invoices: React.FC = () => {
 
   const handleEdit = (inv: any) => {
     setIsEditing(true); setEditingId(inv.id); setFileName(inv.fileName);
-    setAmountBilled(inv.amountBilled); setAmountPaid(inv.amountPaid);
+    setAmountBilled(inv.amountBilled); setAmountPaid(inv.amountPaid); setPaymentMethod("Bank Transfer/ Cheque");
     setRelatedFile(inv.relatedFile); setRelatedFileId(inv.relatedFileId || "");
     setInvoiceDescription(inv.description || "");
     setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" });
@@ -264,9 +277,19 @@ const Invoices: React.FC = () => {
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Payment Received (if any)</label>
-                  <input type="number" className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-sm" value={amountPaid || ""} onChange={e => setAmountPaid(Number(e.target.value))} placeholder="0" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Payment Received (if any)</label>
+                    <input type="number" className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-sm" value={amountPaid || ""} onChange={e => setAmountPaid(Number(e.target.value))} placeholder="0" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Payment Method</label>
+                    <select className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-sm font-bold text-[#0B1F3A]" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                      <option value="Bank Transfer/ Cheque">Bank Transfer/ Cheque</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Mobile Money">Mobile Money</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -318,12 +341,22 @@ const Invoices: React.FC = () => {
             <label className="block text-xs font-black text-gray-400 uppercase mb-1">Payment Amount</label>
             <input
               type="number"
-              className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-lg font-bold mb-6"
+              className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-lg font-bold mb-4"
               placeholder="Enter amount received"
               value={partialAmount || ""}
               onChange={e => setPartialAmount(Number(e.target.value))}
               max={partialInvoice.balance}
             />
+            <label className="block text-xs font-black text-gray-400 uppercase mb-1">Payment Method</label>
+            <select
+              className="w-full bg-gray-50 border-none p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-sm font-bold text-[#0B1F3A] mb-6"
+              value={partialMethod}
+              onChange={e => setPartialMethod(e.target.value)}
+            >
+              <option value="Bank Transfer/ Cheque">Bank Transfer/ Cheque</option>
+              <option value="Cash">Cash</option>
+              <option value="Mobile Money">Mobile Money</option>
+            </select>
             <div className="flex gap-3">
               <button onClick={handlePartialSubmit} disabled={partialAmount <= 0}
                 className="flex-1 bg-green-600 text-white font-black py-3 rounded-xl hover:bg-green-700 transition disabled:opacity-40">

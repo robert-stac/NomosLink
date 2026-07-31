@@ -64,14 +64,14 @@ export default function ClerkDashboard() {
   };
 
   return (
-    <div style={body} className="min-h-screen bg-[#F8FAFC] pb-20">
+    <div className="min-h-screen bg-[#F8FAFC] pb-20">
 
       {/* HEADER */}
       <div className="bg-[#0B1F3A] pt-14 pb-24 px-6 md:px-12 rounded-b-[60px] shadow-2xl">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>
             <p className="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-2">Clerk Portal</p>
-            <h1 style={serif} className="text-white text-3xl md:text-4xl font-bold tracking-tight">
+            <h1 className="text-white text-3xl md:text-4xl font-bold tracking-tight">
               {currentUser.name.split(' ')[0]}'s Assignments
             </h1>
           </div>
@@ -242,8 +242,8 @@ export default function ClerkDashboard() {
       {/* COMPLETION MODAL */}
       {selectedTask && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div style={body} className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl">
-            <h3 style={serif} className="text-2xl font-bold text-slate-900 mb-1">Task Feedback</h3>
+          <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl">
+            <h3 className="text-2xl font-bold text-slate-900 mb-1">Task Feedback</h3>
             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-8">
               Report to {selectedTask.assignedByName}
             </p>
@@ -270,8 +270,8 @@ export default function ClerkDashboard() {
       {/* UPDATE MODAL */}
       {selectedTaskForUpdate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div style={body} className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl">
-            <h3 style={serif} className="text-2xl font-bold text-slate-900 mb-1">Progress Update</h3>
+          <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl">
+            <h3 className="text-2xl font-bold text-slate-900 mb-1">Progress Update</h3>
             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-8">
               Post an update for {selectedTaskForUpdate.assignedByName}
             </p>

@@ -162,7 +162,7 @@ export default function LawyerDashboard() {
   const inp = "w-full bg-slate-50/50 border border-slate-200 p-4 rounded-2xl text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition shadow-sm";
 
   return (
-    <div style={body} className="min-h-screen bg-[#F8FAFC] pb-20">
+    <div className="min-h-screen bg-[#F8FAFC] pb-20">
 
       {/* HEADER */}
       <div className="bg-[#0B1F3A] pt-14 pb-24 px-6 md:px-12 rounded-b-[60px] shadow-2xl">
@@ -170,7 +170,7 @@ export default function LawyerDashboard() {
           <div className="flex justify-between items-center mb-10">
             <div>
               <p className="text-blue-400 text-xs font-semibold uppercase tracking-widest mb-2">Lawyer Portal</p>
-              <h1 style={serif} className="text-white text-3xl md:text-4xl font-bold tracking-tight">
+              <h1 className="text-white text-3xl md:text-4xl font-bold tracking-tight">
                 Welcome, {currentUser.name.split(' ')[0]}
               </h1>
             </div>
@@ -238,7 +238,7 @@ export default function LawyerDashboard() {
                   New Feature Release
                 </span>
                 
-                <h2 style={serif} className="text-4xl md:text-5xl font-bold mb-6 tracking-tight leading-tight">
+                <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight leading-tight">
                   Registry Filing <br />
                   <span className="text-blue-300">is Now Live</span>
                 </h2>
@@ -637,13 +637,13 @@ export default function LawyerDashboard() {
 
       {/* TASK MODAL */}
       {isTaskModalOpen && (
-        <div style={body} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={closeModal}></div>
           <div className="relative bg-white w-full max-w-4xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col md:flex-row">
             <div className="bg-gradient-to-br from-[#0B1F3A] to-blue-900 md:w-2/5 p-10 text-white flex-col justify-between hidden md:flex">
               <div>
                 <div className="bg-white/10 w-14 h-14 rounded-3xl flex items-center justify-center text-3xl mb-8 border border-white/5">{editingTaskId ? "✏️" : "✨"}</div>
-                <h3 style={serif} className="text-3xl font-bold tracking-tight mb-4 leading-tight">
+                <h3 className="text-3xl font-bold tracking-tight mb-4 leading-tight">
                   {editingTaskId ? "Update" : "Delegate"}<br /><span className="text-blue-400">{editingTaskId ? "Instruction" : "New Work"}</span>
                 </h3>
                 <p className="text-blue-200/80 text-sm leading-relaxed max-w-[230px]">
@@ -772,9 +772,9 @@ export default function LawyerDashboard() {
 
       {/* COMPLETE DRAFT MODAL */}
       {completingDraftId && (
-        <div style={body} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl">
-            <h3 style={serif} className="text-xl font-bold text-slate-900 mb-2">Complete Draft</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Complete Draft</h3>
             <p className="text-slate-400 text-sm mb-7 leading-relaxed">Optionally attach the completed document before marking this as done.</p>
             <div className="space-y-4">
               <div>
