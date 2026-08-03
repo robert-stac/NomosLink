@@ -53,11 +53,12 @@ const Clients: React.FC = () => {
   const selectedClientLetters = useMemo(() => {
     if (!selectedClient) return [];
     return letters.filter(l =>
+      !(l as any).archived && (
       l.clientId === selectedClient.id ||
       (l as any).client_id === selectedClient.id ||
       ((!l.clientId && !(l as any).client_id) &&
         ((l.subject || "").toLowerCase().includes(selectedClient.name.toLowerCase()) ||
-          (l.recipient || "").toLowerCase().includes(selectedClient.name.toLowerCase())))
+          (l.recipient || "").toLowerCase().includes(selectedClient.name.toLowerCase()))))
     );
   }, [selectedClient, letters]);
 
@@ -68,13 +69,14 @@ const Clients: React.FC = () => {
         (c.email || "").toLowerCase().includes(searchTerm.toLowerCase())
       )
       .map(client => {
-        const clientCases = courtCases.filter(c => c.clientId === client.id || (!c.clientId && c.fileName.toLowerCase().includes(client.name.toLowerCase())));
-        const clientTransactions = transactions.filter(t => t.clientId === client.id || (!t.clientId && t.fileName.toLowerCase().includes(client.name.toLowerCase())));
+        const clientCases = courtCases.filter(c => !c.archived && (c.clientId === client.id || (!c.clientId && c.fileName.toLowerCase().includes(client.name.toLowerCase()))));
+        const clientTransactions = transactions.filter(t => !t.archived && (t.clientId === client.id || (!t.clientId && t.fileName.toLowerCase().includes(client.name.toLowerCase()))));
         const clientLetters = letters.filter(l =>
+          !(l as any).archived && (
           l.clientId === client.id ||
           (l as any).client_id === client.id ||
           ((!l.clientId && !(l as any).client_id) && (l.subject || "").toLowerCase().includes(client.name.toLowerCase()))
-        );
+        ));
 
         // A title belongs to this client if:
         // 1. It is directly linked via client_id

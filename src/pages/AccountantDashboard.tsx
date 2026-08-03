@@ -29,9 +29,9 @@ export default function AccountantDashboard() {
     if (!q) return [];
     const matches = clients.filter(c => c.name.toLowerCase().includes(q));
     const allFiles = [
-      ...transactions,
-      ...courtCases,
-      ...letters,
+      ...transactions.filter(t => !t.archived),
+      ...courtCases.filter(c => !c.archived),
+      ...letters.filter(l => !(l as any).archived),
     ];
 
     const fileMatches = allFiles.filter(item => {
@@ -94,9 +94,9 @@ export default function AccountantDashboard() {
 
   const financeTotals = useMemo(() => {
     let allRevenueItems = [
-      ...(transactions || []),
-      ...(courtCases || []),
-      ...(letters || [])
+      ...(transactions || []).filter(t => !t.archived),
+      ...(courtCases || []).filter(c => !c.archived),
+      ...(letters || []).filter(l => !(l as any).archived)
     ];
     let allExpenses = expenses || [];
 
@@ -142,9 +142,9 @@ export default function AccountantDashboard() {
     const amounts = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
 
     const allRevenueItems = [
-      ...(transactions || []),
-      ...(courtCases || []),
-      ...(letters || [])
+      ...(transactions || []).filter(t => !t.archived),
+      ...(courtCases || []).filter(c => !c.archived),
+      ...(letters || []).filter(l => !(l as any).archived)
     ];
 
     allRevenueItems.forEach(item => {
@@ -558,9 +558,9 @@ export default function AccountantDashboard() {
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
               />
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
               <table className="w-full text-left border-collapse">
-                <thead>
+                <thead className="sticky top-0 bg-white z-10">
                   <tr className="border-b border-slate-100">
                     <th
                       onClick={() => setSortConfig(p => p?.key === "name" ? { key: "name", direction: p.direction === "asc" ? "desc" : "asc" } : { key: "name", direction: "asc" })}
@@ -587,7 +587,7 @@ export default function AccountantDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {[...(transactions || []), ...(courtCases || []), ...(letters || [])]
+                  {[...(transactions || []).filter(t => !t.archived), ...(courtCases || []).filter(c => !c.archived), ...(letters || []).filter(l => !(l as any).archived)]
                     .filter(item => {
                       const billed = ("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0;
                       const paid = ("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0;

@@ -412,6 +412,26 @@ export default function Expenses() {
           <button onClick={handleExportCSV} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors border border-emerald-200">
             📥 Export CSV
           </button>
+          <button
+            onClick={() => {
+              const win = window.open("", "_blank");
+              if (!win) return;
+              const rows = filteredExpenses.slice(0, 100).map((exp: any) => `<tr>
+                <td style="padding:8px;border:1px solid #ddd;white-space:nowrap">${exp.date}</td>
+                <td style="padding:8px;border:1px solid #ddd;font-weight:bold;color:${exp.type === 'in' ? '#059669' : exp.type === 'transfer' ? '#d97706' : '#dc2626'}">${exp.type === 'in' ? 'In (+)' : exp.type === 'transfer' ? 'Transfer ⇄' : 'Out (-)'}</td>
+                <td style="padding:8px;border:1px solid #ddd">${exp.type === 'transfer' ? (exp.paymentMethod || '') + ' ➔ ' + (exp.category || '') : (exp.paymentMethod || '—')}</td>
+                <td style="padding:8px;border:1px solid #ddd">${exp.type !== 'transfer' ? (exp.category || '—') : ''}</td>
+                <td style="padding:8px;border:1px solid #ddd">${exp.staffName ? exp.staffName : ''}${exp.relatedFileName ? (exp.staffName ? ' / ' : '') + exp.relatedFileName : ''}</td>
+                <td style="padding:8px;border:1px solid #ddd">${exp.purpose || exp.description || ''}</td>
+                <td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold;color:${exp.type === 'in' ? '#059669' : '#dc2626'}">${exp.type === 'in' ? '+' : '-'} UGX ${Number(exp.amount).toLocaleString()}</td>
+              </tr>`).join('');
+              win.document.write(`<html><head><title>Financial Ledger</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}h2{margin-bottom:4px}p{color:#666;margin-top:0}</style></head><body><h2>Financial Tracker — Petty Cash Ledger</h2><p>Buwembo & Company Advocates · Printed ${new Date().toLocaleDateString()}</p><table><thead><tr style="background:#f1f5f9"><th style="padding:8px;border:1px solid #ddd;text-align:left">Date</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Type</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Account</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Category</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Staff & File</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Purpose</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+              win.document.close(); win.print();
+            }}
+            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors border border-slate-200"
+          >
+            🖨️ Print
+          </button>
           <button onClick={() => handleOpenModal()} className="bg-slate-900 text-white hover:bg-slate-800 px-5 py-2.5 rounded-xl font-bold text-sm shadow-md transition-colors">
             + Record Transaction
           </button>
@@ -611,7 +631,7 @@ export default function Expenses() {
               <span>🚨</span> Advisory Warnings
             </h2>
             {reportData.advisoryWarnings.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
                 {reportData.advisoryWarnings.map((w, idx) => (
                   <div key={idx} className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-xl flex justify-between items-center">
                     <div>
@@ -659,7 +679,44 @@ export default function Expenses() {
 
             {/* FILE EXPENDITURE */}
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-8">
-              <h2 className="text-lg font-black text-slate-800 mb-6">Expenditure by File</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-black text-slate-800">Expenditure by File</h2>
+                {reportData.fileList.length > 0 && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const headers = ["File Name", "Spent (UGX)", "Billed (UGX)", "Margin (UGX)"];
+                        const rows = reportData.fileList.map(f => [
+                          `"${f.fileName.replace(/"/g, '""')}"`,
+                          f.spent,
+                          f.billed,
+                          f.billed - f.spent
+                        ]);
+                        const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+                        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", url);
+                        link.setAttribute("download", `BCA_File_Expenditure_${new Date().toISOString().split('T')[0]}.csv`);
+                        link.click();
+                      }}
+                      className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors border border-emerald-200"
+                    >📥 CSV</button>
+                    <button
+                      onClick={() => {
+                        const win = window.open("", "_blank");
+                        if (!win) return;
+                        const rows = reportData.fileList.map(f => `<tr><td style="padding:8px;border:1px solid #ddd">${f.fileName}</td><td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold;color:#dc2626">UGX ${f.spent.toLocaleString()}</td><td style="padding:8px;border:1px solid #ddd;text-align:right">UGX ${f.billed.toLocaleString()}</td><td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold;color:${(f.billed - f.spent) >= 0 ? '#059669' : '#dc2626'}">UGX ${(f.billed - f.spent).toLocaleString()}</td></tr>`).join('');
+                        const totalSpent = reportData.fileList.reduce((s, f) => s + f.spent, 0);
+                        const totalBilled = reportData.fileList.reduce((s, f) => s + f.billed, 0);
+                        win.document.write(`<html><head><title>Expenditure by File</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}h2{margin-bottom:4px}p{color:#666;margin-top:0}</style></head><body><h2>Expenditure by File</h2><p>Buwembo & Company Advocates · Printed ${new Date().toLocaleDateString()}</p><table><thead><tr style="background:#f1f5f9"><th style="padding:8px;border:1px solid #ddd;text-align:left">File Name</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Spent</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Billed</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Margin</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="background:#f1f5f9;font-weight:bold"><td style="padding:8px;border:1px solid #ddd">TOTAL</td><td style="padding:8px;border:1px solid #ddd;text-align:right;color:#dc2626">UGX ${totalSpent.toLocaleString()}</td><td style="padding:8px;border:1px solid #ddd;text-align:right">UGX ${totalBilled.toLocaleString()}</td><td style="padding:8px;border:1px solid #ddd;text-align:right;color:${(totalBilled - totalSpent) >= 0 ? '#059669' : '#dc2626'}">UGX ${(totalBilled - totalSpent).toLocaleString()}</td></tr></tfoot></table></body></html>`);
+                        win.document.close(); win.print();
+                      }}
+                      className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors border border-slate-200"
+                    >🖨️ Print</button>
+                  </div>
+                )}
+              </div>
               <div className="max-h-[300px] overflow-y-auto pr-2">
                 {reportData.fileList.length > 0 ? (
                   <div className="space-y-3">
