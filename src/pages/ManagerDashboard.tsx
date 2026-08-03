@@ -4,7 +4,7 @@ import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, clients, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest, requisitions } = useAppContext();
+  const { users, clients, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest, requisitions, draftRequests, completeDraftRequest } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -13,6 +13,9 @@ export default function ManagerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyStagnant, setShowOnlyStagnant] = useState(false);
   const [showMissingCourtDates, setShowMissingCourtDates] = useState(false);
+
+  const draftsAssignedToMe = (draftRequests || []).filter(d => String(d.assignedToId) === String(currentUser?.id));
+  const pendingDrafts = draftsAssignedToMe.filter(d => d.status === 'Pending');
 
   const pendingRequisitionsCount = (requisitions || []).filter((r: any) => r.status === 'Pending').length;
 
@@ -404,6 +407,39 @@ export default function ManagerDashboard() {
     setShowRegistryBanner(false);
   };
 
+  const [completingDraftId, setCompletingDraftId] = useState<string | null>(null);
+  const [completeForm, setCompleteForm] = useState({ hoursSpent: "", documentFile: null as File | null, completionNote: "" });
+  const [isUploadingDraft, setIsUploadingDraft] = useState(false);
+
+  const handleCompleteDraft = async () => {
+    if (!completingDraftId) return;
+    setIsUploadingDraft(true);
+    let documentUrl: string | undefined;
+    let documentName: string | undefined;
+
+    if (completeForm.documentFile) {
+      const { supabase } = await import("../lib/supabaseClient");
+      const file = completeForm.documentFile;
+      const filePath = `draft-docs/${completingDraftId}/${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage.from('transactions').upload(filePath, file);
+      if (!error) {
+        documentUrl = supabase.storage.from('transactions').getPublicUrl(filePath).data.publicUrl;
+        documentName = file.name;
+      }
+    }
+
+    completeDraftRequest(
+      completingDraftId,
+      completeForm.hoursSpent ? Number(completeForm.hoursSpent) : undefined,
+      documentUrl,
+      documentName,
+      completeForm.completionNote
+    );
+    setCompletingDraftId(null);
+    setCompleteForm({ hoursSpent: "", documentFile: null, completionNote: "" });
+    setIsUploadingDraft(false);
+  };
+
   return (
     <div className="p-4 space-y-6 relative">
       {/* GLASSMORPHISM FEATURE ANNOUNCEMENT OVERLAY */}
@@ -792,6 +828,71 @@ export default function ManagerDashboard() {
           <p className="text-center text-gray-500 italic py-6">No pending court deadlines.</p>
         )}
       </div>
+
+      {/* DRAFTS ASSIGNED TO MANAGER */}
+      {pendingDrafts.length > 0 && (
+        <div className="bg-white p-6 rounded-lg shadow-sm border mt-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-slate-700">Draft Requests Assigned To You</h3>
+            <span className="bg-orange-100 text-orange-600 font-bold text-xs px-2 py-1 rounded-full">{pendingDrafts.length} Pending</span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {pendingDrafts.map((draft: any) => (
+              <div key={draft.id} className="p-4 border rounded-lg bg-orange-50/30">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-slate-800 text-sm truncate">{draft.title}</h4>
+                  <span className="text-[10px] bg-orange-500 text-white px-2 py-1 rounded font-black uppercase">Due {new Date(draft.deadline).toLocaleDateString()}</span>
+                </div>
+                <button onClick={() => navigate(`/lawyer/cases/${draft.caseId}`)} className="text-xs text-blue-600 font-bold uppercase tracking-widest hover:underline mb-2 block truncate">⚖️ {draft.caseFileName}</button>
+                <p className="text-xs text-slate-600 mb-3 line-clamp-2">{draft.description}</p>
+                <div className="text-[10px] text-slate-400 font-black uppercase mb-4">Requested by: {draft.requestedByName}</div>
+                <button
+                  onClick={() => setCompletingDraftId(draft.id)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-xs font-bold transition-colors w-full"
+                >
+                  Mark as Complete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* COMPLETE DRAFT MODAL */}
+      {completingDraftId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Complete Draft Request</h3>
+              <button onClick={() => setCompletingDraftId(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Hours Spent (Optional)</label>
+                <input type="number" placeholder="e.g. 2.5" className="w-full border p-3 rounded-lg text-sm outline-none focus:border-blue-500"
+                  value={completeForm.hoursSpent} onChange={e => setCompleteForm({ ...completeForm, hoursSpent: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Completion Note</label>
+                <textarea rows={3} placeholder="Any notes for the requestor..." className="w-full border p-3 rounded-lg text-sm outline-none focus:border-blue-500"
+                  value={completeForm.completionNote} onChange={e => setCompleteForm({ ...completeForm, completionNote: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Attach Document (Optional)</label>
+                <input type="file" className="text-sm"
+                  onChange={e => setCompleteForm({ ...completeForm, documentFile: e.target.files?.[0] || null })} />
+              </div>
+              <button
+                disabled={isUploadingDraft}
+                onClick={handleCompleteDraft}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-colors disabled:opacity-50"
+              >
+                {isUploadingDraft ? "Uploading & Saving..." : "Submit Completed Draft"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PENDING REGISTRY FILINGS */}
       {pendingFilings.length > 0 && (

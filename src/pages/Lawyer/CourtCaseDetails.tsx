@@ -96,7 +96,7 @@ export default function CourtCaseDetails() {
     setIsEditingDate(false);
   };
 
-  const assignableLawyers = users.filter(u => (u.role === 'lawyer') && String(u.id) !== String(currentUser.id));
+  const assignableStaff = users.filter(u => (u.role === 'lawyer' || u.role === 'manager' || u.role === 'managing_partner') && String(u.id) !== String(currentUser.id));
 
   // Draft requests for this case
   const caseDrafts = draftRequests.filter(d => String(d.caseId) === String(courtCase.id));
@@ -636,7 +636,7 @@ export default function CourtCaseDetails() {
                             onChange={e => setDraftForm({ ...draftForm, assignedToId: e.target.value })}
                           >
                             <option value="">Select Assistant...</option>
-                            {assignableLawyers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            {assignableStaff.map(l => <option key={l.id} value={l.id}>{l.name} ({l.role})</option>)}
                           </select>
                         </div>
                       </div>
