@@ -410,7 +410,7 @@ export default function Expenses() {
         </div>
         <div className="flex gap-3">
           <button onClick={handleExportCSV} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors border border-emerald-200">
-            📥 Export CSV
+            Export CSV
           </button>
           <button
             onClick={() => {

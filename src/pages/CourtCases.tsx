@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
 export default function CourtCases() {
-  const { courtCases, addCourtCase, editCourtCase, deleteCourtCase, lawyers } = useAppContext();
+  const { courtCases, addCourtCase, editCourtCase, deleteCourtCase, lawyers, expenses } = useAppContext();
   const location = useLocation();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -12,7 +12,6 @@ export default function CourtCases() {
   const [lawyerId, setLawyerId] = useState("");
   const [status, setStatus] = useState<"Ongoing" | "Completed" | "On Hold" | "Pending">("Ongoing");
   const [billed, setBilled] = useState("");
-  const [paid, setPaid] = useState("");
   const [nextDate, setNextDate] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
   const [categoryInput, setCategoryInput] = useState("");
@@ -46,7 +45,12 @@ export default function CourtCases() {
         c.fileName.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
-    return cases.sort((a: any, b: any) => {
+    return cases.map(c => {
+      const expensesPaid = (expenses || []).filter((e: any) => e.type === 'in' && e.relatedFileId === c.id).reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
+      const totalPaid = (Number(c.paid) || 0) + expensesPaid;
+      const computedBalance = (Number(c.billed) || 0) - totalPaid;
+      return { ...c, computedPaid: totalPaid, computedBalance: computedBalance };
+    }).sort((a: any, b: any) => {
       switch (sortType) {
         case "newest": return Number(b.id) - Number(a.id);
         case "oldest": return Number(a.id) - Number(b.id);
@@ -61,7 +65,7 @@ export default function CourtCases() {
         default: return 0;
       }
     });
-  }, [courtCases, searchTerm, sortType]);
+  }, [courtCases, searchTerm, sortType, expenses]);
 
   // --- CLIENT DROPDOWN LOGIC ---
   const { clients } = useAppContext();
@@ -87,7 +91,6 @@ export default function CourtCases() {
     setLawyerId("");
     setStatus("Ongoing");
     setBilled("");
-    setPaid("");
     setNextDate("");
     setCategories([]);
     setCategoryInput("");
@@ -109,8 +112,8 @@ export default function CourtCases() {
     }
 
     const billedNum = Number(billed);
-    const paidNum = Number(paid) || 0;
-    const balance = billedNum - paidNum;
+    const existingPaid = editingId ? (courtCases.find(c => c.id === editingId)?.paid || 0) : 0;
+    const balance = billedNum - existingPaid;
     const finalSittingType = sittingType === "Other" ? customSittingType : sittingType;
 
     if (editingId) {
@@ -121,7 +124,7 @@ export default function CourtCases() {
         fileName,
         lawyerId,
         billed: billedNum,
-        paid: paidNum,
+        paid: existingPaid,
         balance,
         status,
         nextCourtDate: nextDate,
@@ -136,7 +139,7 @@ export default function CourtCases() {
         fileName,
         lawyerId,
         billed: billedNum,
-        paid: paidNum,
+        paid: existingPaid,
         balance,
         status,
         nextCourtDate: nextDate,
@@ -157,7 +160,6 @@ export default function CourtCases() {
     setLawyerId(c.lawyerId || "");
     setStatus(c.status || "Ongoing");
     setBilled(c.billed?.toString() || "");
-    setPaid(c.paid?.toString() || "");
     setNextDate(c.nextCourtDate || "");
     setCategories(c.categories || []);
     const isOtherSitting = c.sittingType && !SITTING_OPTIONS.includes(c.sittingType);
@@ -278,10 +280,6 @@ export default function CourtCases() {
           <div>
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Amount Billed (UGX) *</label>
             <input type="number" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={billed} onChange={(e) => setBilled(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Amount Paid (UGX)</label>
-            <input type="number" className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder="0.00" />
           </div>
           <div>
             <label className="block font-semibold text-slate-500 mb-2 text-xs uppercase">Next Court Date</label>
@@ -440,8 +438,8 @@ export default function CourtCases() {
                   </span>
                 </td>
                 <td className="p-4 font-medium">{formatCurrency(c.billed)}</td>
-                <td className="p-4 text-emerald-600 font-medium">{formatCurrency(c.paid)}</td>
-                <td className="p-4 font-semibold text-red-600">{formatCurrency(c.balance)}</td>
+                <td className="p-4 text-emerald-600 font-medium">{formatCurrency(c.computedPaid)}</td>
+                <td className="p-4 font-semibold text-red-600">{formatCurrency(c.computedBalance)}</td>
                 <td className="p-4">
                   <div className="flex flex-wrap gap-1 mb-1">
                     {c.categories?.map((cat: string) => (

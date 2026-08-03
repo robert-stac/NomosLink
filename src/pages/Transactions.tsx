@@ -13,6 +13,7 @@ export default function Transactions() {
     addTransactionProgress, 
     editTransactionProgress,
     deleteTransactionProgress,
+    expenses = [],
     currentUser 
   } = useAppContext();
 
@@ -50,7 +51,6 @@ export default function Transactions() {
     lawyerId: "",
     clientId: "",
     billedAmount: "",
-    paidAmount: "",
     date: new Date().toISOString().split("T")[0],
   });
 
@@ -104,25 +104,30 @@ export default function Transactions() {
       });
     }
 
-    return [...data].sort((a, b) => {
+    return [...data].map(t => {
+      const expensesPaid = expenses.filter(e => e.type === 'in' && e.relatedFileId === t.id).reduce((s, e) => s + Number(e.amount || 0), 0);
+      const totalPaid = (Number(t.paidAmount) || 0) + expensesPaid;
+      const computedBalance = (Number(t.billedAmount) || 0) - totalPaid;
+      return { ...t, computedPaid: totalPaid, computedBalance };
+    }).sort((a: any, b: any) => {
       switch (sortType) {
         case "newest": return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
         case "oldest": return new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
         case "az": return a.fileName.localeCompare(b.fileName);
         case "za": return b.fileName.localeCompare(a.fileName);
         case "billed-desc": return (Number(b.billedAmount) || 0) - (Number(a.billedAmount) || 0);
-        case "balance-desc": return ((Number(b.billedAmount)||0) - (Number(b.paidAmount)||0)) - ((Number(a.billedAmount)||0) - (Number(a.paidAmount)||0));
+        case "balance-desc": return (b.computedBalance || 0) - (a.computedBalance || 0);
         default: return 0;
       }
     });
-  }, [transactions, currentUser, searchQuery, lawyers, sortType]);
+  }, [transactions, currentUser, searchQuery, lawyers, sortType, expenses]);
 
   const stats = useMemo(() => {
     return visibleTransactions.reduce(
-      (acc, t) => {
+      (acc, t: any) => {
         const billed = Number(t.billedAmount) || 0;
-        const paid = Number(t.paidAmount) || 0;
-        const balance = billed - paid;
+        const paid = t.computedPaid || 0;
+        const balance = t.computedBalance || 0;
         acc.billed += billed;
         acc.paid += paid;
         acc.balance += balance;
@@ -178,14 +183,14 @@ export default function Transactions() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const billed = Number(form.billedAmount) || 0;
-    const paid = Number(form.paidAmount) || 0;
+    const existingPaid = editingId ? (transactions.find(t => t.id === editingId)?.paidAmount || 0) : 0;
 
     const payload = {
       ...form,
       id: editingId ?? Date.now().toString(),
       billedAmount: billed,
-      paidAmount: paid,
-      balance: billed - paid,
+      paidAmount: existingPaid,
+      balance: billed - existingPaid,
       archived: false,
       progressNotes: editingId 
         ? (transactions.find(t => t.id === editingId)?.progressNotes || []) 
@@ -209,7 +214,6 @@ export default function Transactions() {
       lawyerId: "",
       clientId: "",
       billedAmount: "",
-      paidAmount: "",
       date: new Date().toISOString().split("T")[0],
     });
   };
@@ -342,10 +346,6 @@ export default function Transactions() {
             <input name="billedAmount" type="number" placeholder="0" value={form.billedAmount} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Paid (UGX)</label>
-            <input name="paidAmount" type="number" placeholder="0" value={form.paidAmount} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
-          </div>
-          <div className="flex flex-col gap-1">
             <label className="text-[12px] font-bold text-slate-500 uppercase ml-1">Date</label>
             <input name="date" type="date" value={form.date} onChange={handleInputChange} className="border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
           </div>
@@ -387,8 +387,8 @@ export default function Transactions() {
                       {lawyers.find(l => String(l.id) === String(t.lawyerId))?.name || "Unassigned"}
                     </span>
                   </td>
-                  <td className={`px-6 py-4 text-right font-black text-sm ${((Number(t.billedAmount)||0)-(Number(t.paidAmount)||0)) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                    {formatCurrency((Number(t.billedAmount)||0)-(Number(t.paidAmount)||0))}
+                  <td className={`px-6 py-4 text-right font-black text-sm ${(t as any).computedBalance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                    {formatCurrency((t as any).computedBalance)}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <button onClick={() => setNoteViewId(t.id)} className="text-[9px] bg-slate-100 text-slate-600 px-3 py-1 rounded-full border border-slate-200 font-black hover:bg-white transition-all">
@@ -405,7 +405,6 @@ export default function Transactions() {
                           lawyerId: t.lawyerId || "",
                           clientId: t.clientId || "",
                           billedAmount: String(t.billedAmount || ""),
-                          paidAmount: String(t.paidAmount || ""),
                           date: t.date ? t.date.split('T')[0] : ""
                         });
                         window.scrollTo({ top: 0, behavior: 'smooth' });

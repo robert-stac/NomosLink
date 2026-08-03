@@ -372,8 +372,9 @@ export default function Requisitions() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
                 <th className="p-4">Date</th>
-                <th className="p-4">Category</th>
                 <th className="p-4">Title</th>
+                <th className="p-4">Category</th>
+                <th className="p-4">File Name</th>
                 <th className="p-4">Submitted By</th>
                 <th className="p-4 text-right">Amount (UGX)</th>
                 <th className="p-4 text-center">Status</th>
@@ -384,11 +385,15 @@ export default function Requisitions() {
               {visibleRequisitions.length > 0 ? visibleRequisitions.map(req => (
                 <tr key={req.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                   <td className="p-4 text-slate-600 whitespace-nowrap">{new Date(req.dateSubmitted).toLocaleDateString()}</td>
-                  <td className="p-4 text-slate-800 font-bold">
-                    {req.title}
-                    {req.category && <p className="text-[11px] text-slate-500 mt-1">Category: {req.category}</p>}
-                    {req.relatedFileName && (
-                      <p className="text-xs text-blue-600 truncate mt-1">⚖️ {req.relatedFileName}</p>
+                  <td className="p-4 text-slate-800 font-bold">{req.title}</td>
+                  <td className="p-4 text-slate-600">{req.category || "-"}</td>
+                  <td className="p-4 text-slate-600">
+                    {req.relatedFileName ? (
+                      <span className="text-blue-600 truncate block max-w-[200px]" title={req.relatedFileName}>
+                        ⚖️ {req.relatedFileName}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">-</span>
                     )}
                   </td>
                   <td className="p-4 text-slate-600">{req.submittedByName}</td>
