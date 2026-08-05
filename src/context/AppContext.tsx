@@ -1359,7 +1359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // { name: 'transactions', task: supabase.from('transactions').upsert(transactionsForDb, { onConflict: 'id' }) },
         // { name: 'court_cases', task: supabase.from('court_cases').upsert(courtCasesForDb, { onConflict: 'id' }) },
         // { name: 'tasks', task: supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }) },
-        { name: 'users', task: supabase.from('users').upsert(users, { onConflict: 'id' }) },
+        // { name: 'users', task: supabase.from('users').upsert(users, { onConflict: 'id' }) },
         { name: 'draft_requests', task: supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }) },
         { name: 'filing_requests', task: supabase.from('filing_requests').upsert(filingRequests, { onConflict: 'id' }) },
         { name: 'requisitions', task: supabase.from('requisitions').upsert(requisitions, { onConflict: 'id' }) },
@@ -1409,7 +1409,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addUser = (user: User) => { setUsers(prev => [...prev, user]); instantSave('users', user); };
   const deleteUser = async (id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
-    if (navigator.onLine) await supabase.from('users').delete().eq('id', id);
+    if (navigator.onLine) {
+      await supabase.from('users').delete().eq('id', id);
+    } else {
+      queuePendingDelete('users', id);
+    }
   };
 
   const lawyers = users.filter(u => u.role !== "admin");

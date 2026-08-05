@@ -8,6 +8,13 @@ export default function Requisitions() {
   const navigate = useNavigate();
   const { currentUser, users, requisitions, addRequisition, updateRequisition, sendNotification, courtCases, transactions, letters } = useAppContext();
   const { deleteRequisition } = useAppContext();
+  
+  const handleNavigate = (type: string, id: string) => {
+    if (!type || !id) return;
+    if (type === 'case') navigate(`/lawyer/cases/${id}`);
+    else if (type === 'transaction') navigate(`/lawyer/transactions/${id}`);
+    else if (type === 'letter') navigate(`/lawyer/letters/${id}`);
+  };
 
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState("");
@@ -337,7 +344,7 @@ export default function Requisitions() {
 
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center">
-          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="border p-2 rounded-xl text-sm">
+          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm">
             <option value="">All categories</option>
             <option>Commissioning fees</option>
             <option>Transport expenses</option>
@@ -353,13 +360,13 @@ export default function Requisitions() {
             <option>Cost of Service</option>
             <option>Others</option>
           </select>
-          <select value={filterRequesterId} onChange={e => setFilterRequesterId(e.target.value)} className="border p-2 rounded-xl text-sm">
+          <select value={filterRequesterId} onChange={e => setFilterRequesterId(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm">
             <option value="">All requestors</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
-          <input value={filterFileName} onChange={e => setFilterFileName(e.target.value)} placeholder="File name or title" className="border p-2 rounded-xl text-sm" />
-          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="border p-2 rounded-xl text-sm" />
-          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="border p-2 rounded-xl text-sm" />
+          <input value={filterFileName} onChange={e => setFilterFileName(e.target.value)} placeholder="File name or title" className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm placeholder:text-slate-400" />
+          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm" />
+          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm" />
           <button onClick={() => { setFilterCategory(''); setFilterRequesterId(''); setFilterFileName(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="text-sm px-3 py-2 bg-gray-100 rounded-xl">Clear</button>
           <div className="ml-auto flex gap-2">
             <button onClick={handleExportCSV} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-2 rounded-xl text-sm">📥 Export CSV</button>
@@ -389,7 +396,11 @@ export default function Requisitions() {
                   <td className="p-4 text-slate-600">{req.category || "-"}</td>
                   <td className="p-4 text-slate-600">
                     {req.relatedFileName ? (
-                      <span className="text-blue-600 truncate block max-w-[200px]" title={req.relatedFileName}>
+                      <span 
+                        onClick={() => req.relatedFileType && req.relatedFileId ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
+                        className={`truncate block max-w-[200px] ${req.relatedFileType && req.relatedFileId ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-blue-600'}`} 
+                        title={req.relatedFileName}
+                      >
                         ⚖️ {req.relatedFileName}
                       </span>
                     ) : (
@@ -446,7 +457,12 @@ export default function Requisitions() {
                   <h3 className="font-bold text-slate-800 text-sm">{req.title}</h3>
                   {req.category && <p className="text-xs text-slate-500 mt-0.5">Category: {req.category}</p>}
                   {req.relatedFileName && (
-                    <p className="text-xs text-blue-600 truncate mt-0.5">⚖️ {req.relatedFileName}</p>
+                    <p 
+                      onClick={() => req.relatedFileType && req.relatedFileId ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
+                      className={`text-xs truncate mt-0.5 ${req.relatedFileType && req.relatedFileId ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-blue-600'}`}
+                    >
+                      ⚖️ {req.relatedFileName}
+                    </p>
                   )}
                   <p className="text-xs text-slate-500 mt-1">{new Date(req.dateSubmitted).toLocaleDateString()} • {req.submittedByName}</p>
                 </div>

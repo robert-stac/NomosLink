@@ -721,12 +721,17 @@ export default function Expenses() {
                 {reportData.fileList.length > 0 ? (
                   <div className="space-y-3">
                     {reportData.fileList.map((f, idx) => (
-                      <div key={idx} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-slate-50 hover:border-blue-300 transition-colors">
+                      <div key={idx} 
+                           onClick={() => {
+                             setSearchTerm(f.fileName);
+                             setActiveTab("Ledger");
+                           }}
+                           className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-slate-50 hover:border-blue-300 transition-colors cursor-pointer group">
                         <div className="flex-1 min-w-0 pr-4">
-                          <p className="font-bold text-sm text-slate-800 truncate" title={f.fileName}>{f.fileName}</p>
+                          <p className="font-bold text-sm text-slate-800 truncate group-hover:text-blue-600 transition-colors" title={f.fileName}>{f.fileName}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="font-black text-red-600 text-sm">UGX {f.spent.toLocaleString()}</p>
+                          <p className="font-black text-red-600 text-sm group-hover:text-red-700 transition-colors">UGX {f.spent.toLocaleString()}</p>
                         </div>
                       </div>
                     ))}
