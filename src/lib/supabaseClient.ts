@@ -10,12 +10,15 @@ console.log("Supabase URL initialized:", supabaseUrl);
 
 // Use service role key for all DB operations — bypasses RLS entirely.
 // This is safe for an internal private app not exposed to the public.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  global: {
+    headers: {
+      Authorization: `Bearer ${supabaseServiceKey}`
+    }
+  },
   auth: {
-    storageKey: 'nomoslink-auth-key',
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
   }
 });

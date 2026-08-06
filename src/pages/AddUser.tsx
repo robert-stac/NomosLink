@@ -111,6 +111,30 @@ export default function AddUser() {
     }
   };
 
+  const handleResetPassword = async (userId: string, userName: string) => {
+    const newPassword = prompt(`Enter new password for ${userName}:`);
+    if (!newPassword) return;
+
+    if (newPassword.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      const { error } = await supabase
+        .from("users")
+        .update({ password: hashedPassword })
+        .eq("id", userId);
+
+      if (error) throw error;
+      alert(`Password for ${userName} has been reset successfully!`);
+    } catch (err: any) {
+      alert(`Error resetting password: ${err.message}`);
+    }
+  };
+
   return (
     <div className="max-w-xl mx-auto bg-white p-8 rounded-[40px] shadow-2xl border border-slate-100 mt-10">
       
@@ -241,7 +265,13 @@ export default function AddUser() {
                         {u.role === 'manager' ? 'Manager' : u.role}
                     </span>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="p-4 text-center space-x-3">
+                    <button
+                      onClick={() => handleResetPassword(u.id, u.name)}
+                      className="text-slate-300 hover:text-blue-500 font-bold text-[10px] uppercase tracking-widest transition-colors"
+                    >
+                      Reset
+                    </button>
                     <button
                       onClick={() => window.confirm(`Remove ${u.name}?`) && deleteUser(u.id)}
                       className="text-slate-300 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest transition-colors"

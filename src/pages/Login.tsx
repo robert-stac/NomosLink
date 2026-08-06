@@ -75,16 +75,37 @@ export default function Login() {
     const emailToReset = prompt("Enter your registered email address:");
     if (!emailToReset) return;
 
-    setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(emailToReset.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    const requestedPassword = prompt("Enter your desired new password (minimum 6 characters):");
+    if (!requestedPassword || requestedPassword.length < 6) {
+      alert("Password reset cancelled. Please provide a valid new password of at least 6 characters.");
+      return;
+    }
 
-    setLoading(false);
-    if (error) {
-      alert("Error: " + error.message);
-    } else {
-      alert("A password reset link has been sent to your email!");
+    setLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: 'rodoi@buwembo.com',
+          subject: `Password Reset Request for ${emailToReset}`,
+          html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+            <h2 style="color: #0B1F3A;">Password Reset Request</h2>
+            <p>Hello Admin,</p>
+            <p>A user has requested a password reset for their account.</p>
+            <p><strong>User Email:</strong> ${emailToReset}</p>
+            <p><strong>Requested New Password:</strong> ${requestedPassword}</p>
+            <p>Please log in to the NomosLink dashboard, go to the <strong>Staff Management</strong> page, and click the "Reset" button next to their name to set this new password for them.</p>
+            <br/>
+            <p><em>This is an automated message from the Transaction Management System.</em></p>
+          </div>`
+        }
+      });
+
+      if (error) throw error;
+      alert("A password reset request has been successfully sent to the admin.");
+    } catch (err: any) {
+      alert("Error sending request: " + (err.message || "Unknown error"));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -111,6 +132,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@lawfirm.com"
               required
+              autoComplete="username"
               style={styles.input}
             />
           </div>
