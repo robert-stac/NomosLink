@@ -100,11 +100,17 @@ const Clients: React.FC = () => {
         });
 
         const totalFilesCount = clientCases.length + clientTransactions.length + clientTitles.length;
-        const totalOwed =
-          clientCases.reduce((sum, c) => sum + (c.balance || 0), 0) +
-          clientTransactions.reduce((sum, t) => sum + (t.balance || 0), 0) +
-          clientLetters.reduce((sum, l) => sum + ((l.billed || 0) - (l.paid || 0)), 0) +
-          clientTitles.reduce((sum: number, t: any) => sum + ((t.total_billed || 0) - (t.total_paid || 0)), 0);
+        const totalBilled =
+          clientCases.reduce((sum, c) => sum + (c.billed || 0), 0) +
+          clientTransactions.reduce((sum, t) => sum + (t.billedAmount || 0), 0) +
+          clientLetters.reduce((sum, l) => sum + (l.billed || 0), 0) +
+          clientTitles.reduce((sum: number, t: any) => sum + (t.total_billed || 0), 0);
+
+        const totalLegacyPaid =
+          clientCases.reduce((sum, c) => sum + (c.paid || 0), 0) +
+          clientTransactions.reduce((sum, t) => sum + (t.paidAmount || 0), 0) +
+          clientLetters.reduce((sum, l) => sum + (l.paid || 0), 0) +
+          clientTitles.reduce((sum: number, t: any) => sum + (t.total_paid || 0), 0);
 
         const clientExpenses = (expenses || []).filter((e: any) =>
           e.type !== 'transfer' && (
@@ -114,6 +120,12 @@ const Clients: React.FC = () => {
             clientTitles.some((t: any) => t.id === e.relatedFileId)
           )
         );
+
+        const expensesPaid = clientExpenses
+          .filter((e: any) => e.type === 'in')
+          .reduce((sum, e: any) => sum + Number(e.amount || 0), 0);
+
+        const totalOwed = totalBilled - (totalLegacyPaid + expensesPaid);
 
         return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, expenses: clientExpenses, totalOwed, totalFilesCount };
       });
@@ -630,15 +642,10 @@ const Clients: React.FC = () => {
                       selectedClient.titles.reduce((s: number, t: any) => s + (t.total_paid || 0), 0);
 
                     const legalFeesFromExpenses = (selectedClient.expenses || [])
-                      .filter((e: any) => e.type === 'in' && (e.category || '').toLowerCase() === 'legal fees')
+                      .filter((e: any) => e.type === 'in')
                       .reduce((s: number, e: any) => s + (e.amount || 0), 0);
 
-                    // Also count "File opening fees" as legal fees
-                    const fileOpeningFeesIn = (selectedClient.expenses || [])
-                      .filter((e: any) => e.type === 'in' && (e.category || '').toLowerCase() === 'file opening fees')
-                      .reduce((s: number, e: any) => s + (e.amount || 0), 0);
-
-                    const totalLegalFees = filePaid + legalFeesFromExpenses + fileOpeningFeesIn;
+                    const totalLegalFees = filePaid + legalFeesFromExpenses;
 
                     const fileBilled =
                       selectedClient.cases.reduce((s: number, c: any) => s + (c.billed || 0), 0) +
@@ -646,7 +653,7 @@ const Clients: React.FC = () => {
                       selectedClient.letters.reduce((s: number, l: any) => s + (l.billed || 0), 0) +
                       selectedClient.titles.reduce((s: number, t: any) => s + (t.total_billed || 0), 0);
 
-                    const legalFeesOutstanding = fileBilled - filePaid;
+                    const legalFeesOutstanding = fileBilled - totalLegalFees;
 
                     // ── 2. DISBURSEMENT ACCOUNT (Pass-through funds) ──
                     // These are non-legal-fee income categories — money received from client
@@ -700,7 +707,7 @@ const Clients: React.FC = () => {
                       .reduce((s: number, e: any) => s + (e.amount || 0), 0);
 
                     // ── 4. OVERALL POSITION ──
-                    const totalMoneyIn = totalLegalFees + totalDisbursementReceived;
+                    const totalMoneyIn = totalLegalFees;
                     const totalMoneyOut = totalDisbursementSpent + unmatchedExpenses;
                     const overallBalance = totalMoneyIn - totalMoneyOut;
 

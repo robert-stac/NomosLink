@@ -918,8 +918,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
-    const localOnly = (prev || []).filter(item => !cloudById.has(item.id));
-    return [...mergedCloud, ...localOnly];
+    return mergedCloud;
   };
 
   /* =======================
@@ -937,10 +936,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!navigator.onLine || document.hidden) return;
 
       try {
-        const [txRes, ccRes, ltRes] = await Promise.all([
+        const [txRes, ccRes, ltRes, expRes] = await Promise.all([
           supabase.from('transactions').select('*'),
           supabase.from('court_cases').select('*'),
           supabase.from('letters').select('*'),
+          supabase.from('expenses').select('*').order('date', { ascending: false }),
         ]);
 
         const normalizeFile = (row: any) => ({
@@ -951,6 +951,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (txRes.data) setTransactions(prev => smartMergeState(txRes.data.map(normalizeFile), prev, 'transactions'));
         if (ccRes.data) setCourtCases(prev => smartMergeState(ccRes.data.map(normalizeFile), prev, 'court_cases'));
         if (ltRes.data) setLetters(prev => smartMergeState(ltRes.data.map(normalizeFile), prev, 'letters'));
+        if (expRes.data) {
+          setExpenses(prev => {
+            const mapped = expRes.data.map((e: any) => buildExpenseRecord({ id: e.id, baseData: e, currentUser }));
+            if (!mapped || !Array.isArray(mapped)) return prev || [];
+            return mapped;
+          });
+        }
       } catch (err) {
         console.error('[Poll] File data polling failed:', err);
       }
@@ -987,11 +994,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const mergeIfChanged = (prev: any[], cloud: any[] | null): any[] => {
           if (!cloud || !Array.isArray(cloud)) return prev || [];
-          // Keep cloud as authoritative for existing rows, but preserve local-only items
-          // that may have been created while offline and have not yet reached Supabase.
-          const cloudById = new Map(cloud.map(item => [item.id, item]));
-          const localOnly = (prev || []).filter(item => !cloudById.has(item.id));
-          return [...cloud, ...localOnly];
+          return cloud;
         };
 
         const [

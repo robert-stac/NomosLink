@@ -121,7 +121,15 @@ export default function AccountantDashboard() {
 
     const revenue = allRevenueItems.reduce((acc, item) => {
       const billed = Number(("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0);
-      const paid = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
+      const legacyPaid = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
+      
+      // Calculate income from expenses (Money In)
+      const expensesPaid = (expenses || [])
+        .filter(e => e.type === 'in' && e.relatedFileId === item.id)
+        .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        
+      const paid = legacyPaid + expensesPaid;
+      
       acc.totalBilled += billed;
       acc.totalPaid += paid;
       if (billed > paid) acc.outstanding += (billed - paid);
@@ -150,7 +158,13 @@ export default function AccountantDashboard() {
     allRevenueItems.forEach(item => {
       // Don't filter by timeFilter for aging since aging is about ALL outstanding debt
       const billed = Number(("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0);
-      const paid = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
+      const legacyPaid = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
+      
+      const expensesPaid = (expenses || [])
+        .filter(e => e.type === 'in' && e.relatedFileId === item.id)
+        .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        
+      const paid = legacyPaid + expensesPaid;
       const balance = billed - paid;
       
       if (balance <= 0) return;
@@ -197,14 +211,29 @@ export default function AccountantDashboard() {
       return true;
     };
 
+    const getExpensesPaid = (fileId: string) => {
+      return (expenses || [])
+        .filter(e => e.type === 'in' && e.relatedFileId === fileId)
+        .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    };
+
     courtCases?.forEach((c: any) => { 
-      if (filterByTime(c.date || c.createdAt || '')) filesData.push(['Court Case', c.fileName || '', c.billed || 0, c.paid || 0, clients.find((cl: any)=>cl.id===c.clientId)?.name || 'N/A']); 
+      if (filterByTime(c.date || c.createdAt || '')) {
+        const paid = (c.paid || 0) + getExpensesPaid(c.id);
+        filesData.push(['Court Case', c.fileName || '', c.billed || 0, paid, clients.find((cl: any)=>cl.id===c.clientId)?.name || 'N/A']); 
+      }
     });
     transactions?.forEach((t: any) => { 
-      if (filterByTime(t.date || '')) filesData.push(['Transaction', t.fileName || '', t.billedAmount || 0, t.paidAmount || 0, clients.find((cl: any)=>cl.id===t.clientId)?.name || 'N/A']); 
+      if (filterByTime(t.date || '')) {
+        const paid = (t.paidAmount || 0) + getExpensesPaid(t.id);
+        filesData.push(['Transaction', t.fileName || '', t.billedAmount || 0, paid, clients.find((cl: any)=>cl.id===t.clientId)?.name || 'N/A']); 
+      }
     });
     landTitles?.forEach((t: any) => { 
-      if (filterByTime(t.date || '')) filesData.push(['Land Title', `Plot ${t.title_number}`, t.total_billed || 0, t.total_paid || 0, clients.find((cl: any)=>cl.id===t.client_id)?.name || 'N/A']); 
+      if (filterByTime(t.date || '')) {
+        const paid = (t.total_paid || 0) + getExpensesPaid(t.id);
+        filesData.push(['Land Title', `Plot ${t.title_number}`, t.total_billed || 0, paid, clients.find((cl: any)=>cl.id===t.client_id)?.name || 'N/A']); 
+      }
     });
 
     let totalBilled = 0;
@@ -217,10 +246,12 @@ export default function AccountantDashboard() {
 
     const filteredExpenses = (expenses || []).filter(e => filterByTime(e.date || ''));
     const outExpenses = filteredExpenses.filter((e: any) => e.type === 'out');
-    const inExpenses = filteredExpenses.filter((e: any) => e.type === 'in');
+    
+    // Only incomes not already counted in file balances
+    const unlinkedInExpenses = filteredExpenses.filter((e: any) => e.type === 'in' && !e.relatedFileId);
     
     let totalInExpenses = 0;
-    inExpenses.forEach((e: any) => { totalInExpenses += (e.amount || 0); });
+    unlinkedInExpenses.forEach((e: any) => { totalInExpenses += (e.amount || 0); });
 
     let totalOutExpenses = 0;
     outExpenses.forEach((e: any) => { totalOutExpenses += (e.amount || 0); });
@@ -250,12 +281,12 @@ export default function AccountantDashboard() {
     lines.push(["TOTAL ACROSS ALL FILES", "", "", totalBilled, totalFilePaid, totalOwed]);
     lines.push([]);
 
-    lines.push(["OTHER REVENUES / DEPOSITS (MONEY IN)"]);
+    lines.push(["OTHER REVENUES / DEPOSITS (UNLINKED MONEY IN)"]);
     lines.push(["Date", "Related File", "Purpose", "Amount (UGX)"]);
-    if (inExpenses.length === 0) {
-      lines.push(["No deposits recorded", "", "", "0"]);
+    if (unlinkedInExpenses.length === 0) {
+      lines.push(["No unlinked deposits recorded", "", "", "0"]);
     } else {
-      inExpenses.forEach((e: any) => {
+      unlinkedInExpenses.forEach((e: any) => {
         lines.push([
           `"${e.date || ''}"`, 
           `"${(e.relatedFileName || '').replace(/"/g, '""')}"`, 

@@ -280,16 +280,27 @@ export default function Expenses() {
   const handleExportCSV = () => {
     if (filteredExpenses.length === 0) return alert("No data to export");
     const headers = ["Date", "Type", "Account", "Category", "Staff Name", "Purpose", "File Name", "Amount (UGX)"];
-    const rows = filteredExpenses.map((exp: any) => [
-      exp.date,
-      exp.type === "in" ? "Money In" : exp.type === "transfer" ? "Transfer" : "Money Out",
-      exp.type === "transfer" ? `${exp.paymentMethod || ''} > ${exp.category || ''}` : (exp.paymentMethod || ""),
-      exp.type === "transfer" ? "" : (exp.category || ""),
-      exp.staffName || "",
-      (exp.purpose || exp.description || "").replace(/,/g, ""),
-      (exp.relatedFileName || "").replace(/,/g, ""),
-      exp.amount
-    ]);
+    let csvTotalIn = 0;
+    let csvTotalOut = 0;
+    const rows = filteredExpenses.map((exp: any) => {
+      const amt = Number(exp.amount || 0);
+      if (exp.type === "in") csvTotalIn += amt;
+      else if (exp.type === "out") csvTotalOut += amt;
+      return [
+        exp.date,
+        exp.type === "in" ? "Money In" : exp.type === "transfer" ? "Transfer" : "Money Out",
+        exp.type === "transfer" ? `${exp.paymentMethod || ''} > ${exp.category || ''}` : (exp.paymentMethod || ""),
+        exp.type === "transfer" ? "" : (exp.category || ""),
+        exp.staffName || "",
+        (exp.purpose || exp.description || "").replace(/,/g, ""),
+        (exp.relatedFileName || "").replace(/,/g, ""),
+        exp.amount
+      ];
+    });
+    rows.push([]);
+    rows.push(["", "", "", "", "", "", "TOTAL INCOME (Money In)", csvTotalIn]);
+    rows.push(["", "", "", "", "", "", "TOTAL EXPENSES (Money Out)", csvTotalOut]);
+    rows.push(["", "", "", "", "", "", "NET BALANCE", csvTotalIn - csvTotalOut]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -416,7 +427,14 @@ export default function Expenses() {
             onClick={() => {
               const win = window.open("", "_blank");
               if (!win) return;
-              const rows = filteredExpenses.slice(0, 100).map((exp: any) => `<tr>
+              const printData = filteredExpenses.slice(0, 100);
+              let printTotalIn = 0;
+              let printTotalOut = 0;
+              const rows = printData.map((exp: any) => {
+                const amt = Number(exp.amount || 0);
+                if (exp.type === 'in') printTotalIn += amt;
+                else if (exp.type === 'out') printTotalOut += amt;
+                return `<tr>
                 <td style="padding:8px;border:1px solid #ddd;white-space:nowrap">${exp.date}</td>
                 <td style="padding:8px;border:1px solid #ddd;font-weight:bold;color:${exp.type === 'in' ? '#059669' : exp.type === 'transfer' ? '#d97706' : '#dc2626'}">${exp.type === 'in' ? 'In (+)' : exp.type === 'transfer' ? 'Transfer ⇄' : 'Out (-)'}</td>
                 <td style="padding:8px;border:1px solid #ddd">${exp.type === 'transfer' ? (exp.paymentMethod || '') + ' ➔ ' + (exp.category || '') : (exp.paymentMethod || '—')}</td>
@@ -424,8 +442,10 @@ export default function Expenses() {
                 <td style="padding:8px;border:1px solid #ddd">${exp.staffName ? exp.staffName : ''}${exp.relatedFileName ? (exp.staffName ? ' / ' : '') + exp.relatedFileName : ''}</td>
                 <td style="padding:8px;border:1px solid #ddd">${exp.purpose || exp.description || ''}</td>
                 <td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold;color:${exp.type === 'in' ? '#059669' : '#dc2626'}">${exp.type === 'in' ? '+' : '-'} UGX ${Number(exp.amount).toLocaleString()}</td>
-              </tr>`).join('');
-              win.document.write(`<html><head><title>Financial Ledger</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}h2{margin-bottom:4px}p{color:#666;margin-top:0}</style></head><body><h2>Financial Tracker — Petty Cash Ledger</h2><p>Buwembo & Company Advocates · Printed ${new Date().toLocaleDateString()}</p><table><thead><tr style="background:#f1f5f9"><th style="padding:8px;border:1px solid #ddd;text-align:left">Date</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Type</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Account</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Category</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Staff & File</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Purpose</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+              </tr>`;
+              }).join('');
+              const printNet = printTotalIn - printTotalOut;
+              win.document.write(`<html><head><title>Financial Ledger</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}h2{margin-bottom:4px}p{color:#666;margin-top:0}</style></head><body><h2>Financial Tracker — Petty Cash Ledger</h2><p>Buwembo & Company Advocates · Printed ${new Date().toLocaleDateString()}</p><table><thead><tr style="background:#f1f5f9"><th style="padding:8px;border:1px solid #ddd;text-align:left">Date</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Type</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Account</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Category</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Staff & File</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Purpose</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="background:#f0fdf4"><td colspan="6" style="padding:10px;border:1px solid #ddd;font-weight:bold;color:#059669">TOTAL INCOME (Money In)</td><td style="padding:10px;border:1px solid #ddd;text-align:right;font-weight:bold;color:#059669">+ UGX ${printTotalIn.toLocaleString()}</td></tr><tr style="background:#fef2f2"><td colspan="6" style="padding:10px;border:1px solid #ddd;font-weight:bold;color:#dc2626">TOTAL EXPENSES (Money Out)</td><td style="padding:10px;border:1px solid #ddd;text-align:right;font-weight:bold;color:#dc2626">- UGX ${printTotalOut.toLocaleString()}</td></tr><tr style="background:${printNet >= 0 ? '#f0fdf4' : '#fef2f2'}"><td colspan="6" style="padding:12px;border:2px solid #333;font-weight:bold;font-size:15px">NET BALANCE</td><td style="padding:12px;border:2px solid #333;text-align:right;font-weight:bold;font-size:15px;color:${printNet >= 0 ? '#059669' : '#dc2626'}">UGX ${printNet.toLocaleString()}</td></tr></tfoot></table></body></html>`);
               win.document.close(); win.print();
             }}
             className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors border border-slate-200"
