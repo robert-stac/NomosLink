@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 import { supabase } from "../lib/supabaseClient";
 import { buildExpenseForDb } from "../utils/expenseUtils";
@@ -10,7 +11,15 @@ const Invoices: React.FC = () => {
   } = useAppContext();
 
   /* ===== FORM STATE ===== */
+  const location = useLocation();
   const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.openForm) {
+      setShowForm(true);
+    }
+  }, [location.state]);
+
   const [fileName, setFileName] = useState("");
   const [relatedFile, setRelatedFile] = useState("");
   const [relatedFileId, setRelatedFileId] = useState("");

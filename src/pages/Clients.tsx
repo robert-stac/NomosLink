@@ -99,18 +99,67 @@ const Clients: React.FC = () => {
           return false;
         });
 
+        // Invoices linked to any of this client's files
+        const allClientFileIds = new Set([
+          ...clientCases.map(c => c.id),
+          ...clientTransactions.map(t => t.id),
+          ...clientLetters.map(l => l.id),
+          ...clientTitles.map((t: any) => t.id),
+        ]);
+        const allClientFileNames = new Set([
+          ...clientCases.map(c => c.fileName?.toLowerCase()),
+          ...clientTransactions.map(t => t.fileName?.toLowerCase()),
+          ...clientLetters.map(l => (l.subject || '').toLowerCase()),
+        ].filter(Boolean));
+
+        const clientInvoices = (invoices || []).filter((inv: any) => {
+          if (inv.relatedFileId && allClientFileIds.has(inv.relatedFileId)) return true;
+          if (inv.relatedFile && allClientFileNames.has(inv.relatedFile.toLowerCase())) return true;
+          return false;
+        });
+
         const totalFilesCount = clientCases.length + clientTransactions.length + clientTitles.length;
+
+        // Calculate total billed and legacy paid using invoices as the source of truth if they exist
+        const invoiceBilledByFileId = new Map<string, number>();
+        const invoiceBilledByFileName = new Map<string, number>();
+        const invoicePaidByFileId = new Map<string, number>();
+        const invoicePaidByFileName = new Map<string, number>();
+        
+        clientInvoices.forEach((inv: any) => {
+          if (inv.relatedFileId) {
+            invoiceBilledByFileId.set(inv.relatedFileId, (invoiceBilledByFileId.get(inv.relatedFileId) || 0) + (inv.amountBilled || 0));
+            invoicePaidByFileId.set(inv.relatedFileId, (invoicePaidByFileId.get(inv.relatedFileId) || 0) + (inv.amountPaid || 0));
+          } else if (inv.relatedFile) {
+            const lowerName = inv.relatedFile.toLowerCase();
+            invoiceBilledByFileName.set(lowerName, (invoiceBilledByFileName.get(lowerName) || 0) + (inv.amountBilled || 0));
+            invoicePaidByFileName.set(lowerName, (invoicePaidByFileName.get(lowerName) || 0) + (inv.amountPaid || 0));
+          }
+        });
+
+        const getFileBilled = (id: string, name: string | undefined, defaultBilled: number) => {
+          if (invoiceBilledByFileId.has(id)) return invoiceBilledByFileId.get(id) || 0;
+          if (name && invoiceBilledByFileName.has(name.toLowerCase())) return invoiceBilledByFileName.get(name.toLowerCase()) || 0;
+          return defaultBilled || 0;
+        };
+        
+        const getFileLegacyPaid = (id: string, name: string | undefined, defaultPaid: number) => {
+          if (invoicePaidByFileId.has(id)) return invoicePaidByFileId.get(id) || 0;
+          if (name && invoicePaidByFileName.has(name.toLowerCase())) return invoicePaidByFileName.get(name.toLowerCase()) || 0;
+          return defaultPaid || 0;
+        };
+
         const totalBilled =
-          clientCases.reduce((sum, c) => sum + (c.billed || 0), 0) +
-          clientTransactions.reduce((sum, t) => sum + (t.billedAmount || 0), 0) +
-          clientLetters.reduce((sum, l) => sum + (l.billed || 0), 0) +
-          clientTitles.reduce((sum: number, t: any) => sum + (t.total_billed || 0), 0);
+          clientCases.reduce((sum, c) => sum + getFileBilled(c.id, c.fileName, c.billed), 0) +
+          clientTransactions.reduce((sum, t) => sum + getFileBilled(t.id, t.fileName, t.billedAmount), 0) +
+          clientLetters.reduce((sum, l) => sum + getFileBilled(l.id, l.subject, l.billed), 0) +
+          clientTitles.reduce((sum: number, t: any) => sum + getFileBilled(t.id, undefined, t.total_billed), 0);
 
         const totalLegacyPaid =
-          clientCases.reduce((sum, c) => sum + (c.paid || 0), 0) +
-          clientTransactions.reduce((sum, t) => sum + (t.paidAmount || 0), 0) +
-          clientLetters.reduce((sum, l) => sum + (l.paid || 0), 0) +
-          clientTitles.reduce((sum: number, t: any) => sum + (t.total_paid || 0), 0);
+          clientCases.reduce((sum, c) => sum + getFileLegacyPaid(c.id, c.fileName, c.paid), 0) +
+          clientTransactions.reduce((sum, t) => sum + getFileLegacyPaid(t.id, t.fileName, t.paidAmount), 0) +
+          clientLetters.reduce((sum, l) => sum + getFileLegacyPaid(l.id, l.subject, l.paid), 0) +
+          clientTitles.reduce((sum: number, t: any) => sum + getFileLegacyPaid(t.id, undefined, t.total_paid), 0);
 
         const clientExpenses = (expenses || []).filter((e: any) =>
           e.type !== 'transfer' && (
@@ -127,7 +176,7 @@ const Clients: React.FC = () => {
 
         const totalOwed = totalBilled - (totalLegacyPaid + expensesPaid);
 
-        return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, expenses: clientExpenses, totalOwed, totalFilesCount };
+        return { ...client, cases: clientCases, transactions: clientTransactions, letters: clientLetters, titles: clientTitles, invoices: clientInvoices, expenses: clientExpenses, totalOwed, totalBilled, totalLegacyPaid, expensesPaid, totalFilesCount };
       });
 
     return result.sort((a, b) => {
@@ -287,6 +336,55 @@ const Clients: React.FC = () => {
     link.click();
   };
 
+  const handlePrintExpenseRecord = (client: any) => {
+    const win = window.open('', '_blank');
+    if (!win) return alert("Please allow popups to print.");
+
+    const totalBilled = client.totalBilled || 0;
+    const totalReceived = (client.totalLegacyPaid || 0) + (client.expensesPaid || 0);
+    const totalOwed = client.totalOwed || 0;
+
+    const expRows = (client.expenses || []).map((exp: any) => {
+      return `<tr>
+        <td style="padding:8px;border-bottom:1px solid #ddd">${exp.date || ''}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd">${exp.type === 'in' ? '<span style="color:#059669;font-weight:bold">IN (+)</span>' : '<span style="color:#dc2626;font-weight:bold">OUT (-)</span>'}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd">${exp.relatedFileName || '-'}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd">${exp.purpose || exp.description || ''}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right;font-weight:bold;color:${exp.type === 'in' ? '#059669' : '#dc2626'}">${exp.type === 'in' ? '+' : '-'} UGX ${Number(exp.amount || 0).toLocaleString()}</td>
+      </tr>`;
+    }).join("");
+
+    win.document.write(`<html><head><title>Client Expense Record - ${client.name}</title><style>body{font-family:sans-serif;padding:20px;color:#333}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}th{background:#f8fafc;padding:10px;text-align:left;border-bottom:2px solid #ddd}h2{margin-bottom:4px;color:#0f172a}p{color:#64748b;margin-top:0}.summary{display:flex;gap:20px;margin:20px 0;padding:15px;background:#f8fafc;border-radius:8px}.stat{flex:1}</style></head><body>
+      <h2>Client Expense Record: ${client.name}</h2>
+      <p>Buwembo & Company Advocates · Printed ${new Date().toLocaleDateString()}</p>
+      
+      <div class="summary">
+        <div class="stat"><strong style="color:#64748b;font-size:12px;text-transform:uppercase">Total Billed</strong><br/><span style="font-size:20px;font-weight:bold;color:#0f172a">UGX ${totalBilled.toLocaleString()}</span></div>
+        <div class="stat"><strong style="color:#64748b;font-size:12px;text-transform:uppercase">Total Received</strong><br/><span style="font-size:20px;font-weight:bold;color:#059669">UGX ${totalReceived.toLocaleString()}</span></div>
+        <div class="stat"><strong style="color:#64748b;font-size:12px;text-transform:uppercase">Outstanding</strong><br/><span style="font-size:20px;font-weight:bold;color:${totalOwed > 0 ? '#dc2626' : '#059669'}">UGX ${totalOwed.toLocaleString()}</span></div>
+      </div>
+      
+      <h3>Expense Transactions</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>File</th>
+            <th>Purpose</th>
+            <th style="text-align:right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${expRows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:#94a3b8;font-style:italic">No expenses recorded.</td></tr>'}
+        </tbody>
+      </table>
+    </body></html>`);
+    
+    win.document.close();
+    win.print();
+  };
+
   const handleSubmit = () => {
     const newClient = {
       id: crypto.randomUUID(),
@@ -443,12 +541,32 @@ const Clients: React.FC = () => {
                 >
                   ← Back
                 </button>
-                <button
-                  onClick={() => openEditModal(selectedClient)}
-                  className="text-xs font-semibold text-blue-300 hover:text-white border border-blue-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
-                >
-                  ✏️ Edit
-                </button>
+                <div className="flex gap-2 relative">
+                  {(currentUser?.role === 'accountant' || currentUser?.role === 'admin' || currentUser?.role === 'managing_partner') && (
+                    <div className="relative group">
+                      <button className="text-xs font-semibold text-blue-300 hover:text-white border border-blue-600 hover:border-white px-3 py-1 rounded-lg transition-colors flex items-center gap-1">
+                        ⚡ Quick Actions <span>▼</span>
+                      </button>
+                      <div className="absolute right-0 top-full mt-1 hidden group-hover:flex group-focus-within:flex flex-col bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden w-40 z-50">
+                        <button onClick={() => navigate('/expenses', { state: { openForm: true, type: 'out' } })} className="px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 text-left w-full transition-colors">
+                          - Record Expense
+                        </button>
+                        <button onClick={() => navigate('/expenses', { state: { openForm: true, type: 'in' } })} className="px-4 py-2.5 text-xs font-bold text-emerald-600 hover:bg-emerald-50 text-left w-full transition-colors border-t border-slate-100">
+                          + Record Income
+                        </button>
+                        <button onClick={() => navigate('/invoices', { state: { openForm: true } })} className="px-4 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50 text-left w-full transition-colors border-t border-slate-100">
+                          📄 Record Invoice
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => openEditModal(selectedClient)}
+                    className="text-xs font-semibold text-blue-300 hover:text-white border border-blue-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
+                  >
+                    ✏️ Edit
+                  </button>
+                </div>
               </div>
               <p className="text-xs font-semibold text-blue-300 uppercase tracking-widest mb-2 mt-1">
                 {selectedClient.type} Client
@@ -483,10 +601,16 @@ const Clients: React.FC = () => {
 
               {activeDrawerTab === "Overview" || !(currentUser?.role === 'accountant' || currentUser?.role === 'admin') ? (
                 <>
-                  <div className="grid grid-cols-3 gap-4 mb-8">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-slate-50 rounded-2xl p-4 text-center">
                       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Files</p>
                       <p className="text-xl font-bold text-[#0B1F3A]">{selectedClient.totalFilesCount}</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">Total Billed</p>
+                      <p className="text-lg font-bold text-blue-600">
+                        {fmt(selectedClient.totalBilled || 0)}
+                      </p>
                     </div>
                     <div className="bg-red-50 rounded-2xl p-4 text-center">
                       <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1">Outstanding</p>
@@ -495,8 +619,10 @@ const Clients: React.FC = () => {
                       </p>
                     </div>
                     <div className="bg-emerald-50 rounded-2xl p-4 text-center">
-                      <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Status</p>
-                      <p className="text-lg font-bold text-emerald-600">Active</p>
+                      <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Total Received</p>
+                      <p className="text-lg font-bold text-emerald-600">
+                        {fmt((selectedClient.totalLegacyPaid || 0) + (selectedClient.expensesPaid || 0))}
+                      </p>
                     </div>
                   </div>
 
@@ -622,12 +748,20 @@ const Clients: React.FC = () => {
                     <h4 className="text-xs font-semibold text-[#0B1F3A] uppercase tracking-widest">
                       Expense Record
                     </h4>
-                    <button
-                      onClick={() => handleDownloadExpensesCSV(selectedClient)}
-                      className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-lg font-bold text-xs transition-colors border border-emerald-200"
-                    >
-                      📥 Export Expenses CSV
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDownloadExpensesCSV(selectedClient)}
+                        className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-lg font-bold text-xs transition-colors border border-emerald-200"
+                      >
+                        📥 Export Expenses CSV
+                      </button>
+                      <button
+                        onClick={() => handlePrintExpenseRecord(selectedClient)}
+                        className="bg-slate-50 text-slate-700 hover:bg-slate-100 px-4 py-2 rounded-lg font-bold text-xs transition-colors border border-slate-200"
+                      >
+                        🖨️ Print
+                      </button>
+                    </div>
                   </div>
 
                   {/* Account Balance Summary - Always visible */}
@@ -635,11 +769,7 @@ const Clients: React.FC = () => {
                     // ── 1. LEGAL FEES (Billable Revenue) ──
                     // Legal fees = money paid on files (court cases, transactions, letters, titles)
                     //            + any "Money In" expense records categorised as "Legal fees"
-                    const filePaid =
-                      selectedClient.cases.reduce((s: number, c: any) => s + (c.paid || 0), 0) +
-                      selectedClient.transactions.reduce((s: number, t: any) => s + (t.paidAmount || 0), 0) +
-                      selectedClient.letters.reduce((s: number, l: any) => s + (l.paid || 0), 0) +
-                      selectedClient.titles.reduce((s: number, t: any) => s + (t.total_paid || 0), 0);
+                    const filePaid = selectedClient.totalLegacyPaid || 0;
 
                     const legalFeesFromExpenses = (selectedClient.expenses || [])
                       .filter((e: any) => e.type === 'in')
@@ -647,11 +777,7 @@ const Clients: React.FC = () => {
 
                     const totalLegalFees = filePaid + legalFeesFromExpenses;
 
-                    const fileBilled =
-                      selectedClient.cases.reduce((s: number, c: any) => s + (c.billed || 0), 0) +
-                      selectedClient.transactions.reduce((s: number, t: any) => s + (t.billedAmount || 0), 0) +
-                      selectedClient.letters.reduce((s: number, l: any) => s + (l.billed || 0), 0) +
-                      selectedClient.titles.reduce((s: number, t: any) => s + (t.total_billed || 0), 0);
+                    const fileBilled = selectedClient.totalBilled || 0;
 
                     const legalFeesOutstanding = fileBilled - totalLegalFees;
 
@@ -806,6 +932,33 @@ const Clients: React.FC = () => {
                       ...selectedClient.letters.map((l: any) => ({ id: l.id, name: l.subject, type: 'letter', billed: l.billed || 0, paid: l.paid || 0 })),
                       ...selectedClient.titles.map((t: any) => ({ id: t.id, name: `Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ''}`, type: 'title', billed: t.total_billed || 0, paid: t.total_paid || 0 }))
                     ];
+
+                    // Overwrite file amounts with invoice amounts if they exist
+                    (selectedClient.invoices || []).forEach((inv: any) => {
+                      const matchingFile = allFiles.find(f =>
+                        (inv.relatedFileId && f.id === inv.relatedFileId) ||
+                        (inv.relatedFile && f.name.toLowerCase() === inv.relatedFile.toLowerCase())
+                      );
+                      if (matchingFile) {
+                        if (!matchingFile.hasInvoice) {
+                          matchingFile.billed = 0;
+                          matchingFile.paid = 0;
+                          matchingFile.hasInvoice = true;
+                        }
+                        matchingFile.billed += (inv.amountBilled || 0);
+                        matchingFile.paid += (inv.amountPaid || 0);
+                      } else {
+                        // Invoice linked to a file not in the list — add as its own entry
+                        allFiles.push({
+                          id: inv.id,
+                          name: inv.relatedFile || inv.fileName,
+                          type: 'invoice',
+                          billed: inv.amountBilled || 0,
+                          paid: inv.amountPaid || 0,
+                          hasInvoice: true
+                        });
+                      }
+                    });
 
                     // Build expense map by file name
                     const outExpensesByFile = new Map<string, number>();

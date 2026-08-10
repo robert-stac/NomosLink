@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 import { supabase } from "../lib/supabaseClient";
 import { buildExpenseForDb, buildExpenseRecord } from "../utils/expenseUtils";
@@ -17,9 +18,19 @@ ChartJS.register(Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement)
 
 export default function Expenses() {
   const { expenses, setExpenses, users, courtCases, transactions, letters, currentUser } = useAppContext();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<"Ledger" | "Reports">("Ledger");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state?.openForm) {
+      setShowModal(true);
+      if (location.state?.type) {
+        setFormData(prev => ({ ...prev, type: location.state.type }));
+      }
+    }
+  }, [location.state]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All");

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { buildExpenseForDb } from "../utils/expenseUtils";
+import { buildExpenseForDb, buildExpenseRecord } from "../utils/expenseUtils";
 
 /* =======================
     TYPES
@@ -558,6 +558,31 @@ function buildDraftEmail(
   );
 }
 
+const normalizeInvoice = (row: any): Invoice => ({
+  id: row.id,
+  fileName: row.filename ?? row.fileName ?? '',
+  relatedFile: row.relatedfile ?? row.relatedFile ?? '',
+  amountBilled: Number(row.amountbilled ?? row.amountBilled ?? 0),
+  amountPaid: Number(row.amountpaid ?? row.amountPaid ?? 0),
+  balance: Number(row.balance ?? 0),
+  isPaid: Boolean(row.ispaid ?? row.isPaid ?? false),
+  dateCreated: row.datecreated ?? row.dateCreated ?? '',
+  dueDate: row.duedate ?? row.dueDate ?? undefined,
+  scannedInvoiceUrl: row.scannedInvoiceUrl ?? undefined,
+});
+
+const normalizeExpense = (row: any) => ({
+  ...row,
+  relatedFileId: row.relatedfileid ?? row.relatedFileId ?? row.related_file_id ?? '',
+  relatedFileName: row.relatedfilename ?? row.relatedFileName ?? row.related_file_name ?? '',
+  relatedFileType: row.relatedfiletype ?? row.relatedFileType ?? row.related_file_type ?? '',
+  staffId: row.staffid ?? row.staffId ?? row.staff_id ?? '',
+  staffName: row.staffname ?? row.staffName ?? row.staff_name ?? '',
+  addedById: row.addedbyid ?? row.addedById ?? row.added_by_id ?? '',
+  addedByName: row.addedbyname ?? row.addedByName ?? row.added_by_name ?? '',
+  paymentMethod: row.paymentmethod ?? row.paymentMethod ?? row.payment_method ?? '',
+});
+
 /* =======================
     PROVIDER
 ======================= */
@@ -953,7 +978,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (ltRes.data) setLetters(prev => smartMergeState(ltRes.data.map(normalizeFile), prev, 'letters'));
         if (expRes.data) {
           setExpenses(prev => {
-            const mapped = expRes.data.map((e: any) => buildExpenseRecord({ id: e.id, baseData: e, currentUser }));
+            const mapped = expRes.data.map(normalizeExpense);
             if (!mapped || !Array.isArray(mapped)) return prev || [];
             return mapped;
           });
@@ -1014,31 +1039,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (letterData) setLetters(prev => smartMergeState(letterData.map(normalizeFile), prev, 'letters'));
         if (userData) setUsers(prev => mergeIfChanged(prev, userData));
         if (taskData) setTasks(prev => mergeIfChanged(prev, taskData).map(normalizeTask));
-        const normalizeInvoice = (row: any): Invoice => ({
-          id: row.id,
-          fileName: row.filename ?? row.fileName ?? '',
-          relatedFile: row.relatedfile ?? row.relatedFile ?? '',
-          amountBilled: Number(row.amountbilled ?? row.amountBilled ?? 0),
-          amountPaid: Number(row.amountpaid ?? row.amountPaid ?? 0),
-          balance: Number(row.balance ?? 0),
-          isPaid: Boolean(row.ispaid ?? row.isPaid ?? false),
-          dateCreated: row.datecreated ?? row.dateCreated ?? '',
-          dueDate: row.duedate ?? row.dueDate ?? undefined,
-          scannedInvoiceUrl: row.scannedInvoiceUrl ?? undefined,
-        });
         if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData.map(normalizeInvoice)));
-        const normalizeExpense = (row: any) => ({
-          ...row,
-          relatedFileId: row.relatedfileid ?? row.relatedFileId ?? row.related_file_id ?? '',
-          relatedFileName: row.relatedfilename ?? row.relatedFileName ?? row.related_file_name ?? '',
-          relatedFileType: row.relatedfiletype ?? row.relatedFileType ?? row.related_file_type ?? '',
-          staffId: row.staffid ?? row.staffId ?? row.staff_id ?? '',
-          staffName: row.staffname ?? row.staffName ?? row.staff_name ?? '',
-          addedById: row.addedbyid ?? row.addedById ?? row.added_by_id ?? '',
-          addedByName: row.addedbyname ?? row.addedByName ?? row.added_by_name ?? '',
-          paymentMethod: row.paymentmethod ?? row.paymentMethod ?? row.payment_method ?? '',
-        });
-        
         if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData.map(normalizeExpense)));
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
         if (filingData) setFilingRequests(prev => mergeIfChanged(prev, filingData));
