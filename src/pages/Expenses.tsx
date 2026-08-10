@@ -378,16 +378,20 @@ export default function Expenses() {
     }
 
     if (navigator.onLine) {
-      const expenseForDb = buildExpenseForDb(newExpense);
+      try {
+        const expenseForDb = buildExpenseForDb(newExpense);
 
-      console.log('[Expense Save] Payload:', expenseForDb);
-      const { error, data } = await supabase.from('expenses').upsert([expenseForDb], { onConflict: 'id' });
-      if (error) {
-        console.error('[Expense Save] Error:', error.message);
-        alert(`Expense save failed: ${error.message}`);
-        return;
-      } else {
-        console.log('[Expense Save] Success:', data);
+        console.log('[Expense Save] Payload:', expenseForDb);
+        const { error, data } = await supabase.from('expenses').upsert([expenseForDb], { onConflict: 'id' });
+        if (error) {
+          console.error('[Expense Save] DB Error:', error.message);
+          alert(`Expense saved locally but failed to sync to server: ${error.message}. It will sync automatically when connection is restored.`);
+        } else {
+          console.log('[Expense Save] Success:', data);
+        }
+      } catch (err: any) {
+        console.error('[Expense Save] Network error:', err);
+        alert('Expense saved locally but could not reach the server. It will sync automatically when connection is restored.');
       }
     }
 

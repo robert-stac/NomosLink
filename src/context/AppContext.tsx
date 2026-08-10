@@ -1354,8 +1354,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       const syncTasks = [
-        // CRITICAL FIX: Disabled destructive blind upserts that overwrite concurrent cloud edits
-        // { name: 'expenses', task: supabase.from('expenses').upsert(expensesForDb, { onConflict: 'id' }) },
+        // CRITICAL FIX: Only expenses are re-synced to handle failed saves from Expenses.tsx
+        { name: 'expenses', task: supabase.from('expenses').upsert(expensesForDb, { onConflict: 'id' }) },
         // { name: 'clients', task: supabase.from('clients').upsert(clientsForDb, { onConflict: 'id' }) },
         // { name: 'letters', task: supabase.from('letters').upsert(lettersForDb, { onConflict: 'id' }) },
         // { name: 'invoices', task: supabase.from('invoices').upsert(invoicesForDb, { onConflict: 'id' }) },
