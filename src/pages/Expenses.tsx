@@ -57,6 +57,11 @@ export default function Expenses() {
     "Office repairs & Maintenance",
     "Telephone & Internet Services",
     "Cost of Service",
+    "NSSF",
+    "PAYE",
+    "Salaries & wages",
+    "Security Services",
+    "Garbage Collection",
     "Others",
   ];
 

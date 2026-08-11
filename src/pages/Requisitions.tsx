@@ -358,6 +358,11 @@ export default function Requisitions() {
             <option>Office repairs & Maintenance</option>
             <option>Telephone & Internet Services</option>
             <option>Cost of Service</option>
+            <option>NSSF</option>
+            <option>PAYE</option>
+            <option>Salaries & wages</option>
+            <option>Security Services</option>
+            <option>Garbage Collection</option>
             <option>Others</option>
           </select>
           <select value={filterRequesterId} onChange={e => setFilterRequesterId(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm">
@@ -539,6 +544,11 @@ export default function Requisitions() {
                   <option>Office repairs & Maintenance</option>
                   <option>Telephone & Internet Services</option>
                   <option>Cost of Service</option>
+                  <option>NSSF</option>
+                  <option>PAYE</option>
+                  <option>Salaries & wages</option>
+                  <option>Security Services</option>
+                  <option>Garbage Collection</option>
                   <option>Others</option>
                 </select>
               </div>
