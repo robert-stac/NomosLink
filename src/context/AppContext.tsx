@@ -628,6 +628,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [expenses, setExpenses] = useState<any[]>(() => JSON.parse(localStorage.getItem("expenses") || "[]"));
   const [requisitions, setRequisitions] = useState<Requisition[]>(() => JSON.parse(localStorage.getItem("requisitions") || "[]"));
   const [pendingDeletes, setPendingDeletes] = useState<{ table: string; id: string }[]>(() => JSON.parse(localStorage.getItem("pendingDeletes") || "[]"));
+  const pendingDeletesRef = useRef<{ table: string; id: string }[]>([]);
+  useEffect(() => { pendingDeletesRef.current = pendingDeletes; }, [pendingDeletes]);
+
   const [firmName, setFirmName] = useState("Buwembo & Co. Advocates");
   const [updateAvailable, setUpdateAvailable] = useState(false);
 
@@ -876,7 +879,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const smartMergeState = <T extends { id: string }>(cloud: T[], prev: T[], tableName: string): T[] => {
     if (!cloud || !Array.isArray(cloud)) return prev || [];
     const localById = new Map((prev || []).map(item => [item.id, item]));
-    const cloudById = new Map(cloud.map(item => [item.id, item]));
 
     const mergeArraysById = (localArr: any[] | undefined, cloudArr: any[] | undefined, onLocalMissingInCloud?: (mergedArr: any[]) => void) => {
       if (!localArr || localArr.length === 0) return cloudArr || [];
@@ -943,7 +945,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
-    return mergedCloud;
+    const filteredCloud = mergedCloud.filter(item => !pendingDeletesRef.current.some(pd => pd.table === tableName && pd.id === item.id));
+    return filteredCloud as T[];
   };
 
   /* =======================
@@ -2089,11 +2092,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateRequisition = async (id: string, data: Partial<Requisition>) => {
     setRequisitions(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
     if (navigator.onLine) {
-      const req = requisitions.find(r => r.id === id);
-      if (req) {
-        const { error } = await supabase.from('requisitions').upsert({ ...req, ...data }, { onConflict: 'id' });
-        if (error) console.error("Failed to update requisition:", error.message);
-      }
+      const { error } = await supabase.from('requisitions').update(data).eq('id', id);
+      if (error) console.error("Failed to update requisition:", error.message);
     }
   };
 
