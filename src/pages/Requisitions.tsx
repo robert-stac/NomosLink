@@ -6,9 +6,9 @@ import type { Requisition } from "../context/AppContext";
 
 export default function Requisitions() {
   const navigate = useNavigate();
-  const { currentUser, users, requisitions, addRequisition, updateRequisition, sendNotification, courtCases, transactions, letters } = useAppContext();
+  const { currentUser, users, requisitions, addRequisition, updateRequisition, sendNotification, courtCases, transactions, letters, clients } = useAppContext();
   const { deleteRequisition } = useAppContext();
-  
+
   const handleNavigate = (type: string, id: string) => {
     if (!type || !id) return;
     if (type === 'case') navigate(`/lawyer/cases/${id}`);
@@ -17,6 +17,7 @@ export default function Requisitions() {
   };
 
   const [showModal, setShowModal] = useState(false);
+  const [editingReqId, setEditingReqId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
@@ -36,9 +37,44 @@ export default function Requisitions() {
   const [presets, setPresets] = useState<Array<any>>([]);
   const [selectedPreset, setSelectedPreset] = useState("");
 
-  const availableCases = useMemo(() => courtCases.filter(c => !c.archived), [courtCases]);
-  const availableTransactions = useMemo(() => transactions.filter(t => !t.archived), [transactions]);
-  const availableLetters = useMemo(() => letters.filter(l => !l.archived), [letters]);
+  const availableCases = useMemo(() => courtCases, [courtCases]);
+  const availableTransactions = useMemo(() => transactions, [transactions]);
+  const availableLetters = useMemo(() => letters, [letters]);
+
+  const filteredCasesForDropdown = useMemo(() => {
+    return availableCases.filter(c => {
+      if (c.archived) return false;
+      const searchLower = fileSearch.toLowerCase();
+      const nameMatch = (c.fileName || "").toLowerCase().includes(searchLower);
+      const clientName = c.clientId ? clients.find(cl => cl.id === c.clientId)?.name || "" : "";
+      const clientMatch = clientName.toLowerCase().includes(searchLower);
+      const detailsMatch = (c.details || "").toLowerCase().includes(searchLower);
+      return nameMatch || clientMatch || detailsMatch;
+    }).sort((a, b) => (a.fileName || "").localeCompare(b.fileName || ""));
+  }, [availableCases, fileSearch, clients]);
+
+  const filteredTransactionsForDropdown = useMemo(() => {
+    return availableTransactions.filter(t => {
+      if (t.archived) return false;
+      const searchLower = fileSearch.toLowerCase();
+      const nameMatch = (t.fileName || "").toLowerCase().includes(searchLower);
+      const clientName = t.clientId ? clients.find(cl => cl.id === t.clientId)?.name || "" : "";
+      const clientMatch = clientName.toLowerCase().includes(searchLower);
+      return nameMatch || clientMatch;
+    }).sort((a, b) => (a.fileName || "").localeCompare(b.fileName || ""));
+  }, [availableTransactions, fileSearch, clients]);
+
+  const filteredLettersForDropdown = useMemo(() => {
+    return availableLetters.filter(l => {
+      if (l.archived) return false;
+      const searchLower = fileSearch.toLowerCase();
+      const subjectMatch = (l.subject || "").toLowerCase().includes(searchLower);
+      const recipientMatch = (l.recipient || "").toLowerCase().includes(searchLower);
+      const clientName = l.clientId ? clients.find(cl => cl.id === l.clientId)?.name || "" : "";
+      const clientMatch = clientName.toLowerCase().includes(searchLower);
+      return subjectMatch || recipientMatch || clientMatch;
+    }).sort((a, b) => (a.subject || "").localeCompare(b.subject || ""));
+  }, [availableLetters, fileSearch, clients]);
 
   const isManager = currentUser?.role === "manager";
   const isAccountant = currentUser?.role === "accountant";
@@ -53,40 +89,52 @@ export default function Requisitions() {
     if (!currentUser) return;
     if (!category) { alert('Please select a category for the requisition.'); return; }
 
-    const newReq: Requisition = {
-      id: crypto.randomUUID(),
-      title,
-      amount: Number(amount),
-      category,
-      status: "Pending",
-      submittedById: currentUser.id,
-      submittedByName: currentUser.name,
-      dateSubmitted: new Date().toISOString(),
-      notes,
-      relatedFileId,
-      relatedFileType,
-      relatedFileName
-    };
+    if (editingReqId) {
+      await updateRequisition(editingReqId, {
+        title,
+        amount: Number(amount),
+        category,
+        notes,
+        relatedFileId,
+        relatedFileType,
+        relatedFileName
+      });
+    } else {
+      const newReq: Requisition = {
+        id: crypto.randomUUID(),
+        title,
+        amount: Number(amount),
+        category,
+        status: "Pending",
+        submittedById: currentUser.id,
+        submittedByName: currentUser.name,
+        dateSubmitted: new Date().toISOString(),
+        notes,
+        relatedFileId,
+        relatedFileType,
+        relatedFileName
+      };
 
-    await addRequisition(newReq);
+      await addRequisition(newReq);
 
-    // Notify managing partners and admins about the new requisition
-    users.filter(u => u.role === 'managing_partner' || u.role === 'admin').forEach(m => {
-      if (m.id !== currentUser.id) {
-        sendNotification(m.id, `New Requisition from ${currentUser.name}: "${title}" for UGX ${amount} (Category: ${category})`, 'alert', newReq.id, 'requisition');
+      // Notify managing partners and admins about the new requisition
+      users.filter(u => u.role === 'managing_partner' || u.role === 'admin').forEach(m => {
+        if (m.id !== currentUser.id) {
+          sendNotification(m.id, `New Requisition from ${currentUser.name}: "${title}" for UGX ${amount} (Category: ${category})`, 'alert', newReq.id, 'requisition');
+        }
+      });
+
+      // Telegram Fallback Notification (WhatsApp style)
+      const telegramBotToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+      const telegramChatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+      if (telegramBotToken && telegramChatId) {
+        const text = `🚨 *New Requisition Pending*\n\n*From:* ${currentUser.name}\n*File Name:* ${relatedFileName || 'N/A'}\n*Category:* ${category}\n*Details:* ${notes || title}\n*Amount:* UGX ${Number(amount).toLocaleString()}\n\n_Please review in the NomosLink app._`;
+        fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: telegramChatId, text: text, parse_mode: 'Markdown' })
+        }).catch(e => console.error("Telegram error:", e));
       }
-    });
-
-    // Telegram Fallback Notification (WhatsApp style)
-    const telegramBotToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-    const telegramChatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
-    if (telegramBotToken && telegramChatId) {
-      const text = `🚨 *New Requisition Pending*\n\n*From:* ${currentUser.name}\n*File Name:* ${relatedFileName || 'N/A'}\n*Category:* ${category}\n*Details:* ${notes || title}\n*Amount:* UGX ${Number(amount).toLocaleString()}\n\n_Please review in the NomosLink app._`;
-      fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: telegramChatId, text: text, parse_mode: 'Markdown' })
-      }).catch(e => console.error("Telegram error:", e));
     }
 
     setShowModal(false);
@@ -99,6 +147,7 @@ export default function Requisitions() {
     setRelatedFileName("");
     setFileSearch("");
     setIsFileDropdownOpen(false);
+    setEditingReqId(null);
   };
 
   const handleApprove = async (id: string) => {
@@ -227,6 +276,23 @@ export default function Requisitions() {
     });
   }, [visibleRequisitions, filterCategory, filterRequesterId, filterFileName, filterDateFrom, filterDateTo]);
 
+  const requisitionTotals = useMemo(() => {
+    let total = 0;
+    let pending = 0;
+    let approved = 0;
+    let paid = 0;
+
+    filteredForReport.forEach(r => {
+      const amt = Number(r.amount || 0);
+      total += amt;
+      if (r.status === "Pending") pending += amt;
+      else if (r.status === "Approved") approved += amt;
+      else if (r.status === "Paid") paid += amt;
+    });
+
+    return { total, pending, approved, paid };
+  }, [filteredForReport]);
+
   // Presets persisted in localStorage
   useEffect(() => {
     try {
@@ -342,6 +408,26 @@ export default function Requisitions() {
         </div>
       </header>
 
+      {/* Requisition Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest text-black-400">Total Requisitioned</span>
+          <h4 className="text-xl font-black text-slate-800 mt-2">UGX {requisitionTotals.total.toLocaleString()}</h4>
+        </div>
+        <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Pending Approval</span>
+          <h4 className="text-xl font-black text-amber-700 mt-2">UGX {requisitionTotals.pending.toLocaleString()}</h4>
+        </div>
+        <div className="bg-blue-50/50 border border-blue-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Approved (Unpaid)</span>
+          <h4 className="text-xl font-black text-blue-700 mt-2">UGX {requisitionTotals.approved.toLocaleString()}</h4>
+        </div>
+        <div className="bg-emerald-50/50 border border-emerald-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Paid / Completed</span>
+          <h4 className="text-xl font-black text-emerald-700 mt-2">UGX {requisitionTotals.paid.toLocaleString()}</h4>
+        </div>
+      </div>
+
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center">
           <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm">
@@ -382,7 +468,7 @@ export default function Requisitions() {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
+              <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-black-400 uppercase tracking-widest">
                 <th className="p-4">Date</th>
                 <th className="p-4">Title</th>
                 <th className="p-4">Category</th>
@@ -394,19 +480,19 @@ export default function Requisitions() {
               </tr>
             </thead>
             <tbody className="text-sm font-medium">
-              {visibleRequisitions.length > 0 ? visibleRequisitions.map(req => (
+              {filteredForReport.length > 0 ? filteredForReport.map(req => (
                 <tr key={req.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                   <td className="p-4 text-slate-600 whitespace-nowrap">{new Date(req.dateSubmitted).toLocaleDateString()}</td>
                   <td className="p-4 text-slate-800 font-bold">{req.title}</td>
                   <td className="p-4 text-slate-600">{req.category || "-"}</td>
                   <td className="p-4 text-slate-600">
                     {req.relatedFileName ? (
-                      <span 
-                        onClick={() => req.relatedFileType && req.relatedFileId ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
-                        className={`truncate block max-w-[200px] ${req.relatedFileType && req.relatedFileId ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-blue-600'}`} 
+                      <span
+                        onClick={() => req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
+                        className={`truncate block max-w-[200px] ${req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-slate-700'}`}
                         title={req.relatedFileName}
                       >
-                        ⚖️ {req.relatedFileName}
+                        {req.relatedFileType === 'general' ? '🏦' : '⚖️'} {req.relatedFileName}
                       </span>
                     ) : (
                       <span className="text-slate-400">-</span>
@@ -442,31 +528,55 @@ export default function Requisitions() {
                       <span className="text-slate-400 italic text-xs">Completed</span>
                     )}
                     {(req.submittedById === currentUser?.id || isAccountant) && (
-                      <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase ml-3">Delete</button>
+                      <div className="flex items-center justify-end gap-3 ml-3">
+                        {req.submittedById === currentUser?.id && req.status === "Pending" && (
+                          <button onClick={() => {
+                            setTitle(req.title);
+                            setAmount(req.amount.toString());
+                            setCategory(req.category || "");
+                            setNotes(req.notes || "");
+                            setRelatedFileId(req.relatedFileId || "");
+                            setRelatedFileType(req.relatedFileType || "");
+                            setRelatedFileName(req.relatedFileName || "");
+                            setEditingReqId(req.id);
+                            setShowModal(true);
+                          }} className="text-blue-500 hover:text-blue-700 font-bold text-xs uppercase">Edit</button>
+                        )}
+                        <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase">Delete</button>
+                      </div>
                     )}
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-medium italic">No requisitions found.</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-slate-400 font-medium italic">No requisitions found.</td></tr>
               )}
             </tbody>
+            {filteredForReport.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-50 border-t border-slate-100 font-black text-slate-800">
+                  <td className="p-4" colSpan={5}>Total Requisitioned Amount</td>
+                  <td className="p-4 text-right text-base font-black">UGX {requisitionTotals.total.toLocaleString()}</td>
+                  <td colSpan={2}></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
         {/* Mobile Card View */}
         <div className="md:hidden flex flex-col divide-y divide-slate-100">
-          {visibleRequisitions.length > 0 ? visibleRequisitions.map(req => (
+          {filteredForReport.length > 0 ? filteredForReport.map(req => (
             <div key={req.id} className="p-4 space-y-3 hover:bg-slate-50 transition-colors">
               <div className="flex justify-between items-start gap-2">
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">{req.title}</h3>
                   {req.category && <p className="text-xs text-slate-500 mt-0.5">Category: {req.category}</p>}
                   {req.relatedFileName && (
-                    <p 
-                      onClick={() => req.relatedFileType && req.relatedFileId ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
-                      className={`text-xs truncate mt-0.5 ${req.relatedFileType && req.relatedFileId ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-blue-600'}`}
+                    <p
+                      onClick={() => req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
+                      className={`text-xs truncate mt-0.5 ${req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-slate-700'}`}
                     >
-                      ⚖️ {req.relatedFileName}
+                      {req.relatedFileType === 'general' ? '🏦' : '⚖️'} {req.relatedFileName}
                     </p>
                   )}
                   <p className="text-xs text-slate-500 mt-1">{new Date(req.dateSubmitted).toLocaleDateString()} • {req.submittedByName}</p>
@@ -507,7 +617,22 @@ export default function Requisitions() {
                   <span className="text-slate-400 italic text-[11px]">Completed</span>
                 )}
                 {(req.submittedById === currentUser?.id || isAccountant) && (
-                  <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-[11px] uppercase bg-red-50 px-3 py-1.5 rounded-lg">Delete</button>
+                  <div className="flex items-center gap-2">
+                    {req.submittedById === currentUser?.id && req.status === "Pending" && (
+                      <button onClick={() => {
+                        setTitle(req.title);
+                        setAmount(req.amount.toString());
+                        setCategory(req.category || "");
+                        setNotes(req.notes || "");
+                        setRelatedFileId(req.relatedFileId || "");
+                        setRelatedFileType(req.relatedFileType || "");
+                        setRelatedFileName(req.relatedFileName || "");
+                        setEditingReqId(req.id);
+                        setShowModal(true);
+                      }} className="text-blue-500 hover:text-blue-700 font-bold text-[11px] uppercase bg-blue-50 px-3 py-1.5 rounded-lg">Edit</button>
+                    )}
+                    <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-[11px] uppercase bg-red-50 px-3 py-1.5 rounded-lg">Delete</button>
+                  </div>
                 )}
               </div>
             </div>
@@ -515,16 +640,33 @@ export default function Requisitions() {
             <div className="p-8 text-center text-slate-400 font-medium italic text-sm">No requisitions found.</div>
           )}
         </div>
+        {/* Mobile Total Row */}
+        {filteredForReport.length > 0 && (
+          <div className="md:hidden bg-slate-50 p-4 border-t border-slate-100 flex justify-between items-center font-bold text-slate-800">
+            <span>Total Requisitioned</span>
+            <span className="text-base font-black">UGX {requisitionTotals.total.toLocaleString()}</span>
+          </div>
+        )}
       </div>
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-visible flex flex-col">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xs uppercase transition-colors">
+              <button onClick={() => {
+                setShowModal(false);
+                setEditingReqId(null);
+                setTitle("");
+                setAmount("");
+                setCategory("");
+                setNotes("");
+                setRelatedFileId("");
+                setRelatedFileType("");
+                setRelatedFileName("");
+              }} className="text-slate-400 hover:text-slate-600 font-bold text-xs uppercase transition-colors">
                 Cancel
               </button>
-              <h3 className="text-lg font-black text-slate-800">New Requisition</h3>
+              <h3 className="text-lg font-black text-slate-800">{editingReqId ? 'Edit Requisition' : 'New Requisition'}</h3>
               <div className="w-10"></div>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -571,7 +713,7 @@ export default function Requisitions() {
                   </div>
 
                   {isFileDropdownOpen && (
-                    <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-72">
+                    <div className="fixed left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-[calc(28rem-3rem)] bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] flex flex-col max-h-[80vh]" style={{ top: '10vh' }}>
                       <div className="p-3 border-b border-slate-100 bg-slate-50/50">
                         <div className="relative">
                           <input
@@ -590,40 +732,67 @@ export default function Requisitions() {
                           ❌ No File Linked
                         </button>
 
-                        {availableCases.filter(c => (c.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                        {(!fileSearch || "bca".includes(fileSearch.toLowerCase())) && (
+                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition flex items-center justify-between ${relatedFileId === 'BCA' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                            onClick={() => { setRelatedFileId("BCA"); setRelatedFileType("general"); setRelatedFileName("BCA"); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                          >
+                            <span>🏦 BCA</span>
+                            <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">General</span>
+                          </button>
+                        )}
+
+                        {(!fileSearch || "fisk".includes(fileSearch.toLowerCase()) || "fisk (u) ltd".includes(fileSearch.toLowerCase())) && (
+                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition flex items-center justify-between ${relatedFileId === 'Fisk (U) Ltd' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                            onClick={() => { setRelatedFileId("Fisk (U) Ltd"); setRelatedFileType("general"); setRelatedFileName("Fisk (U) Ltd"); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                          >
+                            <span>🏢 Fisk (U) Ltd</span>
+                            <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">General</span>
+                          </button>
+                        )}
+
+                        {filteredCasesForDropdown.length > 0 && (
                           <div className="pt-2">
                             <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
-                            {availableCases.filter(c => (c.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
-                              <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                            {filteredCasesForDropdown.map(c => (
+                              <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center justify-between ${relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                 onClick={() => { setRelatedFileId(c.id); setRelatedFileType("case"); setRelatedFileName(c.fileName); setIsFileDropdownOpen(false); setFileSearch(""); }}
                               >
-                                <span className="text-sm">⚖️</span> {c.fileName}
+                                <span className="flex items-center gap-2 truncate">
+                                  <span className="text-sm">⚖️</span>
+                                  <span>{c.fileName}</span>
+                                </span>
                               </button>
                             ))}
                           </div>
                         )}
 
-                        {availableTransactions.filter(t => (t.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                        {filteredTransactionsForDropdown.length > 0 && (
                           <div className="pt-2">
                             <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
-                            {availableTransactions.filter(t => (t.fileName || "").toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
-                              <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                            {filteredTransactionsForDropdown.map(t => (
+                              <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center justify-between ${relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                 onClick={() => { setRelatedFileId(t.id); setRelatedFileType("transaction"); setRelatedFileName(t.fileName); setIsFileDropdownOpen(false); setFileSearch(""); }}
                               >
-                                <span className="text-sm">💼</span> {t.fileName}
+                                <span className="flex items-center gap-2 truncate">
+                                  <span className="text-sm">💼</span>
+                                  <span>{t.fileName}</span>
+                                </span>
                               </button>
                             ))}
                           </div>
                         )}
 
-                        {availableLetters.filter(l => (l.subject || "").toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                        {filteredLettersForDropdown.length > 0 && (
                           <div className="pt-2">
                             <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Letters</p>
-                            {availableLetters.filter(l => (l.subject || "").toLowerCase().includes(fileSearch.toLowerCase())).map(l => (
-                              <button type="button" key={`letter-${l.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${relatedFileId === l.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                            {filteredLettersForDropdown.map(l => (
+                              <button type="button" key={`letter-${l.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center justify-between ${relatedFileId === l.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
                                 onClick={() => { setRelatedFileId(l.id); setRelatedFileType("letter"); setRelatedFileName(l.subject); setIsFileDropdownOpen(false); setFileSearch(""); }}
                               >
-                                <span className="text-sm">✉️</span> {l.subject}
+                                <span className="flex items-center gap-2 truncate">
+                                  <span className="text-sm">✉️</span>
+                                  <span>{l.subject}</span>
+                                </span>
                               </button>
                             ))}
                           </div>

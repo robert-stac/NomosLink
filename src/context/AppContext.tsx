@@ -1044,7 +1044,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
         if (filingData) setFilingRequests(prev => mergeIfChanged(prev, filingData));
         if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));
-        if (requisitionsData) setRequisitions(prev => mergeIfChanged(prev, requisitionsData));
+        if (requisitionsData) setRequisitions(prev => smartMergeState(requisitionsData, prev, 'requisitions'));
 
         setInitialDataLoaded(true);
       } catch (err) {
