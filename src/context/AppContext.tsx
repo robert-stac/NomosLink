@@ -935,8 +935,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      let finalStatus = (cloudItem as any).status;
+      const localStatus = (local as any).status;
+      if (localStatus && finalStatus) {
+        // Prevent stale polls from downgrading statuses
+        if (localStatus === 'Completed' && finalStatus !== 'Completed') finalStatus = 'Completed';
+        if (localStatus === 'Paid' && finalStatus !== 'Paid') finalStatus = 'Paid';
+        if (localStatus === 'Approved' && finalStatus === 'Pending') finalStatus = 'Approved';
+      }
+
       return {
         ...cloudItem,
+        status: finalStatus !== undefined ? finalStatus : (cloudItem as any).status,
         deadlines: finalDeadlines,
         progressNotes: finalNotes,
         documents: finalDocs,
@@ -1044,9 +1054,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (taskData) setTasks(prev => mergeIfChanged(prev, taskData).map(normalizeTask));
         if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData.map(normalizeInvoice)));
         if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData.map(normalizeExpense)));
-        if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
-        if (filingData) setFilingRequests(prev => mergeIfChanged(prev, filingData));
-        if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));
+        if (draftData) setDraftRequests(prev => smartMergeState(draftData, prev, 'draft_requests'));
+        if (filingData) setFilingRequests(prev => smartMergeState(filingData, prev, 'filing_requests'));
+        if (landData) setLandTitles(prev => smartMergeState(landData, prev, 'land_titles'));
         if (requisitionsData) setRequisitions(prev => smartMergeState(requisitionsData, prev, 'requisitions'));
 
         setInitialDataLoaded(true);
@@ -2249,13 +2259,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const completeDraftRequest = (id: string, _hoursSpent?: number, documentUrl?: string, documentName?: string, completionNote?: string) => {
+    setDraftRequests(prev => {
+      const draft = prev.find(d => d.id === id);
+      if (!draft) return prev;
+      const diffMs = new Date().getTime() - new Date(draft.dateCreated).getTime();
+      const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
+      const updatedData = { status: "Completed", hoursSpent: calculatedHours, documentUrl, documentName, completionNote, dateCompleted: new Date().toISOString() };
+      
+      if (navigator.onLine) {
+        supabase.from('draft_requests').update(updatedData).eq('id', id).then(({error}) => {
+          if (error) console.error("Failed to update draft:", error.message);
+        });
+      }
+      return prev.map(d => d.id === id ? { ...d, ...updatedData } as DraftRequest : d);
+    });
+
     const draft = draftRequests.find(d => d.id === id);
     if (!draft) return;
     const diffMs = new Date().getTime() - new Date(draft.dateCreated).getTime();
     const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
-    const updated: DraftRequest = { ...draft, status: "Completed", hoursSpent: calculatedHours, documentUrl, documentName, completionNote, dateCompleted: new Date().toISOString() };
-    setDraftRequests(prev => prev.map(d => d.id === id ? updated : d));
-    instantSave('draft_requests', updated);
 
     if (completionNote) {
       addCourtCaseProgress(draft.caseId, `Draft Completed (${draft.title}): ${completionNote}`);
