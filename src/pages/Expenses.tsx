@@ -62,6 +62,7 @@ export default function Expenses() {
     "Salaries & wages",
     "Security Services",
     "Garbage Collection",
+    "Utility Bills",
     "Others",
   ];
 
