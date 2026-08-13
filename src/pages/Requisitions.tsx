@@ -17,6 +17,12 @@ export default function Requisitions() {
   };
 
   const [showModal, setShowModal] = useState(false);
+  
+  // Approval Modal State
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalReq, setApprovalReq] = useState<Requisition | null>(null);
+  const [approvalAmount, setApprovalAmount] = useState("");
+
   const [editingReqId, setEditingReqId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -150,23 +156,42 @@ export default function Requisitions() {
     setEditingReqId(null);
   };
 
-  const handleApprove = async (id: string) => {
-    if (!currentUser) return;
+  const openApprovalModal = (id: string) => {
     const req = requisitions.find(r => r.id === id);
     if (!req) return;
+    setApprovalReq(req);
+    setApprovalAmount(req.amount.toString());
+    setShowApprovalModal(true);
+  };
+
+  const submitApproval = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !approvalReq) return;
+    
+    const approvedAmount = Number(approvalAmount);
+    if (isNaN(approvedAmount) || approvedAmount < 0) {
+      alert("Invalid amount entered. Please enter a valid number.");
+      return;
+    }
+
+    const req = approvalReq;
+    const id = req.id;
 
     await updateRequisition(id, {
       status: "Approved",
+      amount: approvedAmount,
       approvedById: currentUser.id,
       approvedByName: currentUser.name,
       dateApproved: new Date().toISOString()
     });
 
-    sendNotification(req.submittedById, `Your requisition "${req.title}" has been approved! (Category: ${req.category || 'N/A'})`, 'alert', req.id);
+    const amountMsg = approvedAmount !== req.amount ? `UGX ${approvedAmount.toLocaleString()} (changed from UGX ${req.amount.toLocaleString()})` : `UGX ${approvedAmount.toLocaleString()}`;
+
+    sendNotification(req.submittedById, `Your requisition "${req.title}" has been approved for ${amountMsg}! (Category: ${req.category || 'N/A'})`, 'alert', req.id);
 
     // Notify accountants
     users.filter(u => u.role === 'accountant').forEach(a => {
-      sendNotification(a.id, `Requisition "${req.title}" approved and ready for payment. (Category: ${req.category || 'N/A'})`, 'alert', req.id);
+      sendNotification(a.id, `Requisition "${req.title}" approved and ready for payment of ${amountMsg}. (Category: ${req.category || 'N/A'})`, 'alert', req.id);
     });
 
     // Send individual Telegram notifications to accountants with Telegram IDs
@@ -189,7 +214,7 @@ export default function Requisitions() {
           const accountantsWithTelegram = Array.isArray(accountantsFromDb) ? accountantsFromDb : [];
 
           if (accountantsWithTelegram.length > 0) {
-            const text = `✅ *Requisition Approved by Managing Partner*\n\n*From:* ${currentUser.name}\n*File Name:* ${req.relatedFileName || 'N/A'}\n*Category:* ${req.category || 'N/A'}\n*Details:* ${req.notes || req.title}\n*Amount:* UGX ${req.amount.toLocaleString()}\n\n_Please process payment._`;
+            const text = `✅ *Requisition Approved by Managing Partner*\n\n*From:* ${req.submittedByName || 'Staff'}\n*File Name:* ${req.relatedFileName || 'N/A'}\n*Category:* ${req.category || 'N/A'}\n*Details:* ${req.notes || req.title}\n*Approved Amount:* UGX ${approvedAmount.toLocaleString()}${approvedAmount !== req.amount ? `\n_Note: Changed from original request of UGX ${req.amount.toLocaleString()}_` : ''}\n\n_Please process payment._`;
 
             accountantsWithTelegram.forEach((accountant: any) => {
               const chatId = accountant.telegramid || accountant.telegramId || accountant.telegram_id;
@@ -208,6 +233,9 @@ export default function Requisitions() {
         }
       }
     }
+    
+    setShowApprovalModal(false);
+    setApprovalReq(null);
   };
 
   const handleReject = async (id: string) => {
@@ -512,7 +540,7 @@ export default function Requisitions() {
                   <td className="p-4 text-center whitespace-nowrap">
                     {req.status === "Pending" && canApprove && (
                       <>
-                        <button onClick={() => handleApprove(req.id)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase mr-3">Approve</button>
+                        <button onClick={() => openApprovalModal(req.id)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase mr-3">Approve</button>
                         <button onClick={() => handleReject(req.id)} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase">Reject</button>
                       </>
                     )}
@@ -601,7 +629,7 @@ export default function Requisitions() {
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
                 {req.status === "Pending" && canApprove && (
                   <>
-                    <button onClick={() => handleApprove(req.id)} className="text-blue-600 hover:text-blue-800 font-bold text-[11px] uppercase bg-blue-50 px-3 py-1.5 rounded-lg">Approve</button>
+                    <button onClick={() => openApprovalModal(req.id)} className="text-blue-600 hover:text-blue-800 font-bold text-[11px] uppercase bg-blue-50 px-3 py-1.5 rounded-lg">Approve</button>
                     <button onClick={() => handleReject(req.id)} className="text-red-500 hover:text-red-700 font-bold text-[11px] uppercase bg-red-50 px-3 py-1.5 rounded-lg">Reject</button>
                   </>
                 )}
@@ -820,6 +848,64 @@ export default function Requisitions() {
           </div>
         </div>
       )}
+
+      {/* NEW: Professional Approval Modal */}
+      {showApprovalModal && approvalReq && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 bg-slate-50 border-b border-slate-100">
+              <h3 className="text-lg font-black text-slate-800 text-center">Approve Requisition</h3>
+              <p className="text-xs font-medium text-slate-500 text-center mt-1">Review and finalize the amount.</p>
+            </div>
+            <form onSubmit={submitApproval} className="p-6 space-y-5">
+              
+              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Requested By</p>
+                <p className="text-sm font-bold text-slate-800">{approvalReq.submittedByName}</p>
+                
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 mt-3">Purpose</p>
+                <p className="text-sm font-bold text-slate-800">{approvalReq.title}</p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">
+                  Final Approved Amount (UGX)
+                </label>
+                <input 
+                  type="number"
+                  required 
+                  autoFocus
+                  className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl font-black text-lg text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 transition-all text-center"
+                  value={approvalAmount} 
+                  onChange={e => setApprovalAmount(e.target.value)} 
+                />
+                {Number(approvalAmount) !== approvalReq.amount && (
+                  <p className="text-xs text-amber-600 font-bold mt-2 text-center bg-amber-50 p-2 rounded-lg border border-amber-100">
+                    Amount changed from originally requested UGX {approvalReq.amount.toLocaleString()}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => { setShowApprovalModal(false); setApprovalReq(null); }} 
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black text-xs uppercase tracking-widest py-4 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest py-4 rounded-xl shadow-xl shadow-blue-200 transition-all"
+                >
+                  Confirm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
