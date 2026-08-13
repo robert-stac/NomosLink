@@ -4,6 +4,8 @@ import { useAppContext } from "./context/AppContext";
 
 import Sidebar from "./components/Sidebar";
 import UpdateBanner from "./components/UpdateBanner";
+import SubscriptionGate from "./components/SubscriptionGate";
+import DevPortal from "./pages/DevPortal";
 
 // Admin & Accountant Shared Pages
 import Dashboard from "./pages/Dashboard";
@@ -116,6 +118,7 @@ export default function App() {
   }
 
   return (
+    <SubscriptionGate>
     <BrowserRouter>
       {/* UPDATE BANNER */}
       <UpdateBanner />
@@ -301,7 +304,7 @@ export default function App() {
         <Route
           path="/AddUser"
           element={
-            <ProtectedRoute allowedRoles={["admin", "managing_partner"]}>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <AdminLayout isOnline={isOnline} updateAvailable={updateAvailable}>
                 <AddUser />
               </AdminLayout>
@@ -397,6 +400,9 @@ export default function App() {
 
         <Route path="/reset-password" element={<ResetPassword />} />
 
+        {/* ================= DEV PORTAL ================= */}
+        <Route path="/dev-portal" element={<DevPortal />} />
+
         {/* ================= FALLBACK ================= */}
         {/* This ensures any random URL takes the user to their specific starting page or Login */}
         <Route
@@ -405,6 +411,7 @@ export default function App() {
         />
       </Routes>
     </BrowserRouter>
+    </SubscriptionGate>
   );
 }
 

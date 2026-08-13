@@ -285,6 +285,17 @@ export default function AddUser() {
           </table>
         </div>
       </div>
+
+      {/* Subtle dev portal access — admin only */}
+      <div className="mt-10 pt-6 border-t border-slate-50 text-center">
+        <a
+          href="/dev-portal"
+          className="text-[10px] text-slate-200 hover:text-slate-400 transition-colors font-medium tracking-widest uppercase"
+          title="System Administration"
+        >
+          ⚙ System Administration
+        </a>
+      </div>
     </div>
   );
 }

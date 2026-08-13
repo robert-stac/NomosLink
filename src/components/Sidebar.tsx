@@ -92,7 +92,7 @@ export default function Sidebar() {
           }
         `}</style>
 
-        <div style={{...sidebarStyles.header, padding: isCollapsed && !isOpen ? "30px 10px" : "30px 20px"}} className="relative flex items-center justify-between">
+        <div style={{ ...sidebarStyles.header, padding: isCollapsed && !isOpen ? "30px 10px" : "30px 20px" }} className="relative flex items-center justify-between">
           <div className="flex-1 overflow-hidden">
             {(!isCollapsed || isOpen) ? (
               <>
@@ -108,7 +108,7 @@ export default function Sidebar() {
               </div>
             )}
           </div>
-          <button 
+          <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="hidden md:flex text-[#38bdf8] hover:text-white transition-colors cursor-pointer w-8 h-8 items-center justify-center rounded-full bg-[#1e293b] flex-shrink-0 absolute -right-4 shadow-md z-50 border border-[#334155]"
             title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
@@ -157,18 +157,18 @@ export default function Sidebar() {
 
         {/* LOGOUT BUTTON */}
         <button onClick={logout} title="Logout" style={{
-            ...sidebarStyles.logoutBtn,
-            justifyContent: (isCollapsed && !isOpen) ? "center" : "flex-start",
-            padding: (isCollapsed && !isOpen) ? "12px 0" : "12px 15px",
-          }}>
-          <span style={{ marginRight: (isCollapsed && !isOpen) ? 0 : 12, fontSize: (isCollapsed && !isOpen) ? "20px" : "16px" }}>🚪</span> 
+          ...sidebarStyles.logoutBtn,
+          justifyContent: (isCollapsed && !isOpen) ? "center" : "flex-start",
+          padding: (isCollapsed && !isOpen) ? "12px 0" : "12px 15px",
+        }}>
+          <span style={{ marginRight: (isCollapsed && !isOpen) ? 0 : 12, fontSize: (isCollapsed && !isOpen) ? "20px" : "16px" }}>🚪</span>
           {(!isCollapsed || isOpen) && <span>Logout</span>}
         </button>
 
         {/* 5. VERSION NUMBER */}
         {(!isCollapsed || isOpen) && (
           <div style={{ ...sidebarStyles.versionBadge, color: "white", fontSize: "12px", fontStyle: "italic" }}>
-            v1.10.0
+            v1.11.1
           </div>
         )}
       </div>
