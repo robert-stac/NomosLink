@@ -125,7 +125,7 @@ export default function LawyerDashboard() {
       return d.getTime() === now.getTime() || d.getTime() === tomorrow.getTime();
     });
 
-    const pendingDeadlines = assignedCases.flatMap(c => 
+    const pendingDeadlines = assignedCases.flatMap(c =>
       (c.deadlines || []).filter(d => d.status === 'Pending').map(d => ({
         ...d,
         caseId: c.id,
@@ -175,17 +175,29 @@ export default function LawyerDashboard() {
                 Welcome, {currentUser.name.split(' ')[0]}
               </h1>
             </div>
-            <div className="flex items-center gap-2">
-              <NotificationBell currentUser={currentUser} notifications={notifications} markAsRead={() => markNotificationsAsRead(currentUser.id)} />
-              <button onClick={() => navigate("/requisitions")} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-xl transition" title="Requisitions">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              </button>
-              <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-xl transition" title="Assign Clerk Task">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              </button>
-              <button onClick={logout} className="bg-white/10 hover:bg-red-500/30 text-white/70 hover:text-white p-2.5 rounded-xl transition" title="Logout">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-              </button>
+            <div className="flex items-start gap-4">
+              <div className="flex flex-col items-center gap-1.5">
+                <NotificationBell currentUser={currentUser} notifications={notifications} markAsRead={() => markNotificationsAsRead(currentUser.id)} />
+                <span className="text-[9px] font-medium text-white/60 uppercase tracking-widest"></span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <button onClick={() => navigate("/requisitions")} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-xl transition" title="Requisitions">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </button>
+                <span className="text-[9px] font-medium text-white/60 uppercase tracking-widest">Requisition</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-xl transition" title="Assign Clerk Task">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                </button>
+                <span className="text-[9px] font-medium text-blue-300 uppercase tracking-widest">Task</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <button onClick={logout} className="bg-white/10 hover:bg-red-500/30 text-white/70 hover:text-white p-2.5 rounded-xl transition" title="Logout">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </button>
+                <span className="text-[9px] font-medium text-white/60 uppercase tracking-widest">Logout</span>
+              </div>
             </div>
           </div>
 
@@ -223,28 +235,28 @@ export default function LawyerDashboard() {
               {/* Decorative elements */}
               <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-400/30 transition-colors" />
               <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-400/30 transition-colors" />
-              
+
               <div className="relative z-10">
                 <div className="w-24 h-24 bg-white/10 rounded-[32px] flex items-center justify-center text-5xl mb-8 mx-auto border border-white/10 shadow-inner">
                   ⚖️
                 </div>
-                
+
                 <span className="bg-blue-400/20 text-blue-200 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-6 inline-block border border-blue-400/20">
                   New Feature Release
                 </span>
-                
+
                 <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight leading-tight">
                   Registry Filing <br />
                   <span className="text-blue-300">is Now Live</span>
                 </h2>
-                
+
                 <p className="text-blue-100/80 text-lg leading-relaxed mb-10 font-medium max-w-lg mx-auto">
-                  Seamlessly request and track court document filings directly from your matter files. 
+                  Seamlessly request and track court document filings directly from your matter files.
                   Real-time status updates and ECCMIS reference tracking are now at your fingertips.
                 </p>
-                
+
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                  <button 
+                  <button
                     onClick={() => {
                       setActiveTab("Registry");
                       dismissBanner();
@@ -253,7 +265,7 @@ export default function LawyerDashboard() {
                   >
                     Open Registry Portal 🚀
                   </button>
-                  <button 
+                  <button
                     onClick={dismissBanner}
                     className="w-full sm:w-auto bg-white/5 border border-white/10 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
                   >
@@ -338,7 +350,7 @@ export default function LawyerDashboard() {
                         </span>
                       </td>
                       <td className="py-4 text-right">
-                        <button 
+                        <button
                           onClick={() => updateCourtCaseDeadline(deadline.caseId, deadline.id, { status: 'Completed' })}
                           className="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-4 py-2 rounded-xl text-xs font-semibold transition whitespace-nowrap flex items-center gap-2 ml-auto"
                         >
@@ -444,13 +456,13 @@ export default function LawyerDashboard() {
                   <div className="flex justify-between items-center mb-4">
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Drafts assigned to me ({filteredAssignedDrafts.filter(d => d.status === draftsTab).length})</p>
                     <div className="flex bg-slate-100 p-1 rounded-xl">
-                      <button 
+                      <button
                         onClick={() => setDraftsTab("Pending")}
                         className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition ${draftsTab === "Pending" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
                       >
                         Pending ({filteredAssignedDrafts.filter(d => d.status === 'Pending').length})
                       </button>
-                      <button 
+                      <button
                         onClick={() => setDraftsTab("Completed")}
                         className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition ${draftsTab === "Completed" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
                       >
@@ -605,12 +617,12 @@ export default function LawyerDashboard() {
                           </div>
                           <div className="space-y-2">
                             {filing.status === 'Pending' && (
-                              <button 
+                              <button
                                 onClick={() => {
                                   const ref = prompt("Enter ECCMIS Reference Number:");
                                   if (ref) {
-                                    updateFilingRequest(filing.id, { 
-                                      status: 'Completed', 
+                                    updateFilingRequest(filing.id, {
+                                      status: 'Completed',
                                       eccmisReference: ref,
                                       dateCompleted: new Date().toISOString()
                                     });
@@ -780,12 +792,12 @@ export default function LawyerDashboard() {
             <div className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Completion Note / Update (optional)</label>
-                <textarea 
-                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500" 
+                <textarea
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   rows={3}
                   placeholder="Provide a brief update..."
                   value={completeForm.completionNote}
-                  onChange={e => setCompleteForm({ ...completeForm, completionNote: e.target.value })} 
+                  onChange={e => setCompleteForm({ ...completeForm, completionNote: e.target.value })}
                 />
               </div>
               <div>
@@ -814,18 +826,17 @@ export default function LawyerDashboard() {
               <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-4">Navigate to</p>
               <div className="grid grid-cols-4 gap-3">
                 {([
-                  { label: "Cases",        tab: "Cases" as const,       icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>) },
+                  { label: "Cases", tab: "Cases" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>) },
                   { label: "Transactions", tab: "Transactions" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>) },
-                  { label: "Letters",      tab: "Letters" as const,     icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>) },
-                  { label: "Drafts",       tab: "Drafts" as const,      icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>), badge: pendingIncomingCount },
-                  { label: "Registry",     tab: "Registry" as const,    icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>) },
-                  { label: "Calendar",     tab: "Calendar" as const,    icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>) },
+                  { label: "Letters", tab: "Letters" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>) },
+                  { label: "Drafts", tab: "Drafts" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>), badge: pendingIncomingCount },
+                  { label: "Registry", tab: "Registry" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>) },
+                  { label: "Calendar", tab: "Calendar" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>) },
                 ] as any[]).map(item => (
                   <button key={item.label}
                     onClick={() => { setActiveTab(item.tab); setSearchQuery(""); setIsMobileMenuOpen(false); }}
-                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition ${
-                      activeTab === item.tab ? "bg-[#0B1F3A] text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                    }`}>
+                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition ${activeTab === item.tab ? "bg-[#0B1F3A] text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}>
                     <div className="relative">
                       {item.icon}
                       {item.badge > 0 && (
@@ -857,16 +868,15 @@ export default function LawyerDashboard() {
         {/* Bottom Tab Bar */}
         <nav className="bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] flex items-center justify-around px-2 h-16">
           {([
-            { label: "Cases",    tab: "Cases" as const,    icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>) },
-            { label: "Drafts",  tab: "Drafts" as const,   icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>), badge: pendingIncomingCount },
-            { label: "Calendar",tab: "Calendar" as const,  icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>) },
-            { label: "Letters", tab: "Letters" as const,   icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>) },
+            { label: "Cases", tab: "Cases" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>) },
+            { label: "Drafts", tab: "Drafts" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>), badge: pendingIncomingCount },
+            { label: "Calendar", tab: "Calendar" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>) },
+            { label: "Letters", tab: "Letters" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>) },
           ] as any[]).map(item => (
             <button key={item.label}
               onClick={() => { setActiveTab(item.tab); setSearchQuery(""); setIsMobileMenuOpen(false); }}
-              className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition relative ${
-                activeTab === item.tab && !isMobileMenuOpen ? "text-[#0B1F3A]" : "text-slate-400"
-              }`}>
+              className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition relative ${activeTab === item.tab && !isMobileMenuOpen ? "text-[#0B1F3A]" : "text-slate-400"
+                }`}>
               <div className="relative">
                 {item.icon}
                 {item.badge > 0 && (
@@ -880,9 +890,8 @@ export default function LawyerDashboard() {
           {/* Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(v => !v)}
-            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition ${
-              isMobileMenuOpen ? "text-[#0B1F3A]" : "text-slate-400"
-            }`}>
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition ${isMobileMenuOpen ? "text-[#0B1F3A]" : "text-slate-400"
+              }`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
@@ -892,4 +901,4 @@ export default function LawyerDashboard() {
       </div>
     </div>
   );
-}
+}
