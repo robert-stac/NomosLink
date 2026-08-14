@@ -179,28 +179,28 @@ export default function CourtCalendar({ embedded = false }: Props) {
             <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
 
               {/* Month nav */}
-              <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
-                <div className="flex items-center gap-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between px-4 md:px-8 py-4 md:py-6 border-b border-slate-100 gap-4">
+                <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
                   <button
                     onClick={prevMonth}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition"
+                    className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition shrink-0"
                   >
                     ‹
                   </button>
-                  <h2 className="text-xl font-bold text-slate-900">
+                  <h2 className="text-lg md:text-xl font-bold text-slate-900 truncate">
                     {MONTHS[viewDate.getMonth()]} {viewDate.getFullYear()}
                   </h2>
                   <button
                     onClick={nextMonth}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition"
+                    className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition shrink-0"
                   >
                     ›
                   </button>
                 </div>
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto">
                   <button
                     onClick={goToToday}
-                    className="text-xs font-semibold text-blue-600 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition uppercase tracking-wider"
+                    className="shrink-0 text-[10px] md:text-xs font-semibold text-blue-600 bg-blue-50 px-3 md:px-4 py-2 rounded-xl hover:bg-blue-100 transition uppercase tracking-wider"
                   >
                     Today
                   </button>
@@ -208,7 +208,7 @@ export default function CourtCalendar({ embedded = false }: Props) {
                   <select
                     value={filterLawyerId}
                     onChange={(e) => setFilterLawyerId(e.target.value)}
-                    className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                    className="shrink-0 text-[10px] md:text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 md:px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 max-w-[140px] md:max-w-none truncate"
                   >
                     <option value="all">🏢 All Lawyers</option>
                     {users.filter(u => u.role === 'lawyer').map(l => (
@@ -231,7 +231,7 @@ export default function CourtCalendar({ embedded = false }: Props) {
               <div className="grid grid-cols-7">
                 {cells.map((cell, idx) => {
                   if (!cell) {
-                    return <div key={`empty-${idx}`} className="h-20 border-b border-r border-slate-50/80" />;
+                    return <div key={`empty-${idx}`} className="h-16 md:h-20 border-b border-r border-slate-50/80" />;
                   }
                   const key = toDateKey(cell);
                   const cases = dateMap.get(key) || [];
@@ -244,12 +244,12 @@ export default function CourtCalendar({ embedded = false }: Props) {
                     <button
                       key={key}
                       onClick={() => setSelectedKey(key)}
-                      className={`h-20 p-2 border-b border-r border-slate-50 flex flex-col items-start transition-all text-left group
+                      className={`h-16 md:h-20 p-1 md:p-2 border-b border-r border-slate-50 flex flex-col items-center md:items-start transition-all text-center md:text-left group
                         ${isSelected ? "bg-[#0B1F3A] border-[#0B1F3A] shadow-inner" : cases.length > 0 ? `${bg} border-${border} hover:opacity-90` : "hover:bg-slate-50"}
                         ${isPast && !isToday ? "opacity-60" : ""}
                       `}
                     >
-                      <span className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-black mb-1 transition-all
+                      <span className={`w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-full text-[10px] md:text-xs font-black mb-0.5 md:mb-1 transition-all
                         ${isToday ? "bg-blue-600 text-white shadow-lg" : isSelected ? "text-white" : "text-slate-600 group-hover:text-slate-900"}
                       `}>
                         {cell.getDate()}
@@ -257,12 +257,12 @@ export default function CourtCalendar({ embedded = false }: Props) {
 
                       {/* Case dots */}
                       {cases.length > 0 && (
-                        <div className="flex flex-wrap gap-0.5 mt-auto">
+                        <div className="flex flex-wrap justify-center md:justify-start gap-0.5 mt-auto w-full px-0.5">
                           {cases.slice(0, 3).map((c) => (
-                            <span key={c.id} className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : dot}`} />
+                            <span key={c.id} className={`w-1.5 h-1.5 md:w-1.5 md:h-1.5 rounded-full ${isSelected ? "bg-white" : dot}`} />
                           ))}
                           {cases.length > 3 && (
-                            <span className={`text-[8px] font-black ml-0.5 ${isSelected ? "text-white/70" : "text-slate-400"}`}>
+                            <span className={`text-[7px] md:text-[8px] font-black leading-none self-center ${isSelected ? "text-white/70" : "text-slate-400"}`}>
                               +{cases.length - 3}
                             </span>
                           )}
@@ -274,8 +274,8 @@ export default function CourtCalendar({ embedded = false }: Props) {
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-6 px-8 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Busy indicator:</p>
+              <div className="flex flex-wrap items-center gap-4 md:gap-6 px-4 md:px-8 py-4 border-t border-slate-100 bg-slate-50/50">
+                <p className="w-full md:w-auto text-[10px] font-black text-slate-400 uppercase tracking-widest">Busy indicator:</p>
                 {[
                   { color: "bg-emerald-500", label: "1 matter" },
                   { color: "bg-amber-500", label: "2 matters" },

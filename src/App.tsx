@@ -202,7 +202,7 @@ export default function App() {
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <div style={{ display: "flex" }}>
                   {["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") && <Sidebar />}
-                  <main style={{ flex: 1, padding: ["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
+                  <main style={{ flex: 1, padding: ["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
                     <Requisitions />
                   </main>
                 </div>
@@ -389,7 +389,7 @@ export default function App() {
               <div style={{ paddingTop: (isOnline ? 0 : 40) + (updateAvailable ? 74 : 0) }}>
                 <div style={{ display: "flex" }}>
                   {["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") && <Sidebar />}
-                  <main style={{ flex: 1, padding: ["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh" }}>
+                  <main style={{ flex: 1, padding: ["admin", "manager", "managing_partner", "accountant"].includes(currentUser?.role || "") ? 20 : 0, backgroundColor: "#f4f6f8", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
                     <CourtCalendar />
                   </main>
                 </div>

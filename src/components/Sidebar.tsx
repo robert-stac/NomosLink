@@ -168,7 +168,7 @@ export default function Sidebar() {
         {/* 5. VERSION NUMBER */}
         {(!isCollapsed || isOpen) && (
           <div style={{ ...sidebarStyles.versionBadge, color: "white", fontSize: "12px", fontStyle: "italic" }}>
-            v1.11.1
+            v1.11.5
           </div>
         )}
       </div>

@@ -22,6 +22,12 @@ export default function Requisitions() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalReq, setApprovalReq] = useState<Requisition | null>(null);
   const [approvalAmount, setApprovalAmount] = useState("");
+  const [approvalReductionReason, setApprovalReductionReason] = useState("");
+
+  // Rejection Modal State
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionReq, setRejectionReq] = useState<Requisition | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   const [editingReqId, setEditingReqId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -161,7 +167,16 @@ export default function Requisitions() {
     if (!req) return;
     setApprovalReq(req);
     setApprovalAmount(req.amount.toString());
+    setApprovalReductionReason("");
     setShowApprovalModal(true);
+  };
+
+  const openRejectionModal = (id: string) => {
+    const req = requisitions.find(r => r.id === id);
+    if (!req) return;
+    setRejectionReq(req);
+    setRejectionReason("");
+    setShowRejectionModal(true);
   };
 
   const submitApproval = async (e: React.FormEvent) => {
@@ -174,20 +189,30 @@ export default function Requisitions() {
       return;
     }
 
+    if (approvedAmount < approvalReq.amount && !approvalReductionReason.trim()) {
+      alert("Please provide a reason for reducing the requested amount.");
+      return;
+    }
+
     const req = approvalReq;
     const id = req.id;
+
+    setShowApprovalModal(false);
+    setApprovalReq(null);
 
     await updateRequisition(id, {
       status: "Approved",
       amount: approvedAmount,
       approvedById: currentUser.id,
       approvedByName: currentUser.name,
-      dateApproved: new Date().toISOString()
+      dateApproved: new Date().toISOString(),
+      ...(approvedAmount < req.amount ? { rejectionReason: `Amount reduced: ${approvalReductionReason}` } : {})
     });
 
     const amountMsg = approvedAmount !== req.amount ? `UGX ${approvedAmount.toLocaleString()} (changed from UGX ${req.amount.toLocaleString()})` : `UGX ${approvedAmount.toLocaleString()}`;
+    const reductionMsg = approvedAmount < req.amount ? ` Reason: ${approvalReductionReason}` : "";
 
-    sendNotification(req.submittedById, `Your requisition "${req.title}" has been approved for ${amountMsg}! (Category: ${req.category || 'N/A'})`, 'alert', req.id);
+    sendNotification(req.submittedById, `Your requisition "${req.title}" has been approved for ${amountMsg}!${reductionMsg}`, 'alert', req.id);
 
     // Notify accountants
     users.filter(u => u.role === 'accountant').forEach(a => {
@@ -233,25 +258,33 @@ export default function Requisitions() {
         }
       }
     }
-    
-    setShowApprovalModal(false);
-    setApprovalReq(null);
   };
 
-  const handleReject = async (id: string) => {
-    if (!currentUser) return;
-    const req = requisitions.find(r => r.id === id);
-    if (!req) return;
+  const submitRejection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !rejectionReq) return;
+    
+    if (!rejectionReason.trim()) {
+      alert("Please provide a reason for rejecting this requisition.");
+      return;
+    }
 
-    const reason = prompt("Enter rejection reason:");
-    if (reason === null) return;
+    const reqId = rejectionReq.id;
+    const submittedById = rejectionReq.submittedById;
+    const title = rejectionReq.title;
 
-    await updateRequisition(id, {
+    setShowRejectionModal(false);
+    setRejectionReq(null);
+
+    await updateRequisition(reqId, {
       status: "Rejected",
-      rejectionReason: reason
+      rejectionReason: rejectionReason,
+      approvedById: currentUser.id,
+      approvedByName: currentUser.name,
+      dateApproved: new Date().toISOString()
     });
 
-    sendNotification(req.submittedById, `Your requisition "${req.title}" was rejected. Reason: ${reason}`, 'alert', req.id);
+    sendNotification(submittedById, `Your requisition "${title}" was rejected. Reason: ${rejectionReason}`, 'alert', reqId);
   };
 
   const handleMarkPaid = async (id: string) => {
@@ -418,7 +451,7 @@ export default function Requisitions() {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+    <div className="px-4 md:px-6 lg:px-8 py-6 md:py-10 max-w-[1600px] mx-auto space-y-8">
       <div className="flex items-center gap-4 mb-2">
         <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-2 text-sm font-bold bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
           ← Back
@@ -437,28 +470,28 @@ export default function Requisitions() {
       </header>
 
       {/* Requisition Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-black-400">Total Requisitioned</span>
-          <h4 className="text-xl font-black text-slate-800 mt-2">UGX {requisitionTotals.total.toLocaleString()}</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-b-4 border-b-slate-300 flex flex-col items-center text-center">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Requisitioned</span>
+          <h4 className="text-2xl font-bold text-slate-800">UGX {requisitionTotals.total.toLocaleString()}</h4>
         </div>
-        <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Pending Approval</span>
-          <h4 className="text-xl font-black text-amber-700 mt-2">UGX {requisitionTotals.pending.toLocaleString()}</h4>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-b-4 border-b-amber-500 flex flex-col items-center text-center">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Pending Approval</span>
+          <h4 className="text-2xl font-bold text-slate-800">UGX {requisitionTotals.pending.toLocaleString()}</h4>
         </div>
-        <div className="bg-blue-50/50 border border-blue-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Approved (Unpaid)</span>
-          <h4 className="text-xl font-black text-blue-700 mt-2">UGX {requisitionTotals.approved.toLocaleString()}</h4>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-b-4 border-b-blue-500 flex flex-col items-center text-center">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Approved (Unpaid)</span>
+          <h4 className="text-2xl font-bold text-slate-800">UGX {requisitionTotals.approved.toLocaleString()}</h4>
         </div>
-        <div className="bg-emerald-50/50 border border-emerald-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Paid / Completed</span>
-          <h4 className="text-xl font-black text-emerald-700 mt-2">UGX {requisitionTotals.paid.toLocaleString()}</h4>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-b-4 border-b-emerald-500 flex flex-col items-center text-center">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Paid / Completed</span>
+          <h4 className="text-2xl font-bold text-slate-800">UGX {requisitionTotals.paid.toLocaleString()}</h4>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center">
-          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row flex-wrap gap-3 md:gap-4 items-stretch md:items-center bg-slate-50/50">
+          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full md:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
             <option value="">All categories</option>
             <option>Commissioning fees</option>
             <option>Transport expenses</option>
@@ -480,100 +513,97 @@ export default function Requisitions() {
             <option>Utility Bills</option>
             <option>Others</option>
           </select>
-          <select value={filterRequesterId} onChange={e => setFilterRequesterId(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm">
+          <select value={filterRequesterId} onChange={e => setFilterRequesterId(e.target.value)} className="w-full md:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
             <option value="">All requestors</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
-          <input value={filterFileName} onChange={e => setFilterFileName(e.target.value)} placeholder="File name or title" className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm placeholder:text-slate-400" />
-          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm" />
-          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-slate-200 p-2 rounded-xl text-sm text-slate-800 outline-none shadow-sm" />
-          <button onClick={() => { setFilterCategory(''); setFilterRequesterId(''); setFilterFileName(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="text-sm px-3 py-2 bg-gray-100 rounded-xl">Clear</button>
-          <div className="ml-auto flex gap-2">
-            <button onClick={handleExportCSV} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-2 rounded-xl text-sm">📥 Export CSV</button>
-            <button onClick={handlePrint} className="bg-slate-50 text-slate-700 hover:bg-slate-100 px-3 py-2 rounded-xl text-sm">🖨️ Print</button>
+          <input value={filterFileName} onChange={e => setFilterFileName(e.target.value)} placeholder="File name or title" className="w-full md:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm placeholder:text-slate-400 placeholder:font-normal" />
+          
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full sm:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm" />
+            <span className="hidden sm:inline text-slate-400 text-sm">to</span>
+            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full sm:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm" />
+          </div>
+          
+          <div className="flex gap-2 w-full md:w-auto">
+            <button onClick={() => { setFilterCategory(''); setFilterRequesterId(''); setFilterFileName(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="flex-1 md:flex-none text-sm font-semibold px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">Clear</button>
+          </div>
+          
+          <div className="flex gap-2 w-full md:w-auto md:ml-auto">
+            <button onClick={handleExportCSV} className="flex-1 md:flex-none bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">Export CSV</button>
+            <button onClick={handlePrint} className="flex-1 md:flex-none bg-white border border-slate-200 text-slate-600 hover:text-blue-700 hover:border-blue-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">Print</button>
           </div>
         </div>
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 text-xs font-black text-black-400 uppercase tracking-widest">
-                <th className="p-4">Date</th>
-                <th className="p-4">Title</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">File Name</th>
-                <th className="p-4">Submitted By</th>
-                <th className="p-4 text-right">Amount (UGX)</th>
-                <th className="p-4 text-center">Status</th>
-                <th className="p-4 text-center">Actions</th>
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 whitespace-nowrap">Date</th>
+                <th className="px-4 py-3 w-1/3">Details</th>
+                <th className="px-4 py-3 hidden lg:table-cell">Category</th>
+                <th className="px-4 py-3 whitespace-nowrap">Submitted By</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Amount</th>
+                <th className="px-4 py-3 text-center whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 text-center whitespace-nowrap">Actions</th>
               </tr>
             </thead>
-            <tbody className="text-sm font-medium">
+            <tbody className="text-sm">
               {filteredForReport.length > 0 ? filteredForReport.map(req => (
-                <tr key={req.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                  <td className="p-4 text-slate-600 whitespace-nowrap">{new Date(req.dateSubmitted).toLocaleDateString()}</td>
-                  <td className="p-4 text-slate-800 font-bold">{req.title}</td>
-                  <td className="p-4 text-slate-600">{req.category || "-"}</td>
-                  <td className="p-4 text-slate-600">
-                    {req.relatedFileName ? (
+                <tr key={req.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                  <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{new Date(req.dateSubmitted).toLocaleDateString()}</td>
+                  <td className="px-4 py-3">
+                    <p className="text-slate-800 font-medium break-words leading-snug">{req.title}</p>
+                    {req.relatedFileName && (
                       <span
                         onClick={() => req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
-                        className={`truncate block max-w-[200px] ${req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-slate-700'}`}
-                        title={req.relatedFileName}
+                        className={`text-xs block break-words leading-snug mt-1 ${req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? 'text-blue-600 hover:text-blue-800 cursor-pointer hover:underline' : 'text-slate-500'}`}
                       >
-                        {req.relatedFileType === 'general' ? '🏦' : '⚖️'} {req.relatedFileName}
+                        {req.relatedFileName}
                       </span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
                     )}
                   </td>
-                  <td className="p-4 text-slate-600">{req.submittedByName}</td>
-                  <td className="p-4 text-right font-black text-slate-800">{req.amount.toLocaleString()}</td>
-                  <td className="p-4 text-center">
-                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getStatusColor(req.status)}`}>
+                  <td className="px-4 py-3 text-slate-600 font-medium hidden lg:table-cell">{req.category || "-"}</td>
+                  <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{req.submittedByName}</td>
+                  <td className="px-4 py-3 text-right font-medium text-slate-900 whitespace-nowrap">UGX {req.amount.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`px-2.5 py-1 rounded text-[10px] font-medium tracking-wide border ${getStatusColor(req.status)}`}>
                       {req.status}
                     </span>
-                    {req.status === "Rejected" && req.rejectionReason && (
-                      <p className="text-[10px] text-red-500 mt-1 truncate max-w-[150px]" title={req.rejectionReason}>{req.rejectionReason}</p>
+                    {req.rejectionReason && (
+                      <p className={`text-[10px] mt-1.5 truncate max-w-[150px] mx-auto ${req.status === 'Approved' ? 'text-blue-600' : 'text-red-500'}`} title={req.rejectionReason}>{req.rejectionReason}</p>
                     )}
                   </td>
-                  <td className="p-4 text-center whitespace-nowrap">
-                    {req.status === "Pending" && canApprove && (
-                      <>
-                        <button onClick={() => openApprovalModal(req.id)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase mr-3">Approve</button>
-                        <button onClick={() => handleReject(req.id)} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase">Reject</button>
-                      </>
-                    )}
-                    {req.status === "Approved" && canPay && (
-                      <button onClick={() => handleMarkPaid(req.id)} className="text-emerald-600 hover:text-emerald-800 font-bold text-xs uppercase">Mark Paid</button>
-                    )}
-                    {req.status === "Pending" && req.submittedById === currentUser?.id && !canApprove && (
-                      <span className="text-slate-400 italic text-xs">Waiting...</span>
-                    )}
-                    {req.status === "Approved" && !canPay && (
-                      <span className="text-slate-400 italic text-xs">Awaiting Payment</span>
-                    )}
-                    {req.status === "Paid" && (
-                      <span className="text-slate-400 italic text-xs">Completed</span>
-                    )}
-                    {(req.submittedById === currentUser?.id || isAccountant) && (
-                      <div className="flex items-center justify-end gap-3 ml-3">
-                        {req.submittedById === currentUser?.id && req.status === "Pending" && (
-                          <button onClick={() => {
-                            setTitle(req.title);
-                            setAmount(req.amount.toString());
-                            setCategory(req.category || "");
-                            setNotes(req.notes || "");
-                            setRelatedFileId(req.relatedFileId || "");
-                            setRelatedFileType(req.relatedFileType || "");
-                            setRelatedFileName(req.relatedFileName || "");
-                            setEditingReqId(req.id);
-                            setShowModal(true);
-                          }} className="text-blue-500 hover:text-blue-700 font-bold text-xs uppercase">Edit</button>
-                        )}
-                        <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase">Delete</button>
-                      </div>
-                    )}
+                  <td className="px-4 py-3 text-center whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-2">
+                      {req.status === "Pending" && canApprove && (
+                        <>
+                          <button onClick={() => openApprovalModal(req.id)} className="text-blue-600 hover:text-blue-800 font-medium text-[10px] uppercase tracking-wider transition-colors">Approve</button>
+                          <button onClick={() => openRejectionModal(req.id)} className="text-red-500 hover:text-red-700 font-medium text-[10px] uppercase tracking-wider transition-colors">Reject</button>
+                        </>
+                      )}
+                      {req.status === "Approved" && canPay && (
+                        <button onClick={() => handleMarkPaid(req.id)} className="text-emerald-600 hover:text-emerald-800 font-medium text-[10px] uppercase tracking-wider transition-colors">Mark Paid</button>
+                      )}
+                      {(req.submittedById === currentUser?.id || isAccountant) && (
+                        <>
+                          {req.submittedById === currentUser?.id && req.status === "Pending" && (
+                            <button onClick={() => {
+                              setTitle(req.title);
+                              setAmount(req.amount.toString());
+                              setCategory(req.category || "");
+                              setNotes(req.notes || "");
+                              setRelatedFileId(req.relatedFileId || "");
+                              setRelatedFileType(req.relatedFileType || "");
+                              setRelatedFileName(req.relatedFileName || "");
+                              setEditingReqId(req.id);
+                              setShowModal(true);
+                            }} className="text-slate-400 hover:text-blue-600 font-medium text-[10px] uppercase tracking-wider transition-colors">Edit</button>
+                          )}
+                          <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-slate-400 hover:text-red-600 font-medium text-[10px] uppercase tracking-wider transition-colors">Del</button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )) : (
@@ -582,9 +612,9 @@ export default function Requisitions() {
             </tbody>
             {filteredForReport.length > 0 && (
               <tfoot>
-                <tr className="bg-slate-50 border-t border-slate-100 font-black text-slate-800">
-                  <td className="p-4" colSpan={5}>Total Requisitioned Amount</td>
-                  <td className="p-4 text-right text-base font-black">UGX {requisitionTotals.total.toLocaleString()}</td>
+                <tr className="bg-slate-50 border-t border-slate-100 font-semibold text-slate-800">
+                  <td className="px-4 py-4" colSpan={4}>Total Requisitioned Amount</td>
+                  <td className="px-4 py-4 text-right text-base font-semibold whitespace-nowrap">UGX {requisitionTotals.total.toLocaleString()}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
@@ -592,81 +622,100 @@ export default function Requisitions() {
           </table>
         </div>
 
-        {/* Mobile Card View */}
-        <div className="md:hidden flex flex-col divide-y divide-slate-100">
-          {filteredForReport.length > 0 ? filteredForReport.map(req => (
-            <div key={req.id} className="p-4 space-y-3 hover:bg-slate-50 transition-colors">
-              <div className="flex justify-between items-start gap-2">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-sm">{req.title}</h3>
-                  {req.category && <p className="text-xs text-slate-500 mt-0.5">Category: {req.category}</p>}
-                  {req.relatedFileName && (
-                    <p
-                      onClick={() => req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
-                      className={`text-xs truncate mt-0.5 ${req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? 'text-blue-600 hover:text-blue-800 cursor-pointer underline' : 'text-slate-700'}`}
-                    >
-                      {req.relatedFileType === 'general' ? '🏦' : '⚖️'} {req.relatedFileName}
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-500 mt-1">{new Date(req.dateSubmitted).toLocaleDateString()} • {req.submittedByName}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-black text-slate-800 text-sm">UGX {req.amount.toLocaleString()}</div>
-                  <div className="mt-1">
-                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${getStatusColor(req.status)}`}>
-                      {req.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
+        {/* Mobile Card View (Compact Banking App Style) */}
+        <div className="md:hidden">
+          {filteredForReport.length > 0 ? (
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-100/60">
+              {filteredForReport.map(req => {
+                const isPaid = req.status === "Paid";
+                const isApproved = req.status === "Approved";
+                const iconBg = isPaid ? "bg-[#EEF7F4] text-[#2CB187]" : isApproved ? "bg-[#EFF3FE] text-[#3D71FF]" : "bg-[#FFF4E5] text-[#FF9B26]";
+                const icon = isPaid ? "✓" : isApproved ? "↑" : "⏳";
 
-              {req.status === "Rejected" && req.rejectionReason && (
-                <div className="bg-red-50 p-2 rounded-lg border border-red-100">
-                  <p className="text-[10px] text-red-600 font-medium">Reason: {req.rejectionReason}</p>
-                </div>
-              )}
+                return (
+                  <div key={req.id} className="p-4 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-start gap-3">
+                      {/* Icon */}
+                      <div className={`w-10 h-10 shrink-0 rounded-[12px] flex items-center justify-center font-semibold text-base ${iconBg}`}>
+                        {icon}
+                      </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-                {req.status === "Pending" && canApprove && (
-                  <>
-                    <button onClick={() => openApprovalModal(req.id)} className="text-blue-600 hover:text-blue-800 font-bold text-[11px] uppercase bg-blue-50 px-3 py-1.5 rounded-lg">Approve</button>
-                    <button onClick={() => handleReject(req.id)} className="text-red-500 hover:text-red-700 font-bold text-[11px] uppercase bg-red-50 px-3 py-1.5 rounded-lg">Reject</button>
-                  </>
-                )}
-                {req.status === "Approved" && canPay && (
-                  <button onClick={() => handleMarkPaid(req.id)} className="text-emerald-600 hover:text-emerald-800 font-bold text-[11px] uppercase bg-emerald-50 px-3 py-1.5 rounded-lg">Mark Paid</button>
-                )}
-                {req.status === "Pending" && req.submittedById === currentUser?.id && !canApprove && (
-                  <span className="text-slate-400 italic text-[11px]">Waiting...</span>
-                )}
-                {req.status === "Approved" && !canPay && (
-                  <span className="text-slate-400 italic text-[11px]">Awaiting Payment</span>
-                )}
-                {req.status === "Paid" && (
-                  <span className="text-slate-400 italic text-[11px]">Completed</span>
-                )}
-                {(req.submittedById === currentUser?.id || isAccountant) && (
-                  <div className="flex items-center gap-2">
-                    {req.submittedById === currentUser?.id && req.status === "Pending" && (
-                      <button onClick={() => {
-                        setTitle(req.title);
-                        setAmount(req.amount.toString());
-                        setCategory(req.category || "");
-                        setNotes(req.notes || "");
-                        setRelatedFileId(req.relatedFileId || "");
-                        setRelatedFileType(req.relatedFileType || "");
-                        setRelatedFileName(req.relatedFileName || "");
-                        setEditingReqId(req.id);
-                        setShowModal(true);
-                      }} className="text-blue-500 hover:text-blue-700 font-bold text-[11px] uppercase bg-blue-50 px-3 py-1.5 rounded-lg">Edit</button>
+                      {/* Details (Middle) */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-slate-800 text-xs break-words leading-snug">{req.title}</h3>
+                        <p className="text-[9px] text-slate-400 mt-1 break-words leading-snug">
+                          {new Date(req.dateSubmitted).toLocaleDateString()} • {req.submittedByName}
+                        </p>
+                        {req.relatedFileName && (
+                          <span
+                            onClick={() => req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? handleNavigate(req.relatedFileType, req.relatedFileId) : null}
+                            className={`text-[9px] font-medium block break-words leading-snug mt-1.5 ${req.relatedFileType && req.relatedFileId && req.relatedFileType !== 'general' ? 'text-blue-600 hover:text-blue-800 cursor-pointer hover:underline' : 'text-slate-500'}`}
+                          >
+                            ⚖️ {req.relatedFileName}
+                          </span>
+                        )}
+                        <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium uppercase mt-1.5 inline-block">
+                          {req.category || "General"}
+                        </span>
+                      </div>
+
+                      {/* Amount (Right) */}
+                      <div className="text-right shrink-0">
+                        <div className={`font-semibold text-xs ${isPaid ? "text-slate-800" : isApproved ? "text-[#3D71FF]" : "text-[#FF9B26]"}`}>
+                          <span className="text-[8px] mr-0.5 opacity-60 font-medium uppercase">UGX</span>
+                          {req.amount.toLocaleString()}
+                        </div>
+                        <div className="mt-0.5">
+                           <span className={`text-[8px] font-semibold uppercase tracking-wider ${isPaid ? "text-[#2CB187]" : isApproved ? "text-[#3D71FF]" : "text-[#FF9B26]"}`}>
+                             {req.status}
+                           </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions Row (only if needed) */}
+                    {(canApprove || canPay || req.submittedById === currentUser?.id || isAccountant || req.rejectionReason) && (
+                      <div className="mt-3 pt-3 border-t border-slate-100 border-dashed flex flex-wrap items-center justify-end gap-2">
+                        {req.rejectionReason && (
+                          <div className={`mr-auto text-[10px] font-medium truncate max-w-[140px] ${req.status === 'Approved' ? 'text-blue-600' : 'text-red-500'}`}>
+                            {req.rejectionReason}
+                          </div>
+                        )}
+                        {req.status === "Pending" && canApprove && (
+                          <>
+                            <button onClick={() => openApprovalModal(req.id)} className="text-white bg-[#3D71FF] hover:bg-blue-700 font-medium text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition">Approve</button>
+                            <button onClick={() => openRejectionModal(req.id)} className="text-white bg-red-500 hover:bg-red-600 font-medium text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition">Reject</button>
+                          </>
+                        )}
+                        {req.status === "Approved" && canPay && (
+                          <button onClick={() => handleMarkPaid(req.id)} className="text-white bg-[#2CB187] hover:bg-emerald-600 font-medium text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition">Pay</button>
+                        )}
+                        {(req.submittedById === currentUser?.id || isAccountant) && (
+                          <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-200">
+                            {req.submittedById === currentUser?.id && req.status === "Pending" && (
+                              <button onClick={() => {
+                                setTitle(req.title);
+                                setAmount(req.amount.toString());
+                                setCategory(req.category || "");
+                                setNotes(req.notes || "");
+                                setRelatedFileId(req.relatedFileId || "");
+                                setRelatedFileType(req.relatedFileType || "");
+                                setRelatedFileName(req.relatedFileName || "");
+                                setEditingReqId(req.id);
+                                setShowModal(true);
+                              }} className="text-slate-400 hover:text-slate-700 font-medium text-[10px] uppercase px-1.5 py-1 transition">Edit</button>
+                            )}
+                            <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-slate-400 hover:text-red-500 font-medium text-[10px] uppercase px-1.5 py-1 transition">Del</button>
+                          </div>
+                        )}
+                      </div>
                     )}
-                    <button onClick={() => { if (confirm('Delete this requisition?')) deleteRequisition(req.id); }} className="text-red-500 hover:text-red-700 font-bold text-[11px] uppercase bg-red-50 px-3 py-1.5 rounded-lg">Delete</button>
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
-          )) : (
-            <div className="p-8 text-center text-slate-400 font-medium italic text-sm">No requisitions found.</div>
+          ) : (
+            <div className="bg-white rounded-3xl p-8 text-center border border-slate-100 shadow-sm text-slate-400 font-medium italic text-sm">No requisitions found.</div>
           )}
         </div>
         {/* Mobile Total Row */}
@@ -695,13 +744,13 @@ export default function Requisitions() {
               }} className="text-slate-400 hover:text-slate-600 font-bold text-xs uppercase transition-colors">
                 Cancel
               </button>
-              <h3 className="text-lg font-black text-slate-800">{editingReqId ? 'Edit Requisition' : 'New Requisition'}</h3>
+              <h3 className="text-lg font-semibold text-slate-800">{editingReqId ? 'Edit Requisition' : 'New Requisition'}</h3>
               <div className="w-10"></div>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Category</label>
-                <select required autoFocus value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500">
+              <div className="group relative">
+                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Category</label>
+                <select required autoFocus value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer">
                   <option value="">Select category...</option>
                   <option>Commissioning fees</option>
                   <option>Transport expenses</option>
@@ -724,18 +773,18 @@ export default function Requisitions() {
                   <option>Others</option>
                 </select>
               </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Title / Purpose</label>
-                <input required className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              <div className="group relative">
+                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Title / Purpose</label>
+                <input required className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                   value={title} onChange={e => setTitle(e.target.value)} placeholder="E.g. Transport to Court" />
               </div>
 
               <div className="group relative z-40">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link Related File (Optional)</label>
+                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link Related File (Optional)</label>
                 <div className="relative">
                   <div
                     onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
-                    className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-4 ring-blue-500/10" : "border-slate-200"} p-3.5 pl-10 rounded-xl font-bold text-sm text-slate-800 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
+                    className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-200"} p-3 pl-10 rounded-xl text-sm font-medium text-slate-700 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
                   >
                     <span className="truncate">{relatedFileName || "-- General Requisition --"}</span>
                     <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
@@ -835,13 +884,16 @@ export default function Requisitions() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Amount (UGX)</label>
-                <input required type="number" className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+              <div className="group relative">
+                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Amount (UGX)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm leading-none">UGX</span>
+                  <input required type="number" className="w-full bg-slate-50/50 border border-slate-200 p-3 pl-14 rounded-xl font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                    value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+                </div>
               </div>
 
-              <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-colors shadow-md">
+              <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl font-medium uppercase tracking-wider text-xs transition-colors shadow-md mt-2">
                 Submit Requisition
               </button>
             </form>
@@ -854,51 +906,119 @@ export default function Requisitions() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
-              <h3 className="text-lg font-black text-slate-800 text-center">Approve Requisition</h3>
+              <h3 className="text-lg font-semibold text-slate-800 text-center">Approve Requisition</h3>
               <p className="text-xs font-medium text-slate-500 text-center mt-1">Review and finalize the amount.</p>
             </div>
             <form onSubmit={submitApproval} className="p-6 space-y-5">
               
               <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Requested By</p>
-                <p className="text-sm font-bold text-slate-800">{approvalReq.submittedByName}</p>
+                <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-widest mb-1">Requested By</p>
+                <p className="text-sm font-semibold text-slate-800">{approvalReq.submittedByName}</p>
                 
-                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 mt-3">Purpose</p>
-                <p className="text-sm font-bold text-slate-800">{approvalReq.title}</p>
+                <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-widest mb-1 mt-3">Purpose</p>
+                <p className="text-sm font-semibold text-slate-800">{approvalReq.title}</p>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 block ml-1">
                   Final Approved Amount (UGX)
                 </label>
                 <input 
                   type="number"
                   required 
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl font-black text-lg text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 transition-all text-center"
+                  className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl font-semibold text-lg text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 transition-all text-center"
                   value={approvalAmount} 
                   onChange={e => setApprovalAmount(e.target.value)} 
                 />
                 {Number(approvalAmount) !== approvalReq.amount && (
-                  <p className="text-xs text-amber-600 font-bold mt-2 text-center bg-amber-50 p-2 rounded-lg border border-amber-100">
+                  <p className="text-xs text-amber-600 font-medium mt-2 text-center bg-amber-50 p-2 rounded-lg border border-amber-100">
                     Amount changed from originally requested UGX {approvalReq.amount.toLocaleString()}
                   </p>
                 )}
               </div>
 
+              {Number(approvalAmount) < approvalReq.amount && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 block ml-1">
+                    Reason for Reduction <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    required
+                    rows={2}
+                    className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition-all resize-none"
+                    placeholder="Explain why the amount was reduced..."
+                    value={approvalReductionReason}
+                    onChange={(e) => setApprovalReductionReason(e.target.value)}
+                  />
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button 
                   type="button"
                   onClick={() => { setShowApprovalModal(false); setApprovalReq(null); }} 
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black text-xs uppercase tracking-widest py-4 rounded-xl transition-colors"
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold text-xs uppercase tracking-widest py-4 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest py-4 rounded-xl shadow-xl shadow-blue-200 transition-all"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs uppercase tracking-widest py-4 rounded-xl shadow-xl shadow-blue-200 transition-all"
                 >
                   Confirm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Professional Rejection Modal */}
+      {showRejectionModal && rejectionReq && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 bg-red-50 border-b border-red-100">
+              <h3 className="text-lg font-semibold text-red-800 text-center">Reject Requisition</h3>
+              <p className="text-xs font-medium text-red-600/80 text-center mt-1">Provide a reason for rejecting this request.</p>
+            </div>
+            <form onSubmit={submitRejection} className="p-6 space-y-5">
+              
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Requested By</p>
+                <p className="text-sm font-semibold text-slate-800">{rejectionReq.submittedByName}</p>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1 mt-3">Amount</p>
+                <p className="text-sm font-semibold text-slate-800">UGX {rejectionReq.amount.toLocaleString()}</p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 block ml-1">
+                  Reason for Rejection <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  autoFocus
+                  rows={3}
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-sm text-slate-800 outline-none focus:ring-2 focus:ring-red-500 transition-all resize-none"
+                  placeholder="Explain why this requisition is being rejected..."
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => { setShowRejectionModal(false); setRejectionReq(null); }} 
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold text-xs uppercase tracking-widest py-4 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs uppercase tracking-widest py-4 rounded-xl shadow-xl shadow-red-200 transition-all"
+                >
+                  Reject
                 </button>
               </div>
             </form>

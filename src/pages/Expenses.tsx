@@ -362,7 +362,11 @@ export default function Expenses() {
       return;
     }
     if (formData.type === 'transfer' && !formData.paymentMethod) {
-      alert("Please select a source account (Cash, Cheque, or Mobile Money) to transfer from.");
+      alert("Please select a source account to transfer from.");
+      return;
+    }
+    if (formData.type === 'transfer' && !formData.category) {
+      alert("Please select a destination account to transfer to.");
       return;
     }
 
@@ -371,7 +375,7 @@ export default function Expenses() {
       amount: Math.round(Number(formData.amount)),
       description: formData.purpose,
       purpose: formData.purpose,
-      category: formData.type === 'transfer' ? 'Petty Cash' : (formData.category || (formData.type === 'in' ? "Other incomes" : "Others")),
+      category: formData.type === 'transfer' ? formData.category : (formData.category || (formData.type === 'in' ? "Other incomes" : "Others")),
       paymentMethod: formData.paymentMethod || "",
     };
 
@@ -469,11 +473,11 @@ export default function Expenses() {
               win.document.write(`<html><head><title>Financial Ledger</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}h2{margin-bottom:4px}p{color:#666;margin-top:0}</style></head><body><h2>Financial Tracker — Petty Cash Ledger</h2><p>Buwembo & Company Advocates · Printed ${new Date().toLocaleDateString()}</p><table><thead><tr style="background:#f1f5f9"><th style="padding:8px;border:1px solid #ddd;text-align:left">Date</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Type</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Account</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Category</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Staff & File</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Purpose</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="background:#f0fdf4"><td colspan="6" style="padding:10px;border:1px solid #ddd;font-weight:bold;color:#059669">TOTAL INCOME (Money In)</td><td style="padding:10px;border:1px solid #ddd;text-align:right;font-weight:bold;color:#059669">+ UGX ${printTotalIn.toLocaleString()}</td></tr><tr style="background:#fef2f2"><td colspan="6" style="padding:10px;border:1px solid #ddd;font-weight:bold;color:#dc2626">TOTAL EXPENSES (Money Out)</td><td style="padding:10px;border:1px solid #ddd;text-align:right;font-weight:bold;color:#dc2626">- UGX ${printTotalOut.toLocaleString()}</td></tr><tr style="background:${printNet >= 0 ? '#f0fdf4' : '#fef2f2'}"><td colspan="6" style="padding:12px;border:2px solid #333;font-weight:bold;font-size:15px">NET BALANCE</td><td style="padding:12px;border:2px solid #333;text-align:right;font-weight:bold;font-size:15px;color:${printNet >= 0 ? '#059669' : '#dc2626'}">UGX ${printNet.toLocaleString()}</td></tr></tfoot></table></body></html>`);
               win.document.close(); win.print();
             }}
-            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors border border-slate-200"
+            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-5 py-2.5 rounded-lg font-medium text-sm transition-colors border border-slate-200"
           >
-            🖨️ Print
+            Print Ledger
           </button>
-          <button onClick={() => handleOpenModal()} className="bg-slate-900 text-white hover:bg-slate-800 px-5 py-2.5 rounded-xl font-bold text-sm shadow-md transition-colors">
+          <button onClick={() => handleOpenModal()} className="bg-slate-900 text-white hover:bg-slate-800 px-5 py-2.5 rounded-lg font-medium text-sm shadow-sm transition-colors">
             + Record Transaction
           </button>
         </div>
@@ -499,44 +503,44 @@ export default function Expenses() {
         <div className="space-y-6 animate-in fade-in duration-300">
           {/* Account Balances Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">💵 Cash Account</span>
-              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.cash.toLocaleString()}</h4>
+            <div className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between shadow-sm">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Cash Account</span>
+              <h4 className="text-lg font-semibold text-slate-900 mt-1">UGX {accountBalances.cash.toLocaleString()}</h4>
             </div>
-            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">📱 Mobile Money</span>
-              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.momo.toLocaleString()}</h4>
+            <div className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between shadow-sm">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Mobile Money</span>
+              <h4 className="text-lg font-semibold text-slate-900 mt-1">UGX {accountBalances.momo.toLocaleString()}</h4>
             </div>
-            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">📝 Bank Transfer / Cheque</span>
-              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.bank.toLocaleString()}</h4>
+            <div className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between shadow-sm">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Bank Transfer / Cheque</span>
+              <h4 className="text-lg font-semibold text-slate-900 mt-1">UGX {accountBalances.bank.toLocaleString()}</h4>
             </div>
-            <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">💼 Petty Cash</span>
-              <h4 className="text-lg font-black text-slate-800 mt-2">UGX {accountBalances.petty.toLocaleString()}</h4>
+            <div className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between shadow-sm">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Petty Cash</span>
+              <h4 className="text-lg font-semibold text-slate-900 mt-1">UGX {accountBalances.petty.toLocaleString()}</h4>
             </div>
           </div>
 
           {accountBalances.unspecified !== 0 && (
-            <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex justify-between items-center text-xs text-slate-500 font-semibold shadow-sm">
-              <span className="flex items-center gap-2">⚠️ Legacy / Unspecified General Balance (unassigned payment methods):</span>
-              <span className="font-bold text-slate-700">UGX {accountBalances.unspecified.toLocaleString()}</span>
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex justify-between items-center text-xs text-slate-500 font-medium shadow-sm">
+              <span>Legacy / Unspecified General Balance (unassigned payment methods):</span>
+              <span className="font-semibold text-slate-700">UGX {accountBalances.unspecified.toLocaleString()}</span>
             </div>
           )}
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl relative overflow-hidden">
-              <p className="text-xs font-black uppercase tracking-widest text-emerald-600/80 mb-2">Total Received (Income)</p>
-              <h3 className="text-3xl font-black text-emerald-700">UGX {summaries.totalReceived.toLocaleString()}</h3>
+            <div className="bg-white border border-slate-100 border-b-[4px] border-b-blue-500 p-6 rounded-xl shadow-sm text-center">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">Total Received</p>
+              <h3 className="text-2xl font-bold text-slate-800">UGX {summaries.totalReceived.toLocaleString()}</h3>
             </div>
-            <div className="bg-red-50 border border-red-100 p-6 rounded-2xl relative overflow-hidden">
-              <p className="text-xs font-black uppercase tracking-widest text-red-600/80 mb-2">Total Spent (Expenses)</p>
-              <h3 className="text-3xl font-black text-red-700">UGX {summaries.totalSpent.toLocaleString()}</h3>
+            <div className="bg-white border border-slate-100 border-b-[4px] border-b-amber-400 p-6 rounded-xl shadow-sm text-center">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">Total Spent</p>
+              <h3 className="text-2xl font-bold text-slate-800">UGX {summaries.totalSpent.toLocaleString()}</h3>
             </div>
-            <div className={`border p-6 rounded-2xl relative overflow-hidden ${summaries.balance < 0 ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'}`}>
-              <p className={`text-xs font-black uppercase tracking-widest mb-2 ${summaries.balance < 0 ? 'text-orange-600/80' : 'text-blue-600/80'}`}>Net Company Balance</p>
-              <h3 className={`text-3xl font-black ${summaries.balance < 0 ? 'text-orange-700' : 'text-blue-700'}`}>UGX {summaries.balance.toLocaleString()}</h3>
+            <div className="bg-white border border-slate-100 border-b-[4px] border-b-emerald-500 p-6 rounded-xl shadow-sm text-center">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">Net Balance</p>
+              <h3 className="text-2xl font-bold text-slate-800">UGX {summaries.balance.toLocaleString()}</h3>
             </div>
           </div>
 
@@ -588,69 +592,69 @@ export default function Expenses() {
             )}
           </div>
 
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 z-10 bg-slate-50">
-                  <tr className="border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Type</th>
-                    <th className="p-4">Account</th>
-                    <th className="p-4">Category</th>
-                    <th className="p-4">Staff & File</th>
-                    <th className="p-4">Purpose</th>
-                    <th className="p-4 text-right">Amount</th>
-                    <th className="p-4 text-center">Actions</th>
+                <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
+                  <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 whitespace-nowrap">Date</th>
+                    <th className="px-3 py-3 whitespace-nowrap">Type</th>
+                    <th className="px-3 py-3">Account</th>
+                    <th className="px-3 py-3">Category</th>
+                    <th className="px-3 py-3">Staff & File</th>
+                    <th className="px-3 py-3 w-full">Purpose</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">Amount</th>
+                    <th className="px-3 py-3 text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="text-sm font-medium">
+                <tbody className="text-sm">
                   {filteredExpenses.length > 0 ? filteredExpenses.slice(0, 100).map((exp: any) => (
-                    <tr key={exp.id} className={`border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors ${exp.type === 'transfer' ? 'bg-amber-50/40' : ''}`}>
-                      <td className="p-4 text-slate-600 whitespace-nowrap">{exp.date}</td>
-                      <td className="p-2">
+                    <tr key={exp.id} className={`border-b border-slate-100 last:border-0 transition-colors ${exp.type === 'transfer' ? 'bg-amber-50/30 hover:bg-amber-50/50' : exp.type === 'in' ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'bg-red-50/10 hover:bg-red-50/30'}`}>
+                      <td className="px-3 py-3 text-slate-700 font-medium whitespace-nowrap">{exp.date}</td>
+                      <td className="px-3 py-3">
                         {exp.type === 'in'
-                          ? <span className="text-emerald-700 rounded text-[10px] font-black">In (+)</span>
+                          ? <span className="text-emerald-700 text-[11px] font-semibold tracking-wide">In (+)</span>
                           : exp.type === 'transfer'
-                            ? <span className="text-amber-700 rounded text-[10px] font-black">Transfer ⇄</span>
-                            : <span className="text-red-700 rounded text-[10px] font-black">Out (-)</span>
+                            ? <span className="text-amber-700 text-[11px] font-semibold tracking-wide">Transfer</span>
+                            : <span className="text-slate-700 text-[11px] font-semibold tracking-wide">Out (-)</span>
                         }
                       </td>
-                      <td className="p-4">
+                      <td className="px-3 py-3 max-w-[140px]">
                         {exp.type === 'transfer' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">
+                          <span className="text-[11px] font-semibold text-amber-600 leading-tight">
                             {exp.paymentMethod || '?'} ➔ {exp.category || '?'}
                           </span>
                         ) : exp.paymentMethod ? (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${exp.type === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                            {exp.paymentMethod === 'Cash' ? '💵' : (exp.paymentMethod === 'Bank Transfer/ Cheque' || exp.paymentMethod === 'Bank Transfer/ Cheque') ? '📝' : exp.paymentMethod === 'Mobile Money' ? '📱' : '💼'} {exp.paymentMethod}
+                          <span className={`text-[11px] font-semibold leading-tight ${exp.type === 'in' ? 'text-emerald-600' : 'text-slate-600'}`}>
+                            {exp.paymentMethod}
                           </span>
                         ) : (
                           <span className="text-slate-300 italic text-xs">—</span>
                         )}
                       </td>
-                      <td className="p-4">
+                      <td className="px-3 py-3 max-w-[120px] truncate">
                         {exp.type !== 'transfer' && exp.category ? (
-                          <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider whitespace-nowrap">{exp.category}</span>
+                          <span className="text-slate-600 text-[11px] font-medium tracking-wide whitespace-nowrap">{exp.category}</span>
                         ) : exp.type !== 'transfer' ? (
                           <span className="text-slate-300 italic text-xs">—</span>
                         ) : null}
                       </td>
-                      <td className="p-4 max-w-[200px]">
+                      <td className="px-3 py-3 max-w-[150px]">
                         <div className="space-y-1">
-                          {exp.type === 'out' && exp.staffName && <p className="text-slate-800 font-bold text-xs">👤 {exp.staffName}</p>}
+                          {exp.type === 'out' && exp.staffName && <p className="text-slate-800 font-medium text-xs truncate" title={exp.staffName}>{exp.staffName}</p>}
                           {exp.relatedFileName
-                            ? <p className="text-blue-600 text-xs truncate" title={exp.relatedFileName}>⚖️ {exp.relatedFileName}</p>
-                            : <span className="text-slate-300 italic text-xs">{exp.type === 'out' && !exp.staffName ? 'General' : '—'}</span>
+                            ? <p className="text-slate-600 text-xs truncate" title={exp.relatedFileName}>{exp.relatedFileName}</p>
+                            : <span className="text-slate-400 italic text-xs">{exp.type === 'out' && !exp.staffName ? 'General' : '—'}</span>
                           }
                         </div>
                       </td>
-                      <td className="p-4 text-slate-700 capitalize min-w-[200px] max-w-[300px] whitespace-normal break-words">{exp.purpose || exp.description}</td>
-                      <td className={`p-4 text-right font-black whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-600' : exp.type === 'transfer' ? 'text-amber-700' : 'text-red-500'}`}>
-                        {exp.type === 'in' ? '+' : exp.type === 'transfer' ? '⇄' : '-'} {Number(exp.amount).toLocaleString()}
+                      <td className="px-3 py-3 text-slate-700 max-w-[250px] whitespace-normal break-words leading-relaxed">{exp.purpose || exp.description}</td>
+                      <td className={`px-3 py-3 text-right font-medium whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-700' : exp.type === 'transfer' ? 'text-amber-700' : 'text-slate-900'}`}>
+                        {exp.type === 'in' ? '+' : exp.type === 'transfer' ? '' : '-'} {Number(exp.amount).toLocaleString()}
                       </td>
-                      <td className="p-4 text-center whitespace-nowrap">
-                        <button onClick={() => handleOpenModal(exp)} className="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase mr-3">Edit</button>
-                        <button onClick={() => handleDelete(exp.id)} className="text-red-400 hover:text-red-600 font-bold text-xs uppercase">Delete</button>
+                      <td className="px-3 py-3 text-center whitespace-nowrap">
+                        <button onClick={() => handleOpenModal(exp)} className="text-slate-400 hover:text-blue-600 font-medium text-[11px] uppercase tracking-wider mr-3 transition-colors">Edit</button>
+                        <button onClick={() => handleDelete(exp.id)} className="text-slate-400 hover:text-red-600 font-medium text-[11px] uppercase tracking-wider transition-colors">Delete</button>
                       </td>
                     </tr>
                   )) : (
@@ -667,28 +671,25 @@ export default function Expenses() {
         <div className="space-y-8 animate-in fade-in duration-300">
 
           {/* ADVISORY WARNINGS */}
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-8">
-            <h2 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
-              <span>🚨</span> Advisory Warnings
-            </h2>
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+            <h2 className="text-base font-semibold text-slate-900 mb-5">Advisory Warnings</h2>
             {reportData.advisoryWarnings.length > 0 ? (
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                 {reportData.advisoryWarnings.map((w, idx) => (
-                  <div key={idx} className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-xl flex justify-between items-center">
+                  <div key={idx} className="bg-slate-50 border-l-4 border-amber-500 p-4 flex justify-between items-center">
                     <div>
-                      <h4 className="font-bold text-slate-800">{w.fileName}</h4>
-                      <p className="text-sm font-medium text-orange-700 mt-1">{w.warning}</p>
+                      <h4 className="font-medium text-slate-900">{w.fileName}</h4>
+                      <p className="text-sm text-amber-700 mt-1">{w.warning}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Billed vs Spent</p>
-                      <p className="text-sm font-black whitespace-nowrap"><span className="text-blue-600">Ugx {w.billed.toLocaleString()}</span> / <span className="text-red-500">Ugx {w.spent.toLocaleString()}</span></p>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 mb-1">Billed vs Spent</p>
+                      <p className="text-sm font-semibold whitespace-nowrap"><span className="text-slate-600">Ugx {w.billed.toLocaleString()}</span> / <span className="text-amber-600">Ugx {w.spent.toLocaleString()}</span></p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-10 bg-slate-50 rounded-xl border border-slate-100 border-dashed">
-                <p className="text-2xl mb-2">✅</p>
+              <div className="text-center py-10 bg-slate-50 rounded-lg border border-slate-200 border-dashed">
                 <p className="text-slate-500 font-medium text-sm">All files are within healthy expenditure margins.</p>
               </div>
             )}
@@ -696,8 +697,8 @@ export default function Expenses() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* STAFF EXPENDITURE */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-8">
-              <h2 className="text-lg font-black text-slate-800 mb-6">Expenditure by Staff</h2>
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+              <h2 className="text-base font-semibold text-slate-900 mb-5">Expenditure by Staff</h2>
               {reportData.staffLabels.length > 0 ? (
                 <div style={{ height: "300px" }}>
                   <Bar
@@ -938,192 +939,211 @@ export default function Expenses() {
             <form onSubmit={handleSaveExpense} className="p-6 overflow-y-auto space-y-6">
 
               <div className="flex bg-slate-100 p-1 rounded-xl">
-                <button type="button" onClick={() => setFormData({ ...formData, type: "in", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'in' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money In (+) </button>
-                <button type="button" onClick={() => setFormData({ ...formData, type: "out", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'out' ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money Out (-) </button>
-                <button type="button" onClick={() => setFormData({ ...formData, type: "transfer", paymentMethod: "", category: "" })} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'transfer' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Transfer ⇄ </button>
+                <button type="button" onClick={() => setFormData({ ...formData, type: "in", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-medium uppercase tracking-wider transition-all ${formData.type === 'in' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money In (+) </button>
+                <button type="button" onClick={() => setFormData({ ...formData, type: "out", paymentMethod: "" })} className={`flex-1 py-2 rounded-lg text-xs font-medium uppercase tracking-wider transition-all ${formData.type === 'out' ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Money Out (-) </button>
+                <button type="button" onClick={() => setFormData({ ...formData, type: "transfer", paymentMethod: "", category: "" })} className={`flex-1 py-2 rounded-lg text-xs font-medium uppercase tracking-wider transition-all ${formData.type === 'transfer' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}> Transfer ⇄ </button>
               </div>
 
-              {formData.type === 'in' && (
-                <div className="group relative">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">Destination Account <span className="text-red-400">*</span></label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["Cash", "Bank Transfer/ Cheque", "Mobile Money"] as const).map((method) => (
-                      <button key={method} type="button" onClick={() => setFormData({ ...formData, paymentMethod: method })}
-                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${formData.paymentMethod === method ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'}`}>
-                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Bank Transfer/ Cheque' ? '📝' : '📱'}</span>
-                        <span>{method}</span>
-                        {formData.paymentMethod === method && (<span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center"><span className="text-white text-[8px] font-black">✓</span></span>)}
-                      </button>
-                    ))}
+              {/* Row 1: Account & Date */}
+              <div className="grid grid-cols-2 gap-4">
+                {formData.type === 'in' ? (
+                  <div className="group relative">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Destination Account <span className="text-red-400">*</span></label>
+                    <select required className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                      value={formData.paymentMethod} onChange={e => setFormData({ ...formData, paymentMethod: e.target.value as any })}>
+                      <option value="">Select destination...</option>
+                      {(["Cash", "Bank Transfer/ Cheque", "Mobile Money"] as const).map(method => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              )}
-
-              {formData.type === 'out' && (
-                <div className="group relative">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">Source Account <span className="text-red-400">*</span></label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(["Cash", "Bank Transfer/ Cheque", "Mobile Money", "Petty Cash"] as const).map((method) => (
-                      <button key={method} type="button" onClick={() => setFormData({ ...formData, paymentMethod: method })}
-                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${formData.paymentMethod === method ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'}`}>
-                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Bank Transfer/ Cheque' ? '📝' : method === 'Mobile Money' ? '📱' : '💼'}</span>
-                        <span>{method}</span>
-                        {formData.paymentMethod === method && (<span className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center"><span className="text-white text-[8px] font-black">✓</span></span>)}
-                      </button>
-                    ))}
+                ) : formData.type === 'out' ? (
+                  <div className="group relative">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Source Account <span className="text-red-400">*</span></label>
+                    <select required className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                      value={formData.paymentMethod} onChange={e => setFormData({ ...formData, paymentMethod: e.target.value as any })}>
+                      <option value="">Select source...</option>
+                      {(["Cash", "Bank Transfer/ Cheque", "Mobile Money", "Petty Cash"] as const).map(method => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              )}
-
-              {formData.type === 'transfer' && (
-                <div className="group relative">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">Transfer From <span className="text-red-400">*</span></label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["Cash", "Bank Transfer/ Cheque", "Mobile Money"] as const).map((method) => (
-                      <button key={method} type="button" onClick={() => setFormData({ ...formData, paymentMethod: method })}
-                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 font-bold text-xs transition-all ${formData.paymentMethod === method ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white'}`}>
-                        <span className="text-xl">{method === 'Cash' ? '💵' : method === 'Bank Transfer/ Cheque' ? '📝' : '📱'}</span>
-                        <span>{method}</span>
-                        {formData.paymentMethod === method && (<span className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center"><span className="text-white text-[8px] font-black">✓</span></span>)}
-                      </button>
-                    ))}
+                ) : (
+                  <div className="group relative">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Transfer From <span className="text-red-400">*</span></label>
+                    <select required className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                      value={formData.paymentMethod} onChange={e => setFormData({ ...formData, paymentMethod: e.target.value as any })}>
+                      <option value="">Select source...</option>
+                      {(["Cash", "Bank Transfer/ Cheque", "Mobile Money", "Petty Cash"] as const).map(method => (
+                        <option key={`source-${method}`} value={method}>{method}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-                    <p className="text-xs font-bold text-amber-800">➔ Destination: <span className="font-black">Petty Cash 💼</span></p>
-                  </div>
-                </div>
-              )}
-
-              <div className="group relative">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Date</label>
-                <input type="date" required className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm"
-                  value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })}
-                />
-              </div>
-
-              {formData.type !== 'transfer' && (
+                )}
+                
                 <div className="group relative">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Category</label>
-                  <select required className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
-                    value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-                    <option value="">Select category...</option>
-                    {(formData.type === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {formData.type === 'out' && (
-                <div className="group relative">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Staff Member Receiving Funds</label>
-                  <select className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
-                    value={formData.staffId} onChange={e => { const staff = staffList.find(s => s.id === e.target.value); setFormData({ ...formData, staffId: staff?.id || "", staffName: staff?.name || "" }); }}>
-                    <option value="">-- General / No Specific Staff --</option>
-                    {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
-                  </select>
-                </div>
-              )}
-
-              {formData.type !== 'transfer' && (
-                <div className="group relative z-40">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link File (Optional)</label>
-                  <div className="relative">
-                    <div
-                      onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
-                      className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-4 ring-blue-500/10" : "border-slate-200"} p-3.5 pl-10 rounded-xl font-bold text-sm text-slate-800 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
-                    >
-                      <span className="truncate">{formData.relatedFileName || "-- General Transaction --"}</span>
-                      <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
-                    </div>
-
-                    {isFileDropdownOpen && (
-                      <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-72">
-                        <div className="p-3 border-b border-slate-100 bg-slate-50/50">
-                          <div className="relative">
-                            <input
-                              autoFocus type="text" placeholder="Search files..."
-                              className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
-                              value={fileSearch} onChange={e => setFileSearch(e.target.value)} onClick={e => e.stopPropagation()}
-                            />
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-                          </div>
-                        </div>
-
-                        <div className="overflow-y-auto p-2 space-y-1" onClick={e => e.stopPropagation()}>
-                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${formData.relatedFileId === 'BCA' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                            onClick={() => { setFormData({ ...formData, relatedFileId: "BCA", relatedFileType: "general", relatedFileName: "BCA" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                          >
-                            🏦 BCA
-                          </button>
-
-                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${formData.relatedFileId === 'Fisk (U) Ltd' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                            onClick={() => { setFormData({ ...formData, relatedFileId: "Fisk (U) Ltd", relatedFileType: "general", relatedFileName: "Fisk (U) Ltd" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                          >
-                            🏢 Fisk (U) Ltd
-                          </button>
-
-                          <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${!formData.relatedFileId ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
-                            onClick={() => { setFormData({ ...formData, relatedFileId: "", relatedFileType: "", relatedFileName: "" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                          >
-                            ❌ No File Checked
-                          </button>
-
-                          {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
-                            <div className="pt-2">
-                              <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Court Cases</p>
-                              {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
-                                <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                                  onClick={() => { setFormData({ ...formData, relatedFileId: c.id, relatedFileType: "case", relatedFileName: c.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                                >
-                                  <span className="text-sm">⚖️</span> {c.fileName}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
-                            <div className="pt-2">
-                              <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Transactions</p>
-                              {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
-                                <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                                  onClick={() => { setFormData({ ...formData, relatedFileId: t.id, relatedFileType: "transaction", relatedFileName: t.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
-                                >
-                                  <span className="text-sm">💼</span> {t.fileName}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                        </div>
-                      </div>
-                    )}
-                    {isFileDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsFileDropdownOpen(false)} />}
-                  </div>
-                </div>
-              )}
-
-              <div className="group relative">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Purpose / Details</label>
-                <input required placeholder="E.g., Money assigned for printing..." className="w-full bg-slate-50/50 border border-slate-200 p-3.5 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm"
-                  value={formData.purpose} onChange={e => setFormData({ ...formData, purpose: e.target.value })}
-                />
-              </div>
-
-              <div className="group relative">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Amount (UGX)</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm leading-none">UGX</span>
-                  <input required type="number" placeholder="0" className="w-full bg-slate-50/50 border border-slate-200 p-3.5 pl-14 rounded-xl font-black text-lg text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm"
-                    value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                  <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Date</label>
+                  <input type="date" required className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                    value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })}
                   />
                 </div>
               </div>
 
+              {/* Row 2: Category & Staff Member / Amount */}
+              <div className="grid grid-cols-2 gap-4">
+                {formData.type === 'transfer' ? (
+                  <div className="group relative">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Transfer To <span className="text-red-400">*</span></label>
+                    <select required className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                      value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
+                      <option value="">Select destination...</option>
+                      {(["Cash", "Bank Transfer/ Cheque", "Mobile Money", "Petty Cash"] as const).map(method => (
+                        <option key={`dest-${method}`} value={method}>{method}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="group relative">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Category</label>
+                    <select required className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                      value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
+                      <option value="">Select category...</option>
+                      {(formData.type === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {formData.type === 'out' ? (
+                  <div className="group relative">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Staff Member Receiving Funds</label>
+                    <select className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
+                      value={formData.staffId} onChange={e => { const staff = staffList.find(s => s.id === e.target.value); setFormData({ ...formData, staffId: staff?.id || "", staffName: staff?.name || "" }); }}>
+                      <option value="">-- General / No Specific Staff --</option>
+                      {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="group relative">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Amount (UGX)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm leading-none">UGX</span>
+                      <input required type="number" placeholder="0" className="w-full bg-slate-50/50 border border-slate-200 p-3 pl-14 rounded-xl font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                        value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 3: Link File & Amount */}
+              {formData.type !== 'transfer' && (
+                <div className={formData.type === 'out' ? "grid grid-cols-2 gap-4" : "block"}>
+                  <div className="group relative z-40">
+                    <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Link File (Optional)</label>
+                    <div className="relative">
+                      <div
+                        onClick={() => setIsFileDropdownOpen(!isFileDropdownOpen)}
+                        className={`w-full bg-slate-50/50 border ${isFileDropdownOpen ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-200"} p-3 pl-10 rounded-xl text-sm font-medium text-slate-700 transition-all shadow-sm cursor-pointer flex justify-between items-center`}
+                      >
+                        <span className="truncate">{formData.relatedFileName || "-- General Transaction --"}</span>
+                        <span className={`text-slate-400 text-xs transition-transform ${isFileDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📎</span>
+                      </div>
+
+                      {isFileDropdownOpen && (
+                        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] sm:w-[500px] max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-2xl shadow-[0_10px_50px_rgba(0,0,0,0.3)] z-[70] flex flex-col overflow-hidden max-h-[80vh]">
+                          <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+                            <div className="relative">
+                              <input
+                                autoFocus type="text" placeholder="Search files..."
+                                className="w-full bg-white border border-slate-200 p-3 pl-9 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
+                                value={fileSearch} onChange={e => setFileSearch(e.target.value)} onClick={e => e.stopPropagation()}
+                              />
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                            </div>
+                          </div>
+
+                          <div className="overflow-y-auto p-2 space-y-1" onClick={e => e.stopPropagation()}>
+                            <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-medium hover:bg-slate-50 transition ${formData.relatedFileId === 'BCA' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                              onClick={() => { setFormData({ ...formData, relatedFileId: "BCA", relatedFileType: "general", relatedFileName: "BCA" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                            >
+                              🏦 BCA
+                            </button>
+
+                            <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-medium hover:bg-slate-50 transition ${formData.relatedFileId === 'Fisk (U) Ltd' ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                              onClick={() => { setFormData({ ...formData, relatedFileId: "Fisk (U) Ltd", relatedFileType: "general", relatedFileName: "Fisk (U) Ltd" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                            >
+                              🏢 Fisk (U) Ltd
+                            </button>
+
+                            <button type="button" className={`w-full text-left px-4 py-3 rounded-xl text-xs font-medium hover:bg-slate-50 transition ${!formData.relatedFileId ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
+                              onClick={() => { setFormData({ ...formData, relatedFileId: "", relatedFileType: "", relatedFileName: "" }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                            >
+                              ❌ No File Checked
+                            </button>
+
+                            {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                              <div className="pt-2">
+                                <p className="px-3 py-1 text-[10px] font-medium text-slate-500 uppercase tracking-widest">Court Cases</p>
+                                {activeCases.filter(c => c.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(c => (
+                                  <button type="button" key={`case-${c.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-medium hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === c.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                    onClick={() => { setFormData({ ...formData, relatedFileId: c.id, relatedFileType: "case", relatedFileName: c.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                                  >
+                                    <span className="text-sm">⚖️</span> {c.fileName}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).length > 0 && (
+                              <div className="pt-2">
+                                <p className="px-3 py-1 text-[10px] font-medium text-slate-500 uppercase tracking-widest">Transactions</p>
+                                {activeTransactions.filter(t => t.fileName.toLowerCase().includes(fileSearch.toLowerCase())).map(t => (
+                                  <button type="button" key={`tx-${t.id}`} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-medium hover:bg-slate-50 transition truncate flex items-center gap-2 ${formData.relatedFileId === t.id ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                    onClick={() => { setFormData({ ...formData, relatedFileId: t.id, relatedFileType: "transaction", relatedFileName: t.fileName }); setIsFileDropdownOpen(false); setFileSearch(""); }}
+                                  >
+                                    <span className="text-sm">💼</span> {t.fileName}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                          </div>
+                        </div>
+                      )}
+                      {isFileDropdownOpen && <div className="fixed inset-0 z-[60] bg-slate-900/20 backdrop-blur-sm" onClick={() => setIsFileDropdownOpen(false)} />}
+                    </div>
+                  </div>
+
+                  {formData.type === 'out' ? (
+                    <div className="group relative">
+                      <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Amount (UGX)</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm leading-none">UGX</span>
+                        <input required type="number" placeholder="0" className="w-full bg-slate-50/50 border border-slate-200 p-3 pl-14 rounded-xl font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                          value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="hidden md:block"></div>
+                  )}
+                </div>
+              )}
+
+              {/* Row 4: Purpose */}
+              <div className="group relative">
+                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 block ml-1 transition-colors group-focus-within:text-blue-600">Purpose / Details</label>
+                <input required placeholder="E.g., Money assigned for printing..." className="w-full bg-slate-50/50 border border-slate-200 p-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                  value={formData.purpose} onChange={e => setFormData({ ...formData, purpose: e.target.value })}
+                />
+              </div>
+
               <div className="pt-4 flex gap-3 flex-shrink-0">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-white border border-slate-200 text-slate-500 py-3.5 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-slate-50 transition-all shadow-sm">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-white border border-slate-200 text-slate-500 py-3 rounded-xl font-medium uppercase text-xs tracking-wider hover:bg-slate-50 transition-all shadow-sm">
                   Cancel
                 </button>
-                <button type="submit" className={`flex-1 text-white py-3.5 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-md active:scale-95 ${formData.type === 'in' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20' : formData.type === 'transfer' ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20' : 'bg-slate-900 hover:bg-slate-800 shadow-slate-900/20'}`}>
+                <button type="submit" className={`flex-1 text-white py-3 rounded-xl font-medium uppercase text-xs tracking-wider transition-all shadow-md active:scale-95 ${formData.type === 'in' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20' : formData.type === 'transfer' ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20' : 'bg-slate-900 hover:bg-slate-800 shadow-slate-900/20'}`}>
                   Save Transaction
                 </button>
               </div>

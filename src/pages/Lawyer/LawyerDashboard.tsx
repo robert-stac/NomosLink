@@ -56,6 +56,7 @@ export default function LawyerDashboard() {
   const [completingDraftId, setCompletingDraftId] = useState<string | null>(null);
   const [completeForm, setCompleteForm] = useState({ hoursSpent: "", documentFile: null as File | null, completionNote: "" });
   const [uploading, setUploading] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (!currentUser) return null;
 
@@ -165,55 +166,49 @@ export default function LawyerDashboard() {
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
 
       {/* HEADER */}
-      <div className="bg-[#0B1F3A] pt-14 pb-24 px-6 md:px-12 rounded-b-[60px] shadow-2xl">
+      <div className="bg-[#0B1F3A] pt-12 pb-20 px-5 md:px-12 rounded-b-[48px] shadow-2xl">
         <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-10">
+          <div className="flex justify-between items-start mb-8">
             <div>
-              <p className="text-blue-400 text-xs font-semibold uppercase tracking-widest mb-2">Lawyer Portal</p>
-              <h1 className="text-white text-3xl md:text-4xl font-bold tracking-tight">
+              <p className="text-blue-400 text-[10px] font-semibold uppercase tracking-widest mb-1">Lawyer Portal</p>
+              <h1 className="text-white text-2xl font-semibold tracking-tight">
                 Welcome, {currentUser.name.split(' ')[0]}
               </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <NotificationBell currentUser={currentUser} notifications={notifications} markAsRead={() => markNotificationsAsRead(currentUser.id)} />
-              <button onClick={() => navigate("/requisitions")} className="bg-white text-[#0B1F3A] hover:bg-slate-100 px-5 py-3.5 rounded-2xl transition text-xs font-semibold uppercase tracking-wider shadow-lg hidden md:block">
-                📝 Requisitions
+              <button onClick={() => navigate("/requisitions")} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-xl transition" title="Requisitions">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               </button>
-              <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3.5 rounded-2xl transition text-xs font-semibold uppercase tracking-wider shadow-lg hidden md:block">
-                + Assign Clerk Task
+              <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-xl transition" title="Assign Clerk Task">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
               </button>
-              {/* Mobile actions menu button or icons could go here if space is tight, but we'll show simplified buttons on mobile */}
-              <div className="md:hidden flex gap-2">
-                 <button onClick={() => navigate("/requisitions")} className="bg-white text-[#0B1F3A] p-3.5 rounded-2xl shadow-lg">📝</button>
-                 <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 text-white p-3.5 rounded-2xl shadow-lg">➕</button>
-              </div>
-              <button onClick={logout} className="bg-white/10 hover:bg-red-500/20 text-white px-4 py-3.5 rounded-2xl transition">
-                <span className="text-xs font-semibold uppercase tracking-wider">Logout</span>
+              <button onClick={logout} className="bg-white/10 hover:bg-red-500/30 text-white/70 hover:text-white p-2.5 rounded-xl transition" title="Logout">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { label: "Active Matters", value: myData.cases.length + myData.txs.length, onClick: undefined, active: false },
-              { label: "Letters", value: myData.ltrs.length, onClick: undefined, active: false },
-            ].map(card => (
-              <div key={card.label} className="bg-white/5 backdrop-blur-md p-6 rounded-[28px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] border-none">
-                <p className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1">{card.label}</p>
-                <p className="text-2xl font-bold text-white">{card.value}</p>
-              </div>
-            ))}
-            <div className={`p-6 rounded-[28px] transition cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.05)] ${pendingIncomingCount > 0 ? "bg-orange-500/20" : "bg-white/5"}`} onClick={() => setActiveTab("Drafts")}>
-              <p className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1">Incoming Drafts</p>
-              <p className="text-2xl font-bold text-white">{pendingIncomingCount}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/5 backdrop-blur-md p-4 rounded-2xl">
+              <p className="text-[10px] font-medium text-blue-300 uppercase tracking-wider mb-1">Active Matters</p>
+              <p className="text-2xl font-semibold text-white">{myData.cases.length + myData.txs.length}</p>
+            </div>
+            <div className="bg-white/5 backdrop-blur-md p-4 rounded-2xl">
+              <p className="text-[10px] font-medium text-blue-300 uppercase tracking-wider mb-1">Letters</p>
+              <p className="text-2xl font-semibold text-white">{myData.ltrs.length}</p>
+            </div>
+            <div className={`p-4 rounded-2xl cursor-pointer transition ${pendingIncomingCount > 0 ? "bg-amber-500/20" : "bg-white/5"}`} onClick={() => setActiveTab("Drafts")}>
+              <p className="text-[10px] font-medium text-blue-300 uppercase tracking-wider mb-1">Incoming Drafts</p>
+              <p className="text-2xl font-semibold text-white">{pendingIncomingCount}</p>
             </div>
             <div onClick={() => myData.nextHearing && navigate(`/lawyer/cases/${myData.nextHearing.id}`)}
-              className={`p-6 rounded-[28px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition cursor-pointer ${myData.nextHearing ? "bg-blue-600 shadow-lg hover:bg-blue-500" : "bg-white/5"}`}>
+              className={`p-4 rounded-2xl cursor-pointer transition ${myData.nextHearing ? "bg-blue-600 hover:bg-blue-500" : "bg-white/5"}`}>
               <div className="flex justify-between items-start">
-                <p className="text-xs font-semibold text-blue-200 uppercase tracking-wider mb-1">Next Court</p>
-                {myData.nextHearing && <span className="text-xs bg-white/20 px-2 py-0.5 rounded text-white font-semibold">Linked</span>}
+                <p className="text-[10px] font-medium text-blue-200 uppercase tracking-wider mb-1">Next Hearing</p>
+                {myData.nextHearing && <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded text-white font-medium">Linked</span>}
               </div>
-              <p className="text-lg font-bold text-white truncate">{myData.nextHearing ? myData.nextHearing.dateStr : "No Hearings"}</p>
+              <p className="text-base font-semibold text-white truncate">{myData.nextHearing ? myData.nextHearing.dateStr : "No Hearings"}</p>
             </div>
           </div>
         </div>
@@ -272,21 +267,19 @@ export default function LawyerDashboard() {
 
         {/* URGENT ALERT */}
         {myData.urgentReminders.length > 0 && (
-          <div className="bg-red-50 p-6 rounded-[32px] shadow-lg border-none">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="bg-red-500 text-white p-3 rounded-2xl text-xl animate-bounce">⚠️</div>
-                <div>
-                  <h3 className="text-red-900 font-semibold text-xs uppercase tracking-wider">Urgent Preparation Required</h3>
-                  <p className="text-red-600/80 text-xs font-medium mt-0.5">You have hearings scheduled for today or tomorrow.</p>
+          <div className="bg-red-50 border border-red-100 p-4 rounded-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-1 self-stretch bg-red-500 rounded-full flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="text-red-800 font-semibold text-sm">Urgent — Hearing Today or Tomorrow</h3>
+                <p className="text-red-500 text-xs mt-0.5 mb-3">Prepare immediately for the following matters.</p>
+                <div className="flex flex-wrap gap-2">
+                  {myData.urgentReminders.map(c => (
+                    <button key={c.id} onClick={() => navigate(`/lawyer/cases/${c.id}`)} className="bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-600 hover:text-white transition">
+                      {c.fileName}
+                    </button>
+                  ))}
                 </div>
-              </div>
-              <div className="flex gap-2">
-                {myData.urgentReminders.map(c => (
-                  <button key={c.id} onClick={() => navigate(`/lawyer/cases/${c.id}`)} className="bg-white border border-red-200 text-red-600 px-3 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-red-600 hover:text-white transition">
-                    {c.fileName}
-                  </button>
-                ))}
               </div>
             </div>
           </div>
@@ -294,12 +287,12 @@ export default function LawyerDashboard() {
 
         {/* PENDING DRAFTS ALERT */}
         {pendingIncomingCount > 0 && activeTab !== "Drafts" && (
-          <div className="bg-orange-50 p-6 rounded-[32px] shadow-sm cursor-pointer border-none" onClick={() => setActiveTab("Drafts")}>
-            <div className="flex items-center gap-4">
-              <div className="bg-orange-500 text-white p-3 rounded-2xl text-xl">📝</div>
+          <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl cursor-pointer" onClick={() => setActiveTab("Drafts")}>
+            <div className="flex items-center gap-3">
+              <div className="w-1 self-stretch bg-amber-500 rounded-full flex-shrink-0" />
               <div>
-                <h3 className="text-orange-900 font-semibold text-xs uppercase tracking-wider">Drafting Work Pending</h3>
-                <p className="text-orange-600/80 text-xs font-medium mt-0.5">You have {pendingIncomingCount} draft request{pendingIncomingCount > 1 ? 's' : ''} awaiting your attention.</p>
+                <h3 className="text-amber-800 font-semibold text-sm">Drafting Work Pending</h3>
+                <p className="text-amber-600 text-xs mt-0.5">You have {pendingIncomingCount} draft request{pendingIncomingCount > 1 ? 's' : ''} awaiting your attention.</p>
               </div>
             </div>
           </div>
@@ -361,47 +354,55 @@ export default function LawyerDashboard() {
         )}
 
         {/* TASKS TABLE */}
-        <div className="bg-white p-8 rounded-[40px] shadow-sm border-none">
-          <h2 className="text-sm font-semibold text-slate-800 mb-6 uppercase tracking-wider">Instructions to Clerks</h2>
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 pt-5 pb-3 border-b border-slate-100">
+            <h2 className="text-sm font-semibold text-slate-800">Instructions to Clerks</h2>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                  <th className="pb-4">Instruction</th><th className="pb-4">Assigned Clerk</th><th className="pb-4">Status</th><th className="pb-4">Clerk Feedback</th><th className="pb-4 text-right">Actions</th>
+                <tr className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-100">
+                  <th className="px-5 py-3">Instruction</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Assigned Clerk</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3 hidden md:table-cell">Feedback</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {myTasks.length > 0 ? myTasks.map(task => (
                   <tr key={task.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition">
-                    <td className="py-4">
-                      <p className="font-semibold text-slate-800">{task.title}</p>
+                    <td className="px-5 py-4">
+                      <p className="font-medium text-slate-800">{task.title}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{task.description}</p>
-                      {task.relatedFileName && <p className="text-xs text-blue-500 font-medium mt-1 uppercase tracking-wide">📎 {task.relatedFileName}</p>}
+                      {task.relatedFileName && <p className="text-xs text-blue-500 font-medium mt-1">{task.relatedFileName}</p>}
                     </td>
-                    <td className="py-4 font-medium text-slate-600">{task.assignedToName}</td>
-                    <td className="py-4"><span className={`px-2.5 py-1 rounded text-xs font-semibold ${task.status === "Completed" ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"}`}>{task.status}</span></td>
-                    <td className="py-4 italic text-slate-400 text-xs">{task.clerkNote || "Awaiting update…"}</td>
-                    <td className="py-4 text-right space-x-4">
-                      <button onClick={() => openEditModal(task)} className="text-blue-600 hover:text-blue-800 font-semibold text-xs">Edit</button>
-                      <button onClick={() => deleteTask(task.id)} className="text-red-400 hover:text-red-600 font-semibold text-xs">Delete</button>
+                    <td className="px-5 py-4 text-slate-600 whitespace-nowrap">{task.assignedToName}</td>
+                    <td className="px-5 py-4">
+                      <span className={`text-[11px] font-semibold ${task.status === "Completed" ? "text-emerald-600" : "text-amber-600"}`}>{task.status}</span>
+                    </td>
+                    <td className="px-5 py-4 text-slate-400 text-xs italic hidden md:table-cell">{task.clerkNote || "Awaiting update…"}</td>
+                    <td className="px-5 py-4 text-right whitespace-nowrap">
+                      <button onClick={() => openEditModal(task)} className="text-slate-400 hover:text-blue-600 text-[11px] font-medium uppercase tracking-wider mr-3 transition">Edit</button>
+                      <button onClick={() => deleteTask(task.id)} className="text-slate-400 hover:text-red-600 text-[11px] font-medium uppercase tracking-wider transition">Delete</button>
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={5} className="py-8 text-center text-sm italic text-slate-300">No instructions currently pending.</td></tr>
+                  <tr><td colSpan={5} className="px-5 py-8 text-center text-sm italic text-slate-300">No instructions currently pending.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* TABS */}
+        {/* TABS — hidden on mobile, shown on desktop */}
         <div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="hidden md:flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div className="flex gap-8 border-b border-slate-200 overflow-x-auto">
               {(["Cases", "Transactions", "Letters", "Drafts", "Registry", "Calendar"] as const).map(tab => (
                 <button key={tab} onClick={() => { setActiveTab(tab); setSearchQuery(""); }}
                   className={`pb-3 text-xs font-semibold uppercase tracking-wider transition border-b-2 -mb-px flex items-center gap-2 whitespace-nowrap ${activeTab === tab ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"}`}>
-                  {tab === "Calendar" ? "📅 Calendar" : tab}
+                  {tab}
                   {tab === "Drafts" && pendingIncomingCount > 0 && (
                     <span className="bg-orange-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">{pendingIncomingCount}</span>
                   )}
@@ -800,7 +801,95 @@ export default function LawyerDashboard() {
             </div>
           </div>
         </div>
-      )}
+      )}\n
+      {/* ── MOBILE BOTTOM NAV ── */}
+      <div className="fixed bottom-0 inset-x-0 z-50 md:hidden">
+
+        {/* Slide-up Menu Sheet */}
+        {isMobileMenuOpen && (
+          <>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+            <div className="fixed bottom-[64px] inset-x-0 bg-white rounded-t-3xl shadow-2xl px-5 pt-5 pb-8 animate-in slide-in-from-bottom duration-200">
+              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-4">Navigate to</p>
+              <div className="grid grid-cols-4 gap-3">
+                {([
+                  { label: "Cases",        tab: "Cases" as const,       icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>) },
+                  { label: "Transactions", tab: "Transactions" as const, icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>) },
+                  { label: "Letters",      tab: "Letters" as const,     icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>) },
+                  { label: "Drafts",       tab: "Drafts" as const,      icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>), badge: pendingIncomingCount },
+                  { label: "Registry",     tab: "Registry" as const,    icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>) },
+                  { label: "Calendar",     tab: "Calendar" as const,    icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>) },
+                ] as any[]).map(item => (
+                  <button key={item.label}
+                    onClick={() => { setActiveTab(item.tab); setSearchQuery(""); setIsMobileMenuOpen(false); }}
+                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition ${
+                      activeTab === item.tab ? "bg-[#0B1F3A] text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    }`}>
+                    <div className="relative">
+                      {item.icon}
+                      {item.badge > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-orange-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{item.badge}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-medium leading-none">{item.label}</span>
+                  </button>
+                ))}
+                {/* Requisitions */}
+                <button
+                  onClick={() => { setIsMobileMenuOpen(false); navigate("/requisitions"); }}
+                  className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-slate-50 text-slate-600 hover:bg-slate-100 transition">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                  <span className="text-[10px] font-medium leading-none">Requisitions</span>
+                </button>
+                {/* Assign Task */}
+                <button
+                  onClick={() => { setIsMobileMenuOpen(false); setIsTaskModalOpen(true); }}
+                  className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-blue-600 text-white hover:bg-blue-500 transition">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
+                  <span className="text-[10px] font-medium leading-none text-center">Assign Task</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Bottom Tab Bar */}
+        <nav className="bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] flex items-center justify-around px-2 h-16">
+          {([
+            { label: "Cases",    tab: "Cases" as const,    icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>) },
+            { label: "Drafts",  tab: "Drafts" as const,   icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>), badge: pendingIncomingCount },
+            { label: "Calendar",tab: "Calendar" as const,  icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>) },
+            { label: "Letters", tab: "Letters" as const,   icon: (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>) },
+          ] as any[]).map(item => (
+            <button key={item.label}
+              onClick={() => { setActiveTab(item.tab); setSearchQuery(""); setIsMobileMenuOpen(false); }}
+              className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition relative ${
+                activeTab === item.tab && !isMobileMenuOpen ? "text-[#0B1F3A]" : "text-slate-400"
+              }`}>
+              <div className="relative">
+                {item.icon}
+                {item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-orange-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{item.badge}</span>
+                )}
+              </div>
+              <span className={`text-[10px] font-medium ${activeTab === item.tab && !isMobileMenuOpen ? "text-[#0B1F3A]" : "text-slate-400"}`}>{item.label}</span>
+              {activeTab === item.tab && !isMobileMenuOpen && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#0B1F3A] rounded-full" />}
+            </button>
+          ))}
+          {/* Menu Button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(v => !v)}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition ${
+              isMobileMenuOpen ? "text-[#0B1F3A]" : "text-slate-400"
+            }`}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <span className="text-[10px] font-medium">More</span>
+          </button>
+        </nav>
+      </div>
     </div>
   );
-}
+}
