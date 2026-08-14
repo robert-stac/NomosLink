@@ -648,7 +648,7 @@ export default function Expenses() {
                           }
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-slate-700 max-w-[250px] whitespace-normal break-words leading-relaxed">{exp.purpose || exp.description}</td>
+                      <td className="px-3 py-3 text-slate-700 max-w-[250px] whitespace-normal break-words leading-relaxed capitalize">{exp.purpose || exp.description}</td>
                       <td className={`px-3 py-3 text-right font-medium whitespace-nowrap ${exp.type === 'in' ? 'text-emerald-700' : exp.type === 'transfer' ? 'text-amber-700' : 'text-slate-900'}`}>
                         {exp.type === 'in' ? '+' : exp.type === 'transfer' ? '' : '-'} {Number(exp.amount).toLocaleString()}
                       </td>

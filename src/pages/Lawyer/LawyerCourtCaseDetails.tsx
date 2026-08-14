@@ -205,7 +205,7 @@ export default function LawyerCourtCaseDetails() {
                           </button>
                         )}
 
-                        <p className="text-sm font-medium text-slate-700 mb-2">{note.message}</p>
+                        <p className="text-sm font-medium text-slate-700 mb-2 whitespace-pre-wrap">{note.message}</p>
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-tighter">
                           Logged on {renderDate(note.date)} by {note.authorName}
                         </p>

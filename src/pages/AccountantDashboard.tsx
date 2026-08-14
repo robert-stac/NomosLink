@@ -845,7 +845,7 @@ export default function AccountantDashboard() {
                       <span className="text-xs font-bold text-blue-700">{n.authorName}</span>
                       <span className="text-[10px] text-slate-400">{renderDate(n.date)}</span>
                     </div>
-                    <p className="text-sm text-slate-700 leading-relaxed break-words">{n.message}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed break-words whitespace-pre-wrap">{n.message}</p>
                   </div>
                 )})
               ) : (

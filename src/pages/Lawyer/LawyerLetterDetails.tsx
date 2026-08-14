@@ -257,7 +257,7 @@ export default function LawyerLetterDetails() {
                 {localNotes.length > 0 ? (
                   localNotes.slice().reverse().map((note: any, index: number) => (
                     <div key={note.id || index} className="p-5 bg-slate-50 rounded-3xl border border-slate-100 group relative">
-                      <p className="text-sm text-slate-700 font-bold mb-2 pr-8">{note.message}</p>
+                      <p className="text-sm text-slate-700 font-bold mb-2 pr-8 whitespace-pre-wrap">{note.message}</p>
                       {(note.authorId === currentUser.id || isAdmin) && (
                         <button onClick={() => handleDeleteNote(note.id)} className="absolute top-5 right-5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
                       )}

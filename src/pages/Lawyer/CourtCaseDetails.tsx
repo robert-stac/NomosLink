@@ -525,7 +525,7 @@ export default function CourtCaseDetails() {
                                   <span className="text-[10px]">🗑️</span>
                                 </button>
                               )}
-                              <p className="text-sm font-semibold text-slate-700 leading-relaxed mb-4">{note.message}</p>
+                              <p className="text-sm font-semibold text-slate-700 leading-relaxed mb-4 whitespace-pre-wrap">{note.message}</p>
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
                                 {note.authorName} • {renderDate(note.date)}
                               </p>

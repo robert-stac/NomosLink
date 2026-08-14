@@ -217,7 +217,7 @@ export default function TransactionDetails() {
                           </div>
                         ) : (
                           <div className="hover:bg-slate-50 p-2 rounded-2xl transition">
-                            <p className="text-sm font-medium text-slate-700 leading-relaxed mb-2">{n.message}</p>
+                            <p className="text-sm font-medium text-slate-700 leading-relaxed mb-2 whitespace-pre-wrap">{n.message}</p>
                             <div className="flex justify-between items-center">
                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
                                 {n.authorName} • {renderDate(n.date)}
