@@ -160,6 +160,7 @@ export interface Letter {
   type: "Incoming" | "Outgoing";
   lawyerId?: string;
   clientId?: string;
+  fileName?: string;
   status: "Pending" | "Completed";
   archived?: boolean;
   date?: string;
@@ -269,6 +270,58 @@ export interface Requisition {
   relatedFileType?: string;
   relatedFileName?: string;
 }
+
+export const requisitionToDb = (req: Requisition) => ({
+  id: req.id,
+  title: req.title,
+  amount: req.amount,
+  category: req.category,
+  status: req.status,
+  submitted_by_id: req.submittedById,
+  submitted_by_name: req.submittedByName,
+  date_submitted: req.dateSubmitted,
+  approved_by_id: req.approvedById,
+  approved_by_name: req.approvedByName,
+  date_approved: req.dateApproved,
+  paid_by_id: req.paidById,
+  paid_by_name: req.paidByName,
+  date_paid: req.datePaid,
+  acknowledged_by_id: req.acknowledgedById,
+  acknowledged_by_name: req.acknowledgedByName,
+  acknowledged_at: req.acknowledgedAt,
+  acknowledge_note: req.acknowledgeNote,
+  amount_received: req.amountReceived,
+  rejection_reason: req.rejectionReason,
+  related_file_id: req.relatedFileId,
+  related_file_type: req.relatedFileType,
+  related_file_name: req.relatedFileName,
+});
+
+export const normalizeReq = (row: any): Requisition => ({
+  id: row.id,
+  title: row.title || row.name || '',
+  amount: Number(row.amount ?? 0),
+  category: row.category ?? undefined,
+  status: row.status ?? 'Pending',
+  submittedById: row.submitted_by_id ?? row.submittedById ?? '',
+  submittedByName: row.submitted_by_name ?? row.submittedByName ?? '',
+  dateSubmitted: row.date_submitted ?? row.dateSubmitted ?? '',
+  approvedById: row.approved_by_id ?? row.approvedById ?? undefined,
+  approvedByName: row.approved_by_name ?? row.approvedByName ?? undefined,
+  dateApproved: row.date_approved ?? row.dateApproved ?? undefined,
+  paidById: row.paid_by_id ?? row.paidById ?? undefined,
+  paidByName: row.paid_by_name ?? row.paidByName ?? undefined,
+  datePaid: row.date_paid ?? row.datePaid ?? undefined,
+  acknowledgedById: row.acknowledged_by_id ?? row.acknowledgedById ?? undefined,
+  acknowledgedByName: row.acknowledged_by_name ?? row.acknowledgedByName ?? undefined,
+  acknowledgedAt: row.acknowledged_at ?? row.acknowledgedAt ?? undefined,
+  acknowledgeNote: row.acknowledge_note ?? row.acknowledgeNote ?? undefined,
+  amountReceived: row.amount_received ?? row.amountReceived ?? undefined,
+  rejectionReason: row.rejection_reason ?? row.rejectionReason ?? undefined,
+  relatedFileId: row.related_file_id ?? row.relatedFileId ?? undefined,
+  relatedFileType: row.related_file_type ?? row.relatedFileType ?? undefined,
+  relatedFileName: row.related_file_name ?? row.relatedFileName ?? undefined,
+});
 
 /* =======================
     CONTEXT TYPE
@@ -849,15 +902,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!navigator.onLine || document.hidden) return;
 
       try {
-        const [txRes, ccRes, ltRes] = await Promise.all([
+        const [txRes, ccRes, ltRes, reqRes, expRes] = await Promise.all([
           supabase.from('transactions').select('*'),
           supabase.from('court_cases').select('*'),
           supabase.from('letters').select('*'),
+          supabase.from('requisitions').select('*'),
+          supabase.from('expenses').select('*').order('date', { ascending: false }),
         ]);
 
         if (txRes.data) setTransactions(txRes.data);
         if (ccRes.data) setCourtCases(ccRes.data);
         if (ltRes.data) setLetters(ltRes.data);
+        if (reqRes.data) setRequisitions(reqRes.data.map(normalizeReq));
+        if (expRes.data) setExpenses(expRes.data);
       } catch (err) {
         console.error('[Poll] File data polling failed:', err);
       }
@@ -933,32 +990,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Normalize requisition rows from DB to camelCase fields (acknowledgement mapping)
         if (requisitionsData) {
-          const normalizeReq = (row: any): Requisition => ({
-            id: row.id,
-            title: row.title || row.name || '',
-            amount: Number(row.amount ?? 0),
-            category: row.category ?? undefined,
-            status: row.status ?? 'Pending',
-            submittedById: row.submitted_by_id ?? row.submittedById ?? row.submittedById ?? '',
-            submittedByName: row.submitted_by_name ?? row.submittedByName ?? row.submittedByName ?? '',
-            dateSubmitted: row.date_submitted ?? row.dateSubmitted ?? row.dateSubmitted ?? '',
-            approvedById: row.approved_by_id ?? row.approvedById ?? undefined,
-            approvedByName: row.approved_by_name ?? row.approvedByName ?? undefined,
-            dateApproved: row.date_approved ?? row.dateApproved ?? undefined,
-            paidById: row.paid_by_id ?? row.paidById ?? undefined,
-            paidByName: row.paid_by_name ?? row.paidByName ?? undefined,
-            datePaid: row.date_paid ?? row.datePaid ?? undefined,
-            acknowledgedById: row.acknowledged_by_id ?? row.acknowledgedById ?? undefined,
-            acknowledgedByName: row.acknowledged_by_name ?? row.acknowledgedByName ?? undefined,
-            acknowledgedAt: row.acknowledged_at ?? row.acknowledgedAt ?? undefined,
-            acknowledgeNote: row.acknowledge_note ?? row.acknowledgeNote ?? undefined,
-            amountReceived: row.amount_received ?? row.amountReceived ?? undefined,
-            rejectionReason: row.rejection_reason ?? row.rejectionReason ?? undefined,
-            relatedFileId: row.related_file_id ?? row.relatedFileId ?? undefined,
-            relatedFileType: row.related_file_type ?? row.relatedFileType ?? undefined,
-            relatedFileName: row.related_file_name ?? row.relatedFileName ?? undefined,
-          });
-
           setRequisitions(prev => mergeIfChanged(prev, requisitionsData.map(normalizeReq)));
         }
 
@@ -1206,7 +1237,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
     const letterScalarFields = [
       'id', 'subject', 'type', 'recipient', 'lawyerId', 'clientId',
-      'status', 'archived', 'date', 'billed', 'paid',
+      'fileName', 'status', 'archived', 'date', 'billed', 'paid',
       'progressNotes', 'documents',
       'lastClientFeedbackDate', 'scannedInvoiceUrl',
     ];
@@ -1281,7 +1312,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         { name: 'tasks', task: supabase.from('tasks').upsert(tasksForDb, { onConflict: 'id' }) },
         { name: 'draft_requests', task: supabase.from('draft_requests').upsert(draftRequests, { onConflict: 'id' }) },
         { name: 'filing_requests', task: supabase.from('filing_requests').upsert(filingRequests, { onConflict: 'id' }) },
-        { name: 'requisitions', task: supabase.from('requisitions').upsert(requisitions, { onConflict: 'id' }) },
+        { name: 'requisitions', task: supabase.from('requisitions').upsert(requisitions.map(requisitionToDb), { onConflict: 'id' }) },
         {
           name: 'land_titles', task: supabase.from('land_titles').upsert(
             landTitles.map(({ notes_history, ...rest }) => rest),
@@ -1886,7 +1917,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addRequisition = async (req: Requisition) => {
     setRequisitions(prev => [req, ...prev]);
     if (navigator.onLine) {
-      const { error } = await supabase.from('requisitions').upsert(req, { onConflict: 'id' });
+      const { error } = await supabase.from('requisitions').upsert(requisitionToDb(req), { onConflict: 'id' });
       if (error) console.error("Failed to save requisition:", error.message);
     }
   };
@@ -1894,9 +1925,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateRequisition = async (id: string, data: Partial<Requisition>) => {
     setRequisitions(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
     if (navigator.onLine) {
-      const req = requisitions.find(r => r.id === id);
-      if (req) {
-        const { error } = await supabase.from('requisitions').upsert({ ...req, ...data }, { onConflict: 'id' });
+      const updatedReq = requisitions.find(r => r.id === id);
+      if (updatedReq) {
+        const fullReq = { ...updatedReq, ...data };
+        const { error } = await supabase.from('requisitions').upsert(requisitionToDb(fullReq), { onConflict: 'id' });
         if (error) console.error("Failed to update requisition:", error.message);
       }
     }
