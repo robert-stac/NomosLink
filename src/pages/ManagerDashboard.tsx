@@ -306,6 +306,64 @@ export default function ManagerDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadClerkReport = (clerkId?: string) => {
+    const csvCell = (val: string | number | null | undefined): string => {
+      const s = String(val ?? "").replace(/[\r\n\t]+/g, " ").replace(/"/g, '""');
+      return `"${s}"`;
+    };
+    const now = new Date();
+    const rptDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    const rptTime = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+    const clerkUsers = clerkId ? clerks.filter(c => String(c.id) === clerkId) : clerks;
+    const filteredTasks = tasks.filter(t => !t.deleted && (clerkId ? String(t.assignedToId) === clerkId : clerks.some(c => String(c.id) === String(t.assignedToId))));
+
+    const colHeaders = ["#", "Clerk Name", "Task Title", "Description", "Status", "Priority", "Due Date",
+      "Assigned By", "Progress Notes", "Completion Note", "Date Created"].map(csvCell).join(",");
+
+    let rowNum = 1;
+    const dataRows = filteredTasks.map(task => {
+      const clerk = users.find(u => String(u.id) === String(task.assignedToId));
+      const progressText = (task.progressNotes || []).map((pn: any) => `[${pn.date}] ${pn.note || pn.message || ""}`).join(" | ");
+      return [
+        csvCell(rowNum++), csvCell(clerk?.name || task.assignedToName),
+        csvCell(task.title), csvCell(task.description),
+        csvCell(task.status), csvCell(task.priority || "Medium"),
+        csvCell(task.dueDate || "N/A"), csvCell(task.assignedByName || "System"),
+        csvCell(progressText || "No updates"),
+        csvCell(task.clerkNote || ""),
+        csvCell(task.dateCreated ? new Date(task.dateCreated).toLocaleDateString("en-GB") : "N/A"),
+      ].join(",");
+    });
+
+    const pending = filteredTasks.filter(t => t.status === "Pending").length;
+    const completed = filteredTasks.filter(t => t.status === "Completed").length;
+    const clerkLabel = clerkId ? (clerks.find(c => String(c.id) === clerkId)?.name || "Unknown") : "All Clerks";
+
+    const headerLines = [
+      `"BUWEMBO & CO. ADVOCATES — CLERK PERFORMANCE REPORT"`,
+      `"Generated: ${rptDate} at ${rptTime}"`,
+      `"Scope: ${clerkLabel}"`,
+      `""`,
+      `"SUMMARY"`,
+      `"Total Tasks",${csvCell(filteredTasks.length)}`,
+      `"Pending",${csvCell(pending)}`,
+      `"Completed",${csvCell(completed)}`,
+      `""`,
+    ].join("\n");
+
+    const csvContent = [headerLines, colHeaders, ...dataRows].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeName = clerkLabel.replace(/\s+/g, "_");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `NomosLink_ClerkReport_${safeName}_${now.toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const getDaysRemaining = (dateString: string) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1070,12 +1128,22 @@ export default function ManagerDashboard() {
         {/* TASKS (Clerk specific) */}
         {(!selectedLawyerId || users.find(u => u.id === selectedLawyerId)?.role === 'clerk') && (
           <div className="bg-white p-4 rounded-lg shadow border">
-            <h2 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
-              Clerk Tasks
-              <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full">
-                {tasks.filter(t => !t.deleted && (!selectedLawyerId || t.assignedToId === selectedLawyerId)).length}
-              </span>
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-bold text-slate-700 flex items-center gap-2">
+                Clerk Tasks
+                <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full">
+                  {tasks.filter(t => !t.deleted && (!selectedLawyerId || t.assignedToId === selectedLawyerId)).length}
+                </span>
+              </h2>
+              <button
+                onClick={() => downloadClerkReport(selectedLawyerId && users.find(u => u.id === selectedLawyerId)?.role === 'clerk' ? selectedLawyerId : undefined)}
+                className="flex items-center gap-1.5 bg-[#0B1F3A] hover:bg-blue-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
+                title="Download clerk task report as CSV"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Report
+              </button>
+            </div>
             <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
               {tasks.filter(t => !t.deleted && (!selectedLawyerId || t.assignedToId === selectedLawyerId)).map(task => (
                 <div key={task.id} className="p-3 border rounded-md bg-slate-50 relative group">

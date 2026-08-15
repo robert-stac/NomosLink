@@ -3,8 +3,8 @@ import { useAppContext } from "../context/AppContext";
 import { getAutoLabels } from "../utils/autoLabel";
 import AutoLabelBadge from "../components/AutoLabelBadge";
 
-// Added 'refNumber' and 'fileName' to sort options
-type SortField = "date" | "billed" | "fileName" | "refNumber" | null;
+// Added 'recipient' and 'fileName' to sort options
+type SortField = "date" | "billed" | "fileName" | "recipient" | null;
 type SortOrder = "asc" | "desc";
 
 export default function Letters() {
@@ -85,10 +85,9 @@ export default function Letters() {
       type: type as "Incoming" | "Outgoing",
       lawyerId, // Fixed: Sending ID string, not the full object
       clientId,
-      recipient: "N/A", // Required by Letter Interface
+      recipient: refNumber || "N/A", // Required by Letter Interface, mapped to refNumber
       subject,
       fileName, 
-      refNumber, 
       date,
       status: status as "Pending" | "Completed",
       billed: billedNum,
@@ -110,7 +109,7 @@ export default function Letters() {
     setClientId(l.clientId || "");
     setSubject(l.subject);
     setFileName(l.fileName || ""); 
-    setRefNumber(l.refNumber || ""); 
+    setRefNumber(l.recipient && l.recipient !== "N/A" ? l.recipient : ""); 
     setDate(l.date || "");
     setStatus(l.status);
     setBilled(l.billed?.toString() || "");
@@ -144,7 +143,7 @@ export default function Letters() {
       searchQuery === "" ||
       l.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (l.fileName && l.fileName.toLowerCase().includes(searchQuery.toLowerCase())) || 
-      (l.refNumber && l.refNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (l.recipient && l.recipient.toLowerCase().includes(searchQuery.toLowerCase())) ||
       lawyerName.includes(searchQuery.toLowerCase());
 
     return matchesFilter && matchesSearch;
@@ -157,7 +156,7 @@ export default function Letters() {
       let aVal: any = a[sortField];
       let bVal: any = b[sortField];
       
-      if (sortField === "fileName" || sortField === "refNumber") {
+      if (sortField === "fileName" || sortField === "recipient") {
           aVal = aVal || "";
           bVal = bVal || "";
           return sortOrder === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
@@ -368,8 +367,8 @@ export default function Letters() {
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("fileName")}>
                  File Name {sortField === "fileName" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
               </th>
-               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("refNumber")}>
-                 Ref No. {sortField === "refNumber" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("recipient")}>
+                 Ref No. {sortField === "recipient" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
               </th>
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest">Subject</th>
               <th className="p-5 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer" onClick={() => toggleSort("date")}>
@@ -395,7 +394,7 @@ export default function Letters() {
                       </span>
                   </td>
                   <td className="p-5 font-bold text-slate-800">{l.fileName || "-"}</td>
-                  <td className="p-5 font-bold text-slate-500 text-xs">{l.refNumber || "-"}</td>
+                  <td className="p-5 font-bold text-slate-500 text-xs">{l.recipient && l.recipient !== "N/A" ? l.recipient : "-"}</td>
 
                   <td className="p-5">
                       <p className="font-bold text-slate-800 line-clamp-1">{l.subject}</p>

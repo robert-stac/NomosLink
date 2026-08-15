@@ -165,6 +165,7 @@ export interface Letter {
   date?: string;
   billed?: number;
   paid?: number;
+  fileName?: string;
   documents?: AppDocument[];
   progressNotes?: ProgressNote[];
   scannedInvoiceUrl?: string;
@@ -1882,7 +1883,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const scalarUpdate: Record<string, any> = {};
     const safeFields = [
       'subject', 'type', 'recipient', 'lawyerId', 'clientId',
-      'status', 'archived', 'date', 'billed', 'paid', 'lastClientFeedbackDate'
+      'status', 'archived', 'date', 'billed', 'paid', 'fileName', 'lastClientFeedbackDate'
     ];
     
     setLetters(prev => prev.map(l => {
