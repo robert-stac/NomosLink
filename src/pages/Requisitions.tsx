@@ -29,6 +29,12 @@ export default function Requisitions() {
   const [rejectionReq, setRejectionReq] = useState<Requisition | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
+  // Acknowledgement Modal State
+  const [showAckModal, setShowAckModal] = useState(false);
+  const [ackReq, setAckReq] = useState<Requisition | null>(null);
+  const [ackAmount, setAckAmount] = useState("");
+  const [ackNote, setAckNote] = useState("");
+
   const [editingReqId, setEditingReqId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -43,9 +49,14 @@ export default function Requisitions() {
   // Reporting filters
   const [filterCategory, setFilterCategory] = useState("");
   const [filterRequesterId, setFilterRequesterId] = useState("");
+  const [filterAcknowledgement, setFilterAcknowledgement] = useState("");
   const [filterFileName, setFilterFileName] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  // UI sections: Pending / Approved / Paid
+  const [activeTab, setActiveTab] = useState<'all'|'pending'|'approved'|'paid'>('all');
+  // Paid subview: awaiting acknowledgement / acknowledged / all
+  const [paidView, setPaidView] = useState<'awaiting'|'acknowledged'|'all'>('awaiting');
   const [presets, setPresets] = useState<Array<any>>([]);
   const [selectedPreset, setSelectedPreset] = useState("");
 
@@ -287,6 +298,41 @@ export default function Requisitions() {
     sendNotification(submittedById, `Your requisition "${title}" was rejected. Reason: ${rejectionReason}`, 'alert', reqId);
   };
 
+  const openAckModal = (id: string) => {
+    const req = requisitions.find(r => r.id === id);
+    if (!req) return;
+    setAckReq(req);
+    setAckAmount((req.amount || 0).toString());
+    setAckNote("");
+    setShowAckModal(true);
+  };
+
+  const submitAcknowledgement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !ackReq) return;
+
+    const amt = Number(ackAmount);
+    if (isNaN(amt) || amt < 0) { alert('Invalid amount'); return; }
+
+    const id = ackReq.id;
+    setShowAckModal(false);
+    setAckReq(null);
+
+    await updateRequisition(id, {
+      acknowledgedById: currentUser.id,
+      acknowledgedByName: currentUser.name,
+      acknowledgedAt: new Date().toISOString(),
+      acknowledgeNote: ackNote,
+      amountReceived: amt
+    });
+
+    // Notify accountants and paidBy user
+    users.filter(u => u.role === 'accountant').forEach(a => {
+      sendNotification(a.id, `Requisition "${ackReq.title}" acknowledged by ${currentUser.name}.`, 'alert', id, 'requisition');
+    });
+    if (ackReq.paidById) sendNotification(ackReq.paidById, `Requester acknowledged payment for "${ackReq.title}".`, 'alert', id, 'requisition');
+  };
+
   const handleMarkPaid = async (id: string) => {
     if (!currentUser) return;
     const req = requisitions.find(r => r.id === id);
@@ -330,12 +376,40 @@ export default function Requisitions() {
     return visibleRequisitions.filter(r => {
       if (filterCategory && r.category !== filterCategory) return false;
       if (filterRequesterId && r.submittedById !== filterRequesterId) return false;
+      if (filterAcknowledgement === 'awaiting_ack' && !(r.status === 'Paid' && !r.acknowledgedAt)) return false;
+      if (filterAcknowledgement === 'acknowledged' && !r.acknowledgedAt) return false;
       if (filterFileName && !(r.relatedFileName || r.title || "").toLowerCase().includes(filterFileName.toLowerCase())) return false;
       if (filterDateFrom && new Date(r.dateSubmitted) < new Date(filterDateFrom)) return false;
       if (filterDateTo && new Date(r.dateSubmitted) > new Date(filterDateTo)) return false;
       return true;
     });
-  }, [visibleRequisitions, filterCategory, filterRequesterId, filterFileName, filterDateFrom, filterDateTo]);
+  }, [visibleRequisitions, filterCategory, filterRequesterId, filterAcknowledgement, filterFileName, filterDateFrom, filterDateTo]);
+
+  // Counts for tabs (reflect current filters)
+  const tabCounts = useMemo(() => {
+    const all = filteredForReport || [];
+    const pending = all.filter(r => r.status === 'Pending').length;
+    const approved = all.filter(r => r.status === 'Approved').length;
+    const paidAwaiting = all.filter(r => r.status === 'Paid' && !r.acknowledgedAt).length;
+    const paidAck = all.filter(r => r.status === 'Paid' && r.acknowledgedAt).length;
+    return { pending, approved, paidAwaiting, paidAck, paid: paidAwaiting + paidAck };
+  }, [filteredForReport]);
+
+  const displayedList = useMemo(() => {
+    const list = filteredForReport || [];
+    switch (activeTab) {
+      case 'pending':
+        return list.filter(r => r.status === 'Pending');
+      case 'approved':
+        return list.filter(r => r.status === 'Approved');
+      case 'paid':
+        if (paidView === 'awaiting') return list.filter(r => r.status === 'Paid' && !r.acknowledgedAt);
+        if (paidView === 'acknowledged') return list.filter(r => r.status === 'Paid' && r.acknowledgedAt);
+        return list.filter(r => r.status === 'Paid');
+      default:
+        return list;
+    }
+  }, [filteredForReport, activeTab, paidView]);
 
   const requisitionTotals = useMemo(() => {
     let total = 0;
@@ -394,7 +468,7 @@ export default function Requisitions() {
 
   const handleExportCSV = () => {
     const headers = ["Date", "Title", "Category", "Related File", "Requestor", "Amount", "Status", "Notes", "Approved By", "Date Approved", "Paid By", "Date Paid"];
-    const rows = filteredForReport.map(r => [
+    const rows = displayedList.map(r => [
       new Date(r.dateSubmitted).toLocaleString(),
       (r.title || "").replace(/\n/g, " "),
       r.category || "",
@@ -420,7 +494,7 @@ export default function Requisitions() {
   };
 
   const handlePrint = () => {
-    const htmlRows = filteredForReport.map(r => `
+    const htmlRows = displayedList.map(r => `
       <tr>
         <td>${new Date(r.dateSubmitted).toLocaleString()}</td>
         <td>${(r.title || "")}</td>
@@ -489,6 +563,34 @@ export default function Requisitions() {
         </div>
       </div>
 
+      {/* Section Tabs: Pending / Approved / Paid */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setActiveTab('pending'); setPaidView('awaiting'); }} className={`px-4 py-2 rounded-xl font-semibold text-sm ${activeTab === 'pending' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
+            Pending ({tabCounts.pending})
+          </button>
+          <button onClick={() => { setActiveTab('approved'); setPaidView('awaiting'); }} className={`px-4 py-2 rounded-xl font-semibold text-sm ${activeTab === 'approved' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
+            Approved ({tabCounts.approved})
+          </button>
+          <button onClick={() => setActiveTab('paid')} className={`px-4 py-2 rounded-xl font-semibold text-sm ${activeTab === 'paid' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
+            Paid ({tabCounts.paid})
+          </button>
+        </div>
+        {activeTab === 'paid' && (
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setPaidView('awaiting')} className={`px-3 py-1 rounded-lg text-sm font-medium ${paidView === 'awaiting' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
+              Awaiting Ack ({tabCounts.paidAwaiting})
+            </button>
+            <button onClick={() => setPaidView('acknowledged')} className={`px-3 py-1 rounded-lg text-sm font-medium ${paidView === 'acknowledged' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
+              Acknowledged ({tabCounts.paidAck})
+            </button>
+            <button onClick={() => setPaidView('all')} className={`px-3 py-1 rounded-lg text-sm font-medium ${paidView === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
+              All Paid
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row flex-wrap gap-3 md:gap-4 items-stretch md:items-center bg-slate-50/50">
           <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full md:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
@@ -516,6 +618,11 @@ export default function Requisitions() {
           <select value={filterRequesterId} onChange={e => setFilterRequesterId(e.target.value)} className="w-full md:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
             <option value="">All requestors</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+          <select value={filterAcknowledgement} onChange={e => setFilterAcknowledgement(e.target.value)} className="w-full md:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
+            <option value="">All acknowledgements</option>
+            <option value="awaiting_ack">Awaiting Acknowledgement</option>
+            <option value="acknowledged">Acknowledged</option>
           </select>
           <input value={filterFileName} onChange={e => setFilterFileName(e.target.value)} placeholder="File name or title" className="w-full md:w-auto bg-white border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm placeholder:text-slate-400 placeholder:font-normal" />
           
@@ -549,7 +656,7 @@ export default function Requisitions() {
               </tr>
             </thead>
             <tbody className="text-sm">
-              {filteredForReport.length > 0 ? filteredForReport.map(req => (
+              {displayedList.length > 0 ? displayedList.map(req => (
                 <tr key={req.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{new Date(req.dateSubmitted).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
@@ -585,6 +692,9 @@ export default function Requisitions() {
                       {req.status === "Approved" && canPay && (
                         <button onClick={() => handleMarkPaid(req.id)} className="text-emerald-600 hover:text-emerald-800 font-medium text-[10px] uppercase tracking-wider transition-colors">Mark Paid</button>
                       )}
+                      {req.status === "Paid" && req.submittedById === currentUser?.id && !req.acknowledgedAt && (
+                        <button onClick={() => openAckModal(req.id)} className="text-indigo-600 hover:text-indigo-800 font-medium text-[10px] uppercase tracking-wider transition-colors">Acknowledge</button>
+                      )}
                       {(req.submittedById === currentUser?.id || isAccountant) && (
                         <>
                           {req.submittedById === currentUser?.id && req.status === "Pending" && (
@@ -610,7 +720,7 @@ export default function Requisitions() {
                 <tr><td colSpan={8} className="p-8 text-center text-slate-400 font-medium italic">No requisitions found.</td></tr>
               )}
             </tbody>
-            {filteredForReport.length > 0 && (
+            {displayedList.length > 0 && (
               <tfoot>
                 <tr className="bg-slate-50 border-t border-slate-100 font-semibold text-slate-800">
                   <td className="px-4 py-4" colSpan={4}>Total Requisitioned Amount</td>
@@ -624,9 +734,9 @@ export default function Requisitions() {
 
         {/* Mobile Card View (Compact Banking App Style) */}
         <div className="md:hidden">
-          {filteredForReport.length > 0 ? (
+              {displayedList.length > 0 ? (
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-100/60">
-              {filteredForReport.map(req => {
+              {displayedList.map(req => {
                 const isPaid = req.status === "Paid";
                 const isApproved = req.status === "Approved";
                 const iconBg = isPaid ? "bg-[#EEF7F4] text-[#2CB187]" : isApproved ? "bg-[#EFF3FE] text-[#3D71FF]" : "bg-[#FFF4E5] text-[#FF9B26]";
@@ -689,6 +799,9 @@ export default function Requisitions() {
                         )}
                         {req.status === "Approved" && canPay && (
                           <button onClick={() => handleMarkPaid(req.id)} className="text-white bg-[#2CB187] hover:bg-emerald-600 font-medium text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition">Pay</button>
+                        )}
+                        {req.status === "Paid" && req.submittedById === currentUser?.id && !req.acknowledgedAt && (
+                          <button onClick={() => openAckModal(req.id)} className="text-white bg-indigo-600 hover:bg-indigo-700 font-medium text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition">Acknowledge</button>
                         )}
                         {(req.submittedById === currentUser?.id || isAccountant) && (
                           <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-200">
@@ -1020,6 +1133,48 @@ export default function Requisitions() {
                 >
                   Reject
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Acknowledgement Modal */}
+      {showAckModal && ackReq && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 bg-indigo-50 border-b border-indigo-100">
+              <h3 className="text-lg font-semibold text-indigo-800 text-center">Acknowledge Payment</h3>
+              <p className="text-xs font-medium text-indigo-600/80 text-center mt-1">Confirm receipt of funds for this requisition.</p>
+            </div>
+            <form onSubmit={submitAcknowledgement} className="p-6 space-y-5">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Requested By</p>
+                <p className="text-sm font-semibold text-slate-800">{ackReq.submittedByName}</p>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1 mt-3">Purpose</p>
+                <p className="text-sm font-semibold text-slate-800">{ackReq.title}</p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Amount Received (UGX)</label>
+                <input
+                  type="number"
+                  required
+                  autoFocus
+                  className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl font-semibold text-lg text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-center"
+                  value={ackAmount}
+                  onChange={e => setAckAmount(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Note (optional)</label>
+                <textarea rows={3} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none" placeholder="Optional note about the payment" value={ackNote} onChange={e => setAckNote(e.target.value)} />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setShowAckModal(false); setAckReq(null); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold text-xs uppercase tracking-widest py-4 rounded-xl transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs uppercase tracking-widest py-4 rounded-xl shadow-xl shadow-indigo-200 transition-all">Confirm</button>
               </div>
             </form>
           </div>

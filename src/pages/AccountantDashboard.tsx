@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
 import { useAppContext } from "../context/AppContext";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+import useFocusTrap from "../hooks/useFocusTrap";
 
 export default function AccountantDashboard() {
   const { transactions, courtCases, letters, expenses, invoices, users, clients, landTitles } = useAppContext();
@@ -16,6 +17,14 @@ export default function AccountantDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [clientLookupQuery, setClientLookupQuery] = useState("");
   const [selectedCaseForProgress, setSelectedCaseForProgress] = useState<any>(null);
+
+  const invoiceModalRef = useRef<HTMLDivElement | null>(null);
+  const scanViewerRef = useRef<HTMLDivElement | null>(null);
+  const caseProgressRef = useRef<HTMLDivElement | null>(null);
+
+  useFocusTrap(invoiceModalRef, showInvoiceModal, () => setShowInvoiceModal(false));
+  useFocusTrap(scanViewerRef, !!viewScanUrl, () => setViewScanUrl(null));
+  useFocusTrap(caseProgressRef, !!selectedCaseForProgress, () => setSelectedCaseForProgress(null));
 
   const formatUGX = (val: number) => "UGX " + val.toLocaleString();
 
@@ -668,6 +677,7 @@ export default function AccountantDashboard() {
                           <td className="py-4 px-2 text-sm font-black text-rose-500 text-right">{formatUGX(unpaid)}</td>
                           <td className="py-4 px-2 text-center">
                             <button
+                              aria-label={`View invoice for ${name}`}
                               onClick={() => { if (scanUrl) { setViewScanUrl(scanUrl); } else { handleSendInvoice(item); } }}
                               className={`border px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm group-hover:shadow-md active:scale-95 flex items-center gap-1 mx-auto ${scanUrl
                                   ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600"
@@ -765,13 +775,14 @@ export default function AccountantDashboard() {
       {showInvoiceModal && invoiceTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowInvoiceModal(false)}></div>
-          <div className="relative bg-white w-full max-w-sm rounded-[32px] shadow-2xl overflow-hidden p-8 transform transition-all animate-in zoom-in-95">
+          <div ref={invoiceModalRef} role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title" aria-describedby="invoice-modal-desc" tabIndex={-1} className="relative bg-white w-full max-w-sm rounded-[32px] shadow-2xl overflow-hidden p-8 transform transition-all animate-in zoom-in-95">
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-6 mx-auto">📄</div>
-            <h3 className="text-2xl font-black text-center text-slate-900 mb-2 tracking-tight">Invoice Preview</h3>
+            <h3 id="invoice-modal-title" className="text-2xl font-black text-center text-slate-900 mb-2 tracking-tight">Invoice Preview</h3>
             <p className="text-center text-xs font-medium text-slate-500 mb-6 leading-relaxed">
               Digital preview for <br /><strong className="text-slate-800">{String(invoiceTarget.fileName || invoiceTarget.subject || "Unknown File")}</strong>.
               <br /><span className="text-rose-500 text-[10px] font-black uppercase tracking-widest mt-1 block">Scan not yet uploaded</span>
             </p>
+            <p id="invoice-modal-desc" className="sr-only">Preview of invoice amounts and outstanding balance. Use Dispatch Now to email the invoice to the client.</p>
             <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl mb-8 space-y-2">
               <div className="flex justify-between text-xs font-bold text-slate-600">
                 <span>Billed Amount:</span>
@@ -783,9 +794,10 @@ export default function AccountantDashboard() {
               </div>
             </div>
             <div className="flex gap-4">
-              <button onClick={() => setShowInvoiceModal(false)} className="flex-[1] py-4 rounded-2xl text-xs font-black uppercase text-slate-500 hover:bg-slate-50 transition-all border border-slate-200">Cancel</button>
+              <button onClick={() => setShowInvoiceModal(false)} aria-label="Cancel invoice preview" className="flex-[1] py-4 rounded-2xl text-xs font-black uppercase text-slate-500 hover:bg-slate-50 transition-all border border-slate-200">Cancel</button>
               <button
                 onClick={() => { alert("Invoice Sent via Email to client!"); setShowInvoiceModal(false); }}
+                aria-label="Send invoice to client"
                 className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl text-xs font-black uppercase shadow-lg shadow-blue-600/20 hover:bg-blue-500 active:scale-95 transition-all"
               >
                 Dispatch Now
@@ -799,11 +811,12 @@ export default function AccountantDashboard() {
       {viewScanUrl && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setViewScanUrl(null)}></div>
-          <div className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col p-4 transform transition-all animate-in zoom-in-95">
+          <div ref={scanViewerRef} role="dialog" aria-modal="true" aria-labelledby="scan-viewer-title" aria-describedby="scan-viewer-desc" tabIndex={-1} className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col p-4 transform transition-all animate-in zoom-in-95">
             <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-xl font-black text-slate-900 tracking-tight">Scanned Invoice Preview</h3>
-              <button onClick={() => setViewScanUrl(null)} className="w-10 h-10 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 rounded-full flex items-center justify-center transition-all text-xl">x</button>
+              <h3 id="scan-viewer-title" className="text-xl font-black text-slate-900 tracking-tight">Scanned Invoice Preview</h3>
+              <button aria-label="Close scanned invoice viewer" onClick={() => setViewScanUrl(null)} className="w-10 h-10 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 rounded-full flex items-center justify-center transition-all text-xl">x</button>
             </div>
+            <p id="scan-viewer-desc" className="sr-only">View or download the scanned invoice. Press Escape to close.</p>
             <div className="flex-1 overflow-auto bg-slate-100/50 rounded-2xl m-2 flex items-center justify-center p-8">
               {viewScanUrl.toLowerCase().endsWith(".pdf") ? (
                 <iframe src={viewScanUrl} className="w-full h-full border-none rounded-xl bg-white shadow-lg" title="PDF Invoice" />
@@ -812,8 +825,8 @@ export default function AccountantDashboard() {
               )}
             </div>
             <div className="p-4 flex gap-4 justify-end">
-              <button onClick={() => window.open(viewScanUrl, "_blank")} className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Open in New Tab</button>
-              <button onClick={() => setViewScanUrl(null)} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20">Close Viewer</button>
+              <button aria-label="Open scanned invoice in new tab" onClick={() => window.open(viewScanUrl, "_blank")} className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Open in New Tab</button>
+              <button aria-label="Close scanned invoice viewer" onClick={() => setViewScanUrl(null)} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20">Close Viewer</button>
             </div>
           </div>
         </div>
@@ -823,13 +836,13 @@ export default function AccountantDashboard() {
       {selectedCaseForProgress && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedCaseForProgress(null)}></div>
-          <div className="relative bg-white w-full max-w-2xl max-h-[85vh] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
+          <div ref={caseProgressRef} role="dialog" aria-modal="true" aria-labelledby="case-progress-title" tabIndex={-1} className="relative bg-white w-full max-w-2xl max-h-[85vh] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
             <div className="p-8 border-b bg-slate-50 flex justify-between items-center rounded-t-[32px]">
               <div>
                 <span className="text-[10px] font-black uppercase text-blue-600 px-2 py-1 bg-blue-50 rounded mb-1 inline-block">File Progress History</span>
-                <h3 className="font-black text-2xl text-slate-800 break-words pr-4">{selectedCaseForProgress.fileName || selectedCaseForProgress.subject}</h3>
+                <h3 id="case-progress-title" className="font-black text-2xl text-slate-800 break-words pr-4">{selectedCaseForProgress.fileName || selectedCaseForProgress.subject}</h3>
               </div>
-              <button onClick={() => setSelectedCaseForProgress(null)} className="w-9 h-9 bg-slate-200 hover:bg-rose-100 hover:text-rose-600 rounded-full flex items-center justify-center font-bold text-slate-500 transition-colors shrink-0">✕</button>
+              <button aria-label="Close case progress" onClick={() => setSelectedCaseForProgress(null)} className="w-9 h-9 bg-slate-200 hover:bg-rose-100 hover:text-rose-600 rounded-full flex items-center justify-center font-bold text-slate-500 transition-colors shrink-0">✕</button>
             </div>
             <div className="p-8 overflow-y-auto flex-1 space-y-4">
               {selectedCaseForProgress.progressNotes?.length > 0 ? (
