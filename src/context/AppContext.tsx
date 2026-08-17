@@ -622,6 +622,18 @@ function buildDraftEmail(
   );
 }
 
+const normalizeExpense = (row: any) => ({
+  ...row,
+  relatedFileId: row.relatedfileid ?? row.relatedFileId ?? row.related_file_id ?? '',
+  relatedFileName: row.relatedfilename ?? row.relatedFileName ?? row.related_file_name ?? '',
+  relatedFileType: row.relatedfiletype ?? row.relatedFileType ?? row.related_file_type ?? '',
+  staffId: row.staffid ?? row.staffId ?? row.staff_id ?? '',
+  staffName: row.staffname ?? row.staffName ?? row.staff_name ?? '',
+  addedById: row.addedbyid ?? row.addedById ?? row.added_by_id ?? '',
+  addedByName: row.addedbyname ?? row.addedByName ?? row.added_by_name ?? '',
+  paymentMethod: row.paymentmethod ?? row.paymentMethod ?? row.payment_method ?? '',
+});
+
 /* =======================
     PROVIDER
 ======================= */
@@ -676,6 +688,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { usersRef.current = users; }, [users]);
+
+  // Persist all state changes to localStorage
+  useEffect(() => { localStorage.setItem("transactions", JSON.stringify(transactions)); }, [transactions]);
+  useEffect(() => { localStorage.setItem("courtCases", JSON.stringify(courtCases)); }, [courtCases]);
+  useEffect(() => { localStorage.setItem("letters", JSON.stringify(letters)); }, [letters]);
+  useEffect(() => { localStorage.setItem("invoices", JSON.stringify(invoices)); }, [invoices]);
+  useEffect(() => { localStorage.setItem("clients", JSON.stringify(clients)); }, [clients]);
+  useEffect(() => { localStorage.setItem("tasks", JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem("draftRequests", JSON.stringify(draftRequests)); }, [draftRequests]);
+  useEffect(() => { localStorage.setItem("filingRequests", JSON.stringify(filingRequests)); }, [filingRequests]);
+  useEffect(() => { localStorage.setItem("landTitles", JSON.stringify(landTitles)); }, [landTitles]);
+  useEffect(() => { localStorage.setItem("commLogs", JSON.stringify(commLogs)); }, [commLogs]);
+  useEffect(() => { localStorage.setItem("notifications", JSON.stringify(notifications)); }, [notifications]);
+  useEffect(() => { localStorage.setItem("expenses", JSON.stringify(expenses)); }, [expenses]);
+  useEffect(() => { localStorage.setItem("requisitions", JSON.stringify(requisitions)); }, [requisitions]);
+  useEffect(() => { localStorage.setItem("pendingDeletes", JSON.stringify(pendingDeletes)); }, [pendingDeletes]);
 
   // Online-recovery: when the browser comes back online, run ONE sync to push
   useEffect(() => {
@@ -928,7 +956,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return [...cloudReqs, ...localOnly];
           });
         }
-        if (expRes.data) setExpenses(expRes.data);
+        if (expRes.data) setExpenses(expRes.data.map(normalizeExpense));
       } catch (err) {
         console.error('[Poll] File data polling failed:', err);
       }
@@ -997,7 +1025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           scannedInvoiceUrl: row.scannedInvoiceUrl ?? undefined,
         });
         if (invoiceData) setInvoices(prev => mergeIfChanged(prev, invoiceData.map(normalizeInvoice)));
-        if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData));
+        if (expenseData) setExpenses(prev => mergeIfChanged(prev, expenseData.map(normalizeExpense)));
         if (draftData) setDraftRequests(prev => mergeIfChanged(prev, draftData));
         if (filingData) setFilingRequests(prev => mergeIfChanged(prev, filingData));
         if (landData) setLandTitles(prev => mergeIfChanged(prev, landData));

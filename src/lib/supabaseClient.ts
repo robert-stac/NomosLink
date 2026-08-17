@@ -8,9 +8,10 @@ console.log("Supabase URL initialized:", supabaseUrl);
 
 
 
-// Use service role key for all DB operations — bypasses RLS entirely.
+// Use anon key as the primary key so Realtime websocket connects successfully.
+// We pass the service role key in the Authorization header to bypass RLS for all REST operations.
 // This is safe for an internal private app not exposed to the public.
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     headers: {
       Authorization: `Bearer ${supabaseServiceKey}`
