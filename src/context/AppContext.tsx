@@ -248,6 +248,7 @@ export interface Requisition {
   id: string;
   title: string;
   amount: number;
+  notes?: string;
   category?: string;
   status: "Pending" | "Approved" | "Paid" | "Rejected";
   submittedById: string;
@@ -271,56 +272,56 @@ export interface Requisition {
   relatedFileName?: string;
 }
 
+// Column names in Supabase are camelCase — must match exactly or fields are silently ignored.
 export const requisitionToDb = (req: Requisition) => ({
   id: req.id,
   title: req.title,
   amount: req.amount,
+  notes: req.notes,
   category: req.category,
   status: req.status,
-  submitted_by_id: req.submittedById,
-  submitted_by_name: req.submittedByName,
-  date_submitted: req.dateSubmitted,
-  approved_by_id: req.approvedById,
-  approved_by_name: req.approvedByName,
-  date_approved: req.dateApproved,
-  paid_by_id: req.paidById,
-  paid_by_name: req.paidByName,
-  date_paid: req.datePaid,
-  acknowledged_by_id: req.acknowledgedById,
-  acknowledged_by_name: req.acknowledgedByName,
-  acknowledged_at: req.acknowledgedAt,
-  acknowledge_note: req.acknowledgeNote,
-  amount_received: req.amountReceived,
-  rejection_reason: req.rejectionReason,
-  related_file_id: req.relatedFileId,
-  related_file_type: req.relatedFileType,
-  related_file_name: req.relatedFileName,
+  submittedById: req.submittedById,
+  submittedByName: req.submittedByName,
+  dateSubmitted: req.dateSubmitted,
+  approvedById: req.approvedById,
+  approvedByName: req.approvedByName,
+  dateApproved: req.dateApproved,
+  paidById: req.paidById,
+  paidByName: req.paidByName,
+  datePaid: req.datePaid,
+  rejectionReason: req.rejectionReason,
+  relatedFileId: req.relatedFileId,
+  relatedFileType: req.relatedFileType,
+  relatedFileName: req.relatedFileName,
 });
 
+// DB columns are camelCase — read them directly. Keep fallback snake_case aliases just in case.
 export const normalizeReq = (row: any): Requisition => ({
   id: row.id,
   title: row.title || row.name || '',
   amount: Number(row.amount ?? 0),
+  notes: row.notes ?? undefined,
   category: row.category ?? undefined,
   status: row.status ?? 'Pending',
-  submittedById: row.submitted_by_id ?? row.submittedById ?? '',
-  submittedByName: row.submitted_by_name ?? row.submittedByName ?? '',
-  dateSubmitted: row.date_submitted ?? row.dateSubmitted ?? '',
-  approvedById: row.approved_by_id ?? row.approvedById ?? undefined,
-  approvedByName: row.approved_by_name ?? row.approvedByName ?? undefined,
-  dateApproved: row.date_approved ?? row.dateApproved ?? undefined,
-  paidById: row.paid_by_id ?? row.paidById ?? undefined,
-  paidByName: row.paid_by_name ?? row.paidByName ?? undefined,
-  datePaid: row.date_paid ?? row.datePaid ?? undefined,
-  acknowledgedById: row.acknowledged_by_id ?? row.acknowledgedById ?? undefined,
-  acknowledgedByName: row.acknowledged_by_name ?? row.acknowledgedByName ?? undefined,
-  acknowledgedAt: row.acknowledged_at ?? row.acknowledgedAt ?? undefined,
-  acknowledgeNote: row.acknowledge_note ?? row.acknowledgeNote ?? undefined,
-  amountReceived: row.amount_received ?? row.amountReceived ?? undefined,
-  rejectionReason: row.rejection_reason ?? row.rejectionReason ?? undefined,
-  relatedFileId: row.related_file_id ?? row.relatedFileId ?? undefined,
-  relatedFileType: row.related_file_type ?? row.relatedFileType ?? undefined,
-  relatedFileName: row.related_file_name ?? row.relatedFileName ?? undefined,
+  submittedById: row.submittedById ?? row.submitted_by_id ?? '',
+  submittedByName: row.submittedByName ?? row.submitted_by_name ?? '',
+  dateSubmitted: row.dateSubmitted ?? row.date_submitted ?? '',
+  approvedById: row.approvedById ?? row.approved_by_id ?? undefined,
+  approvedByName: row.approvedByName ?? row.approved_by_name ?? undefined,
+  dateApproved: row.dateApproved ?? row.date_approved ?? undefined,
+  paidById: row.paidById ?? row.paid_by_id ?? undefined,
+  paidByName: row.paidByName ?? row.paid_by_name ?? undefined,
+  datePaid: row.datePaid ?? row.date_paid ?? undefined,
+  // Acknowledgement fields are stored locally only (no DB columns yet)
+  acknowledgedById: row.acknowledgedById ?? undefined,
+  acknowledgedByName: row.acknowledgedByName ?? undefined,
+  acknowledgedAt: row.acknowledgedAt ?? undefined,
+  acknowledgeNote: row.acknowledgeNote ?? undefined,
+  amountReceived: row.amountReceived ?? undefined,
+  rejectionReason: row.rejectionReason ?? row.rejection_reason ?? undefined,
+  relatedFileId: row.relatedFileId ?? row.related_file_id ?? undefined,
+  relatedFileType: row.relatedFileType ?? row.related_file_type ?? undefined,
+  relatedFileName: row.relatedFileName ?? row.related_file_name ?? undefined,
 });
 
 /* =======================
@@ -913,7 +914,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (txRes.data) setTransactions(txRes.data);
         if (ccRes.data) setCourtCases(ccRes.data);
         if (ltRes.data) setLetters(ltRes.data);
-        if (reqRes.data) setRequisitions(reqRes.data.map(normalizeReq));
+        // Use mergeIfChanged so local optimistic updates aren't overwritten by a poll
+        // arriving after a fast user action but before the DB upsert has committed.
+        if (reqRes.data) {
+          const cloudReqs = reqRes.data.map(normalizeReq);
+          setRequisitions(prev => {
+            const cloudById = new Map(cloudReqs.map((r: Requisition) => [r.id, r]));
+            const localOnly = prev.filter(r => !cloudById.has(r.id));
+            return [...cloudReqs, ...localOnly];
+          });
+        }
         if (expRes.data) setExpenses(expRes.data);
       } catch (err) {
         console.error('[Poll] File data polling failed:', err);
@@ -1923,14 +1933,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateRequisition = async (id: string, data: Partial<Requisition>) => {
-    setRequisitions(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
-    if (navigator.onLine) {
-      const updatedReq = requisitions.find(r => r.id === id);
-      if (updatedReq) {
-        const fullReq = { ...updatedReq, ...data };
-        const { error } = await supabase.from('requisitions').upsert(requisitionToDb(fullReq), { onConflict: 'id' });
-        if (error) console.error("Failed to update requisition:", error.message);
-      }
+    // Capture the merged requisition inside the setState updater to avoid stale closure.
+    let fullReq: Requisition | null = null;
+    setRequisitions(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      fullReq = { ...r, ...data };
+      return fullReq;
+    }));
+    if (navigator.onLine && fullReq) {
+      const { error } = await supabase.from('requisitions').upsert(requisitionToDb(fullReq), { onConflict: 'id' });
+      if (error) console.error("Failed to update requisition:", error.message);
     }
   };
 
