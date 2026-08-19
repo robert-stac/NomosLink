@@ -34,6 +34,7 @@ const Invoices: React.FC = () => {
   const [matterSearchTerm, setMatterSearchTerm] = useState("");
   const [showMatterDropdown, setShowMatterDropdown] = useState(false);
   const [invoiceDescription, setInvoiceDescription] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   /* ===== FILTER STATE ===== */
   const [searchTerm, setSearchTerm] = useState("");
@@ -115,24 +116,34 @@ const Invoices: React.FC = () => {
     const method = window.prompt("Payment Method (Cash, Mobile Money, Bank Transfer/ Cheque):", "Bank Transfer/ Cheque");
     if (!method) return;
     if (!window.confirm(`Mark invoice ${inv.fileName} as fully paid (${formatCurrency(inv.balance)} remaining)?`)) return;
-    const updated = { ...inv, amountPaid: inv.amountBilled, balance: 0, isPaid: true };
-    updateInvoice(updated);
-    await postToExpenses(inv, inv.balance, "Full payment received", method);
+    setIsSubmitting(true);
+    try {
+      const updated = { ...inv, amountPaid: inv.amountBilled, balance: 0, isPaid: true };
+      updateInvoice(updated);
+      await postToExpenses(inv, inv.balance, "Full payment received", method);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   /* Record partial payment */
   const handlePartialSubmit = async () => {
     if (!partialInvoice || partialAmount <= 0) return;
-    const remaining = partialInvoice.balance;
-    const payment = Math.min(partialAmount, remaining);
-    const newPaid = (partialInvoice.amountPaid || 0) + payment;
-    const newBalance = partialInvoice.amountBilled - newPaid;
-    const updated = { ...partialInvoice, amountPaid: newPaid, balance: newBalance, isPaid: newBalance <= 0 };
-    updateInvoice(updated);
-    await postToExpenses(partialInvoice, payment, "Partial payment received", partialMethod);
-    setPartialInvoice(null);
-    setPartialAmount(0);
-    setPartialMethod("Bank Transfer/ Cheque");
+    setIsSubmitting(true);
+    try {
+      const remaining = partialInvoice.balance;
+      const payment = Math.min(partialAmount, remaining);
+      const newPaid = (partialInvoice.amountPaid || 0) + payment;
+      const newBalance = partialInvoice.amountBilled - newPaid;
+      const updated = { ...partialInvoice, amountPaid: newPaid, balance: newBalance, isPaid: newBalance <= 0 };
+      updateInvoice(updated);
+      await postToExpenses(partialInvoice, payment, "Partial payment received", partialMethod);
+      setPartialInvoice(null);
+      setPartialAmount(0);
+      setPartialMethod("Bank Transfer/ Cheque");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -155,20 +166,25 @@ const Invoices: React.FC = () => {
       dueDate: new Date(Date.now() + 12096e5).toISOString().split("T")[0],
     };
 
-    if (isEditing) {
-      updateInvoice(payload);
-    } else {
-      addInvoice(payload);
-      if (paid > 0) {
-        await postToExpenses(payload, paid, "Initial payment on invoice creation", paymentMethod);
+    setIsSubmitting(true);
+    try {
+      if (isEditing) {
+        updateInvoice(payload);
+      } else {
+        addInvoice(payload);
+        if (paid > 0) {
+          await postToExpenses(payload, paid, "Initial payment on invoice creation", paymentMethod);
+        }
       }
-    }
 
-    if (scannedFile) {
-      setIsUploading(true);
-      try { await uploadInvoiceScan(finalId, scannedFile); } catch { alert("Saved, but scan upload failed."); } finally { setIsUploading(false); }
+      if (scannedFile) {
+        setIsUploading(true);
+        try { await uploadInvoiceScan(finalId, scannedFile); } catch { alert("Saved, but scan upload failed."); } finally { setIsUploading(false); }
+      }
+      resetForm();
+    } finally {
+      setIsSubmitting(false);
     }
-    resetForm();
   };
 
   const handleEdit = (inv: any) => {
@@ -329,9 +345,9 @@ const Invoices: React.FC = () => {
                   className="px-5 py-3 rounded-xl border border-gray-200 text-gray-400 font-bold hover:bg-gray-50 text-sm transition-colors">
                   Cancel
                 </button>
-                <button type="submit" disabled={isUploading}
+                <button type="submit" disabled={isUploading || isSubmitting}
                   className="flex-1 bg-[#0B1F3A] text-white font-black py-3 rounded-xl shadow hover:shadow-xl hover:bg-blue-900 transition-all disabled:opacity-50">
-                  {isUploading ? "Uploading..." : isEditing ? "Update Invoice" : "Post Invoice"} 🚀
+                  {isUploading || isSubmitting ? "Processing..." : isEditing ? "Update Invoice" : "Post Invoice"} 🚀
                 </button>
               </div>
             </form>
@@ -367,9 +383,9 @@ const Invoices: React.FC = () => {
               <option value="Mobile Money">Mobile Money</option>
             </select>
             <div className="flex gap-3">
-              <button onClick={handlePartialSubmit} disabled={partialAmount <= 0}
+              <button onClick={handlePartialSubmit} disabled={partialAmount <= 0 || isSubmitting}
                 className="flex-1 bg-green-600 text-white font-black py-3 rounded-xl hover:bg-green-700 transition disabled:opacity-40">
-                ✅ Record Payment
+                {isSubmitting ? "Recording..." : "✅ Record Payment"}
               </button>
               <button onClick={() => { setPartialInvoice(null); setPartialAmount(0); }}
                 className="px-5 py-3 rounded-xl border border-gray-200 text-gray-400 font-bold hover:bg-gray-50 text-sm">
@@ -441,12 +457,14 @@ const Invoices: React.FC = () => {
                             <>
                               <button
                                 onClick={() => handleMarkPaid(inv)}
-                                className="underline hover:bg-green-300 text-green-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg transition-colors"
+                                disabled={isSubmitting}
+                                className="underline hover:bg-green-300 text-green-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                                 title="Mark as fully paid"
                               >Paid</button>
                               <button
                                 onClick={() => { setPartialInvoice(inv); setPartialAmount(0); }}
-                                className="underline hover:bg-blue-300 text-blue-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg transition-colors"
+                                disabled={isSubmitting}
+                                className="underline hover:bg-blue-300 text-blue-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                                 title="Record partial payment"
                               > Partial</button>
                             </>

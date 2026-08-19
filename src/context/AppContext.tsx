@@ -935,17 +935,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!navigator.onLine || document.hidden) return;
 
       try {
-        const [txRes, ccRes, ltRes, reqRes, expRes] = await Promise.all([
+        const [txRes, ccRes, ltRes, reqRes, expRes, draftRes] = await Promise.all([
           supabase.from('transactions').select('*'),
           supabase.from('court_cases').select('*'),
           supabase.from('letters').select('*'),
           supabase.from('requisitions').select('*'),
           supabase.from('expenses').select('*').order('date', { ascending: false }),
+          supabase.from('draft_requests').select('*'),
         ]);
 
         if (txRes.data) setTransactions(txRes.data);
         if (ccRes.data) setCourtCases(ccRes.data);
         if (ltRes.data) setLetters(ltRes.data);
+        if (draftRes.data) {
+          setDraftRequests(prev => {
+            const cloudById = new Map(draftRes.data.map((r: any) => [r.id, r]));
+            const localOnly = prev.filter(r => !cloudById.has(r.id));
+            return [...draftRes.data, ...localOnly];
+          });
+        }
         // Use mergeIfChanged so local optimistic updates aren't overwritten by a poll
         // arriving after a fast user action but before the DB upsert has committed.
         if (reqRes.data) {
