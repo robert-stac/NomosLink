@@ -1,3 +1,4 @@
+import { getFilePaidAmount } from "../../utils/financeUtils";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
@@ -12,7 +13,7 @@ export default function LawyerLetterDetails() {
     letters, 
     updateLetter, 
     addLetterProgress,
-    users 
+    users, expenses, invoices
   } = useAppContext();
   
   const [newNote, setNewNote] = useState("");
@@ -343,6 +344,20 @@ export default function LawyerLetterDetails() {
                 <div>
                   <p className="text-[9px] text-slate-400 font-black uppercase">Recipient</p>
                   <p className="text-sm font-bold">{letter.recipient || "Legal Department"}</p>
+                </div>
+                <div className="pt-4 border-t border-white/10 space-y-4">
+                  <div>
+                    <p className="text-[9px] text-slate-400 font-black uppercase">Amount Billed</p>
+                    <p className="text-sm font-bold text-white">UGX {(letter.billed || 0).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-slate-400 font-black uppercase">Amount Paid</p>
+                    <p className="text-sm font-bold text-emerald-400">UGX {getFilePaidAmount(letter?.id, expenses).toLocaleString()}</p>
+                  </div>
+                  <div className="pt-2 border-t border-white/10">
+                    <p className="text-[9px] text-slate-400 font-black uppercase">Outstanding Balance</p>
+                    <p className="text-sm font-bold text-orange-400">UGX {((() => { const inv = (invoices || []).filter(i => i.relatedFileId === letter?.id || (i.relatedFile && i.relatedFile.toLowerCase() === letter?.subject?.toLowerCase())); const invB = inv.reduce((s,i)=>s+(Number(i.amountBilled)||0),0); return (letter?.billed||0)>0?(letter?.billed||0):invB; })() - getFilePaidAmount(letter?.id, expenses)).toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
             </div>

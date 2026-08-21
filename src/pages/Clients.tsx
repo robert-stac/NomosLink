@@ -1,3 +1,4 @@
+import { getFilePaidAmount } from "../utils/financeUtils";
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
@@ -156,9 +157,9 @@ const Clients: React.FC = () => {
           clientTitles.reduce((sum: number, t: any) => sum + getFileBilled(t.id, undefined, t.total_billed), 0);
 
         const totalLegacyPaid =
-          clientCases.reduce((sum, c) => sum + getFileLegacyPaid(c.id, c.fileName, c.paid), 0) +
-          clientTransactions.reduce((sum, t) => sum + getFileLegacyPaid(t.id, t.fileName, t.paidAmount), 0) +
-          clientLetters.reduce((sum, l) => sum + getFileLegacyPaid(l.id, l.subject, l.paid), 0) +
+          clientCases.reduce((sum, c) => sum + getFilePaidAmount(c.id, expenses), 0) +
+          clientTransactions.reduce((sum, t) => sum + getFilePaidAmount(t.id, expenses), 0) +
+          clientLetters.reduce((sum, l) => sum + getFilePaidAmount(l.id, expenses), 0) +
           clientTitles.reduce((sum: number, t: any) => sum + getFileLegacyPaid(t.id, undefined, t.total_paid), 0);
 
         const clientExpenses = (expenses || []).filter((e: any) =>
@@ -927,10 +928,10 @@ const Clients: React.FC = () => {
                   {(() => {
                     // Aggregate all files with their financial data
                     const allFiles = [
-                      ...selectedClient.cases.map((c: any) => ({ id: c.id, name: c.fileName, type: 'case', billed: c.billed || 0, paid: c.paid || 0 })),
-                      ...selectedClient.transactions.map((t: any) => ({ id: t.id, name: t.fileName, type: 'transaction', billed: t.billedAmount || 0, paid: t.paidAmount || 0 })),
-                      ...selectedClient.letters.map((l: any) => ({ id: l.id, name: l.subject, type: 'letter', billed: l.billed || 0, paid: l.paid || 0 })),
-                      ...selectedClient.titles.map((t: any) => ({ id: t.id, name: `Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ''}`, type: 'title', billed: t.total_billed || 0, paid: t.total_paid || 0 }))
+                      ...selectedClient.cases.map((c: any) => ({ id: c.id, name: c.fileName, type: 'case', billed: c.billed || 0, paid: getFilePaidAmount(c.id, selectedClient.expenses) })),
+                      ...selectedClient.transactions.map((t: any) => ({ id: t.id, name: t.fileName, type: 'transaction', billed: t.billedAmount || 0, paid: getFilePaidAmount(t.id, selectedClient.expenses) })),
+                      ...selectedClient.letters.map((l: any) => ({ id: l.id, name: l.subject, type: 'letter', billed: l.billed || 0, paid: getFilePaidAmount(l.id, selectedClient.expenses) })),
+                      ...selectedClient.titles.map((t: any) => ({ id: t.id, name: `Plot ${t.title_number}${t.block ? `, Block ${t.block}` : ''}`, type: 'title', billed: t.total_billed || 0, paid: getFilePaidAmount(t.id, selectedClient.expenses) }))
                     ];
 
                     // Overwrite file amounts with invoice amounts if they exist

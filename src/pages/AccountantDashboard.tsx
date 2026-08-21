@@ -130,14 +130,10 @@ export default function AccountantDashboard() {
 
     const revenue = allRevenueItems.reduce((acc, item) => {
       const billed = Number(("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0);
-      const legacyPaid = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
       
-      // Calculate income from expenses (Money In)
-      const expensesPaid = (expenses || [])
+      const paid = (expenses || [])
         .filter(e => e.type === 'in' && e.relatedFileId === item.id)
         .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-        
-      const paid = legacyPaid + expensesPaid;
       
       acc.totalBilled += billed;
       acc.totalPaid += paid;
@@ -145,7 +141,9 @@ export default function AccountantDashboard() {
       return acc;
     }, { totalBilled: 0, totalPaid: 0, outstanding: 0 });
 
-    const totalActualExpenses = allExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+    const totalActualExpenses = allExpenses
+      .filter(exp => exp.type === 'out')
+      .reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
     return { ...revenue, totalExpenses: totalActualExpenses, allExpensesList: allExpenses };
   }, [transactions, courtCases, letters, expenses, timeFilter]);
 
@@ -167,13 +165,11 @@ export default function AccountantDashboard() {
     allRevenueItems.forEach(item => {
       // Don't filter by timeFilter for aging since aging is about ALL outstanding debt
       const billed = Number(("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0);
-      const legacyPaid = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
       
-      const expensesPaid = (expenses || [])
+      const paid = (expenses || [])
         .filter(e => e.type === 'in' && e.relatedFileId === item.id)
         .reduce((sum, e) => sum + Number(e.amount || 0), 0);
         
-      const paid = legacyPaid + expensesPaid;
       const balance = billed - paid;
       
       if (balance <= 0) return;
@@ -228,19 +224,19 @@ export default function AccountantDashboard() {
 
     courtCases?.forEach((c: any) => { 
       if (filterByTime(c.date || c.createdAt || '')) {
-        const paid = (c.paid || 0) + getExpensesPaid(c.id);
+        const paid = getExpensesPaid(c.id);
         filesData.push(['Court Case', c.fileName || '', c.billed || 0, paid, clients.find((cl: any)=>cl.id===c.clientId)?.name || 'N/A']); 
       }
     });
     transactions?.forEach((t: any) => { 
       if (filterByTime(t.date || '')) {
-        const paid = (t.paidAmount || 0) + getExpensesPaid(t.id);
+        const paid = getExpensesPaid(t.id);
         filesData.push(['Transaction', t.fileName || '', t.billedAmount || 0, paid, clients.find((cl: any)=>cl.id===t.clientId)?.name || 'N/A']); 
       }
     });
     landTitles?.forEach((t: any) => { 
       if (filterByTime(t.date || '')) {
-        const paid = (t.total_paid || 0) + getExpensesPaid(t.id);
+        const paid = getExpensesPaid(t.id);
         filesData.push(['Land Title', `Plot ${t.title_number}`, t.total_billed || 0, paid, clients.find((cl: any)=>cl.id===t.client_id)?.name || 'N/A']); 
       }
     });
@@ -630,7 +626,7 @@ export default function AccountantDashboard() {
                   {[...(transactions || []).filter(t => !t.archived), ...(courtCases || []).filter(c => !c.archived), ...(letters || []).filter(l => !(l as any).archived)]
                     .filter(item => {
                       const billed = ("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0;
-                      const paid = ("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0;
+                      const paid = (expenses || []).filter(e => e.type === 'in' && e.relatedFileId === item.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
                       if (billed <= paid) return false;
                       if (!searchQuery.trim()) return true;
                       const query = searchQuery.toLowerCase();
@@ -645,8 +641,8 @@ export default function AccountantDashboard() {
                         if (key === "billed") return Number(("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0);
                         if (key === "unpaid") {
                           const b = Number(("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0);
-                          const p = Number(("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0);
-                          return b - p;
+                          const ep = (expenses || []).filter(e => e.type === 'in' && e.relatedFileId === item.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+                          return b - ep;
                         }
                         return 0;
                       };
@@ -658,7 +654,7 @@ export default function AccountantDashboard() {
                     })
                     .map((item, idx) => {
                       const billed = ("billed" in item ? item.billed : 0) || ("billedAmount" in item ? item.billedAmount : 0) || 0;
-                      const paid = ("paid" in item ? item.paid : 0) || ("paidAmount" in item ? item.paidAmount : 0) || 0;
+                      const paid = (expenses || []).filter(e => e.type === 'in' && e.relatedFileId === item.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
                       const unpaid = billed - paid;
                       const name = String(("fileName" in item ? item.fileName : "") || ("subject" in item ? item.subject : "") || "Unknown");
                       const linkedInvoice = invoices.find(inv => inv.relatedFile === name);
@@ -790,7 +786,7 @@ export default function AccountantDashboard() {
               </div>
               <div className="flex justify-between text-xs font-black text-rose-600">
                 <span>Unpaid Balance:</span>
-                <span>{formatUGX((("billed" in invoiceTarget ? invoiceTarget.billed : 0) || ("billedAmount" in invoiceTarget ? invoiceTarget.billedAmount : 0) || 0) - (("paid" in invoiceTarget ? invoiceTarget.paid : 0) || ("paidAmount" in invoiceTarget ? invoiceTarget.paidAmount : 0) || 0))}</span>
+                <span>{formatUGX((("billed" in invoiceTarget ? invoiceTarget.billed : 0) || ("billedAmount" in invoiceTarget ? invoiceTarget.billedAmount : 0) || 0) - ((expenses || []).filter(e => e.type === 'in' && e.relatedFileId === invoiceTarget.id).reduce((sum, e) => sum + Number(e.amount || 0), 0)))}</span>
               </div>
             </div>
             <div className="flex gap-4">

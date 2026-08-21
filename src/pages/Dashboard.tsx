@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { getFilePaidAmount } from "../utils/financeUtils";
 import { Pie, Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -95,9 +96,9 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const allItems = [
-      ...(transactions || []).map(t => ({ billed: Number(t.billedAmount || 0), paid: Number(t.paidAmount || 0) })),
-      ...(courtCases || []).map(c => ({ billed: Number(c.billed || 0), paid: Number(c.paid || 0) })),
-      ...(letters || []).map(l => ({ billed: Number(l.billed || 0), paid: Number(l.paid || 0) }))
+      ...(transactions || []).map(t => ({ billed: Number(t.billedAmount || 0), paid: getFilePaidAmount(t.id, expenses) })),
+      ...(courtCases || []).map(c => ({ billed: Number(c.billed || 0), paid: getFilePaidAmount(c.id, expenses) })),
+      ...(letters || []).map(l => ({ billed: Number(l.billed || 0), paid: getFilePaidAmount(l.id, expenses) }))
     ];
     const stTransactions = (transactions || []).filter(isStagnant).length;
     const stCases = (courtCases || []).filter(isStagnant).length;

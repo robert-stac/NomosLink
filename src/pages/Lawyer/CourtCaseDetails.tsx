@@ -1,3 +1,4 @@
+import { getFilePaidAmount } from "../../utils/financeUtils";
 import { useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
@@ -13,7 +14,7 @@ export default function CourtCaseDetails() {
     addCourtCaseDeadline, updateCourtCaseDeadline, deleteCourtCaseDeadline,
     draftRequests, addDraftRequest, completeDraftRequest, deleteDraftRequest,
     filingRequests, addFilingRequest, updateFilingRequest, deleteFilingRequest,
-    clients
+    clients, expenses, invoices
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<"timeline" | "drafts" | "deadlines" | "registry">("timeline");
@@ -268,8 +269,14 @@ export default function CourtCaseDetails() {
 
   const associatedClient = clients.find(cl => cl.id === courtCase.clientId);
 
-  const billed = courtCase.billed || 0;
-  const paid = courtCase.paid || 0;
+  // Financial summary - use case.billed, fall back to linked invoices
+  const caseInvoices = (invoices || []).filter(
+    inv => inv.relatedFileId === courtCase.id ||
+           (inv.relatedFile && inv.relatedFile.toLowerCase() === courtCase.fileName?.toLowerCase())
+  );
+  const invoiceBilled = caseInvoices.reduce((s, inv) => s + (Number(inv.amountBilled) || 0), 0);
+  const billed = (courtCase.billed || 0) > 0 ? (courtCase.billed || 0) : invoiceBilled;
+  const paid = getFilePaidAmount(courtCase?.id, expenses);
   const balance = billed - paid;
 
   return (

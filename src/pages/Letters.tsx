@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { getFilePaidAmount } from "../utils/financeUtils";
 import { useAppContext } from "../context/AppContext";
 import { getAutoLabels } from "../utils/autoLabel";
 import AutoLabelBadge from "../components/AutoLabelBadge";
@@ -8,7 +9,7 @@ type SortField = "date" | "billed" | "fileName" | "recipient" | null;
 type SortOrder = "asc" | "desc";
 
 export default function Letters() {
-  const { letters = [], lawyers = [], clients = [], addLetter: addLetterToContext, editLetter, deleteLetter } = useAppContext();
+  const { letters = [], lawyers = [], clients = [], expenses = [], addLetter: addLetterToContext, editLetter, deleteLetter } = useAppContext();
 
   // --- PRESERVED STATE ---
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -113,7 +114,7 @@ export default function Letters() {
     setDate(l.date || "");
     setStatus(l.status);
     setBilled(l.billed?.toString() || "");
-    setPaid(l.paid?.toString() || "");
+    setPaid(getFilePaidAmount(l.id, expenses).toString());
     setShowForm(true);
   };
 
@@ -410,12 +411,12 @@ export default function Letters() {
                       <div className="space-y-1">
                           <div className="flex justify-between text-[10px] font-bold">
                               <span className="text-slate-400">Paid:</span>
-                              <span className="text-slate-900">{formatCurrency(l.paid)}</span>
+                              <span className="text-slate-900">{formatCurrency(getFilePaidAmount(l.id, expenses))}</span>
                           </div>
                           <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="bg-emerald-500 h-full transition-all" style={{ width: `${((l.paid || 0) / (l.billed || 1)) * 100}%` }}></div>
+                              <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(getFilePaidAmount(l.id, expenses) / (l.billed || 1)) * 100}%` }}></div>
                           </div>
-                          <p className="text-[10px] font-black text-slate-400">Bal: {formatCurrency((l.billed || 0) - (l.paid || 0))}</p>
+                          <p className="text-[10px] font-black text-slate-400">Bal: {formatCurrency((l.billed || 0) - getFilePaidAmount(l.id, expenses))}</p>
                       </div>
                   </td>
                   <td className="p-5 text-center">

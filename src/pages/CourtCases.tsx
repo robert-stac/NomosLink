@@ -1,3 +1,4 @@
+import { getFilePaidAmount } from "../utils/financeUtils";
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
@@ -47,7 +48,7 @@ export default function CourtCases() {
 
     return cases.map(c => {
       const expensesPaid = (expenses || []).filter((e: any) => e.type === 'in' && e.relatedFileId === c.id).reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
-      const totalPaid = (Number(c.paid) || 0) + expensesPaid;
+      const totalPaid = expensesPaid;
       const computedBalance = (Number(c.billed) || 0) - totalPaid;
       return { ...c, computedPaid: totalPaid, computedBalance: computedBalance };
     }).sort((a: any, b: any) => {
@@ -112,7 +113,7 @@ export default function CourtCases() {
     }
 
     const billedNum = Number(billed);
-    const existingPaid = editingId ? (courtCases.find(c => c.id === editingId)?.paid || 0) : 0;
+    const existingPaid = editingId ? getFilePaidAmount(editingId, expenses) : 0;
     const balance = billedNum - existingPaid;
     const finalSittingType = sittingType === "Other" ? customSittingType : sittingType;
 
@@ -127,7 +128,7 @@ export default function CourtCases() {
         paid: existingPaid,
         balance,
         status,
-        nextCourtDate: nextDate,
+        nextCourtDate: nextDate || undefined,
         categories,
         sittingType: finalSittingType,
         clientId: clientId || undefined,
@@ -142,7 +143,7 @@ export default function CourtCases() {
         paid: existingPaid,
         balance,
         status,
-        nextCourtDate: nextDate,
+        nextCourtDate: nextDate || undefined,
         categories,
         sittingType: finalSittingType,
         clientId: clientId || undefined,

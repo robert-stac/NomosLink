@@ -1,3 +1,4 @@
+import { getFilePaidAmount } from "../utils/financeUtils";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useAppContext } from "../context/AppContext";
 
@@ -106,7 +107,7 @@ export default function Transactions() {
 
     return [...data].map(t => {
       const expensesPaid = expenses.filter(e => e.type === 'in' && e.relatedFileId === t.id).reduce((s, e) => s + Number(e.amount || 0), 0);
-      const totalPaid = (Number(t.paidAmount) || 0) + expensesPaid;
+      const totalPaid = expensesPaid;
       const computedBalance = (Number(t.billedAmount) || 0) - totalPaid;
       return { ...t, computedPaid: totalPaid, computedBalance };
     }).sort((a: any, b: any) => {

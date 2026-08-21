@@ -1,18 +1,20 @@
-import { User, Transaction, CourtCase, Letter } from "../context/AppContext";
+import { User, Transaction, CourtCase, Letter, Expense } from "../context/AppContext";
+import { getFilePaidAmount } from "./financeUtils";
 
 export function calculateLawyerMetrics(
   lawyer: User,
   transactions: Transaction[],
   courtCases: CourtCase[],
-  letters: Letter[]
+  letters: Letter[],
+  expenses: Expense[]
 ) {
   const myTransactions = transactions.filter(t => t.lawyerId === lawyer.id);
   const myCases = courtCases.filter(c => c.lawyerId === lawyer.id);
   const myLetters = letters.filter(l => l.lawyerId === lawyer.id);
 
-  const totalBilled = myTransactions.reduce((s, t) => s + (t.amount || 0), 0);
+  const totalBilled = myTransactions.reduce((s, t) => s + (t.billedAmount || 0), 0);
   const totalPaid = myTransactions.reduce(
-    (s, t) => s + (t.progressNotes?.length ? t.amount * 0.6 : 0),
+    (s, t) => s + getFilePaidAmount(t.id, expenses),
     0
   );
 

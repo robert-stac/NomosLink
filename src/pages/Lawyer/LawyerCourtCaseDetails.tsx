@@ -1,3 +1,4 @@
+import { getFilePaidAmount } from "../../utils/financeUtils";
 import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
@@ -33,7 +34,7 @@ export default function LawyerCourtCaseDetails() {
     deleteCourtCaseProgress,
     uploadCourtCaseDocument,
     deleteCourtCaseDocument,
-    users
+    users, expenses, invoices
   } = useAppContext();
 
   if (!currentUser) return <div className="p-10 text-center font-bold text-slate-400">SESSION EXPIRED</div>;
@@ -309,19 +310,29 @@ export default function LawyerCourtCaseDetails() {
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Amount Billed</p>
                     <p className="text-lg font-black text-white">
-                      UGX {(courtCase.billed || 0).toLocaleString()}
+                      {(() => {
+                        const inv = (invoices || []).filter(i => i.relatedFileId === courtCase.id || (i.relatedFile && i.relatedFile.toLowerCase() === courtCase.fileName?.toLowerCase()));
+                        const invBilled = inv.reduce((s, i) => s + (Number(i.amountBilled) || 0), 0);
+                        const eff = (courtCase.billed || 0) > 0 ? (courtCase.billed || 0) : invBilled;
+                        return 'UGX ' + eff.toLocaleString();
+                      })()}
                     </p>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Amount Paid</p>
                     <p className="text-lg font-black text-emerald-400">
-                      UGX {(courtCase.paid || 0).toLocaleString()}
+                      UGX {getFilePaidAmount(courtCase?.id, expenses).toLocaleString()}
                     </p>
                   </div>
                   <div className="pt-4 border-t border-white/10">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Outstanding Balance</p>
                     <p className="text-xl font-black text-orange-400">
-                      UGX {((courtCase.billed || 0) - (courtCase.paid || 0)).toLocaleString()}
+                      {(() => {
+                        const inv = (invoices || []).filter(i => i.relatedFileId === courtCase.id || (i.relatedFile && i.relatedFile.toLowerCase() === courtCase.fileName?.toLowerCase()));
+                        const invBilled = inv.reduce((s, i) => s + (Number(i.amountBilled) || 0), 0);
+                        const eff = (courtCase.billed || 0) > 0 ? (courtCase.billed || 0) : invBilled;
+                        return 'UGX ' + (eff - getFilePaidAmount(courtCase?.id, expenses)).toLocaleString();
+                      })()}
                     </p>
                   </div>
                 </div>

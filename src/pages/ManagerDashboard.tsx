@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { getFilePaidAmount } from "../utils/financeUtils";
 import { useAppContext } from "../context/AppContext";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { NotificationBell } from "../components/NotificationBell";
 
 export default function ManagerDashboard() {
-  const { users, clients, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest, requisitions, draftRequests, completeDraftRequest } = useAppContext();
+  const { users, clients, transactions, courtCases, letters, tasks, currentUser, notifications, markNotificationsAsRead, addTask, updateTask, deleteTask, updateCourtCaseDeadline, filingRequests, updateFilingRequest, requisitions, draftRequests, completeDraftRequest, expenses } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,8 +84,12 @@ export default function ManagerDashboard() {
   const activeCases = courtCases.filter(c => !c.archived);
   const activeLetters = letters.filter(l => !l.archived);
 
+  const isAssisting = (item: any) => {
+    return selectedLawyerId && (draftRequests || []).some(d => String(d.assignedToId) === String(selectedLawyerId) && String(d.caseId) === String(item.id));
+  };
+
   const filterItem = (item: any, type: 'tx' | 'case' | 'letter' = 'tx') => {
-    const matchesLawyer = !selectedLawyerId || item.lawyerId === selectedLawyerId;
+    const matchesLawyer = !selectedLawyerId || item.lawyerId === selectedLawyerId || isAssisting(item);
     const matchesSearch = (item.fileName || item.subject || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStagnant = !showOnlyStagnant || isStagnant(item);
     const matchesMissing = !showMissingCourtDates || (type === 'case' ? !item.nextCourtDate : false);
@@ -96,7 +101,7 @@ export default function ManagerDashboard() {
   const filteredLetters = activeLetters.filter(l => filterItem(l, 'letter'));
 
   const baseFilter = (item: any) => {
-    const matchesLawyer = !selectedLawyerId || item.lawyerId === selectedLawyerId;
+    const matchesLawyer = !selectedLawyerId || item.lawyerId === selectedLawyerId || isAssisting(item);
     const matchesSearch = (item.fileName || item.subject || "").toLowerCase().includes(searchQuery.toLowerCase());
     return matchesLawyer && matchesSearch;
   };
@@ -132,7 +137,7 @@ export default function ManagerDashboard() {
     ...activeLetters.filter(baseFilter),
   ];
   const totalBilledAll = allActiveFiles.reduce((s, f: any) => s + Number(f.billed || f.billedAmount || 0), 0);
-  const totalPaidAll = allActiveFiles.reduce((s, f: any) => s + Number(f.paid || f.paidAmount || 0), 0);
+  const totalPaidAll = allActiveFiles.reduce((s, f: any) => s + getFilePaidAmount(f.id, expenses), 0);
   const totalOutstanding = totalBilledAll - totalPaidAll;
   const collectionRate = totalBilledAll > 0 ? Math.round((totalPaidAll / totalBilledAll) * 100) : 0;
   const missingCourtDates = activeCases.filter(baseFilter).filter((c: any) => !c.nextCourtDate).length;
@@ -147,7 +152,7 @@ export default function ManagerDashboard() {
     const lLetters = activeLetters.filter((l: any) => l.lawyerId === lawyer.id);
     const all = [...lCases, ...lTx, ...lLetters];
     const lBilled = all.reduce((s: number, f: any) => s + Number(f.billed || f.billedAmount || 0), 0);
-    const lPaid = all.reduce((s: number, f: any) => s + Number(f.paid || f.paidAmount || 0), 0);
+    const lPaid = all.reduce((s: number, f: any) => s + getFilePaidAmount(f.id, expenses), 0);
     const lStagnant = all.filter(isStagnant).length;
     return { lawyer, cases: lCases.length, transactions: lTx.length, letters: lLetters.length, total: all.length, billed: lBilled, paid: lPaid, stagnant: lStagnant };
   }).filter(w => w.total > 0).sort((a, b) => b.total - a.total);
@@ -199,32 +204,55 @@ export default function ManagerDashboard() {
     };
 
     // ── build data rows ─────────────────────────────────────────────────────
-    const allItems = [...filteredCases, ...filteredTransactions, ...filteredLetters];
+    const filteredDrafts = (draftRequests || []).filter(d => {
+      const matchesLawyer = !selectedLawyerId || String(d.assignedToId) === String(selectedLawyerId);
+      const matchesSearch = (d.title || d.description || "").toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesLawyer && matchesSearch;
+    });
+
+    const allItems = [...filteredCases, ...filteredTransactions, ...filteredLetters, ...filteredDrafts];
     let totBilled = 0, totPaid = 0;
     let rowNum = 1;
 
     const dataRows: string[] = allItems.map(item => {
+      const isDraft = (item as any).title !== undefined && (item as any).caseId !== undefined;
       const isLetter = !!(item as any).subject;
-      const isCase = (item as any).nextCourtDate !== undefined && !isLetter;
-      const category = isLetter ? "Letter" : isCase ? "Court Case" : "Transaction";
+      const isCase = (item as any).nextCourtDate !== undefined && !isLetter && !isDraft;
+      const category = isDraft ? "Draft Request" : isLetter ? "Letter" : isCase ? "Court Case" : "Transaction";
 
-      const name = (item as any).fileName || (item as any).subject || "";
-      const lawyer = users.find(u => u.id === item.lawyerId)?.name || "Unassigned";
-      const { text: noteText, rawDate: noteRawDate } = getLastNote(item);
+      const name = isDraft 
+        ? ((item as any).caseFileName ? `${(item as any).caseFileName} - ${(item as any).title}` : (item as any).title || "")
+        : ((item as any).fileName || (item as any).subject || "");
+      const lawyer = isDraft ? (item as any).assignedToName : (users.find(u => u.id === item.lawyerId)?.name || "Unassigned");
+      
+      let noteText, noteRawDate, daysSince;
+      if (isDraft) {
+        noteText = (item as any).completionNote || "No completion note recorded";
+        noteRawDate = (item as any).dateCompleted || (item as any).dateCreated || "";
+        const base = parseAnyDate(noteRawDate);
+        daysSince = base ? Math.max(0, Math.floor((_today.getTime() - base.getTime()) / 86400000)) : 0;
+      } else {
+        const ln = getLastNote(item);
+        noteText = ln.text;
+        noteRawDate = ln.rawDate;
+        daysSince = getDaysSinceUpdate(item);
+      }
+      
       const lastUpdated = fmtDate(noteRawDate);
-      const daysSince = getDaysSinceUpdate(item);
-      const stagnantFlag = isStagnant(item) ? "Yes" : "No";
+      const stagnantFlag = isDraft ? "No" : (isStagnant(item) ? "Yes" : "No");
 
       const billed = Number((item as any).billed || (item as any).billedAmount || 0);
-      const paid = Number((item as any).paid || (item as any).paidAmount || 0);
+      const paid = getFilePaidAmount((item as any).id, expenses);
       const balance = billed - paid;
 
-      totBilled += billed;
-      totPaid += paid;
+      if (!isDraft) {
+        totBilled += billed;
+        totPaid += paid;
+      }
 
       const createdDate = fmtDate((item as any).date || (item as any).createdAt || (item as any).dateCreated);
-      const lastFeedback = fmtDate((item as any).lastClientFeedbackDate);
-      const nextCourtDate = fmtDate((item as any).nextCourtDate);
+      const lastFeedback = isDraft ? "N/A" : fmtDate((item as any).lastClientFeedbackDate);
+      const nextCourtDate = isDraft ? "N/A" : fmtDate((item as any).nextCourtDate);
       const status = (item as any).status || "Ongoing";
 
       return [
@@ -237,9 +265,9 @@ export default function ManagerDashboard() {
         csvCell(lastUpdated),
         csvCell(daysSince),
         csvCell(stagnantFlag),
-        csvCell(fmtUGX(billed)),
-        csvCell(fmtUGX(paid)),
-        csvCell(fmtUGX(balance)),
+        csvCell(isDraft ? "N/A" : fmtUGX(billed)),
+        csvCell(isDraft ? "N/A" : fmtUGX(paid)),
+        csvCell(isDraft ? "N/A" : fmtUGX(balance)),
         csvCell(lastFeedback === "N/A" ? "Never" : lastFeedback),
         csvCell(nextCourtDate),
       ].join(",");

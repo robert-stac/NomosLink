@@ -1,3 +1,4 @@
+import { getFilePaidAmount } from "../utils/financeUtils";
 import { useAppContext } from "../context/AppContext";
 import { calculateLawyerMetrics } from "../utils/lawyerMetrics";
 import { Link } from "react-router-dom";
@@ -22,7 +23,7 @@ export default function DashboardMenu() {
 }
 
 export default function AdminLawyerPerformance() {
-  const { lawyers, transactions, courtCases, letters } = useAppContext();
+  const { lawyers, transactions, courtCases, letters, expenses } = useAppContext();
 
   return (
     <div className="p-6">

@@ -894,7 +894,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: 'recipient_id=eq.' + currentUser.id,
+        filter: 'recipientid=eq.' + currentUser.id,
       }, (payload) => {
         setNotifications(prev => {
           if (prev.find(n => n.id === payload.new.id)) return prev;
@@ -902,7 +902,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const raw = payload.new as any;
           const newNotif: AppNotification = {
             id: raw.id,
-            recipientId: raw.recipient_id ?? raw.recipientId,
+            recipientId: raw.recipientid ?? raw.recipient_id ?? raw.recipientId,
             type: raw.type,
             message: raw.message,
             date: raw.date,
@@ -1153,7 +1153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     supabase
       .from('notifications')
       .select('*')
-      .eq('recipient_id', currentUser.id)
+      .eq('recipientid', currentUser.id)
       .order('date', { ascending: false })
       .limit(50)
       .then(({ data }) => { if (data) setNotifications(data); });
@@ -1207,7 +1207,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTimeout(() => localNotifIds.current.delete(n.id), 10000);
       const dbRow = {
         id: n.id,
-        recipient_id: n.recipientId,
+        recipientid: n.recipientId,
         message: n.message,
         type: n.type,
         date: n.date,
@@ -1241,7 +1241,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const markNotificationsAsRead = async (userId: string) => {
     setNotifications(prev => prev.map(n => n.recipientId === userId ? { ...n, read: true } : n));
     if (navigator.onLine) {
-      await supabase.from('notifications').update({ read: true }).eq('recipient_id', userId);
+      await supabase.from('notifications').update({ read: true }).eq('recipientid', userId);
     }
   };
 
@@ -1445,7 +1445,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (Object.keys(scalarUpdate).length > 0 && navigator.onLine) {
-        supabase.from('transactions').update(scalarUpdate).eq('id', id).then();
+        supabase.from('transactions').update(scalarUpdate).eq('id', id).then(({error}) => { if(error) console.error('Update Error:', error); });
       }
 
       return final;
@@ -1626,7 +1626,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (Object.keys(scalarUpdate).length > 0 && navigator.onLine) {
-        supabase.from('court_cases').update(scalarUpdate).eq('id', id).then();
+        supabase.from('court_cases').update(scalarUpdate).eq('id', id).then(({error}) => { if(error) console.error('Update Error:', error); });
       }
 
       return updated;
@@ -1807,7 +1807,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (Object.keys(scalarUpdate).length > 0 && navigator.onLine) {
-        supabase.from('letters').update(scalarUpdate).eq('id', id).then();
+        supabase.from('letters').update(scalarUpdate).eq('id', id).then(({error}) => { if(error) console.error('Update Error:', error); });
       }
 
       return updated;
